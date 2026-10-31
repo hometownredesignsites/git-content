@@ -1,10 +1,10 @@
 # Git Content
 
-Git Content holds shared prompts and tooling for rebuilding business websites with Duck.ai. The repository is public, so it contains no target CSV or generated customer-site output. Private input data and generated results live in [`git-content-private`](https://github.com/hometownredesignsites/git-content-private).
+Git Content holds shared prompts and tooling for rebuilding business websites with Duck.ai. The current branch contents contain no target CSV or generated customer-site output; private input data and current generated results live in [`git-content-private`](https://github.com/hometownredesignsites/git-content-private). Earlier public CSVs and generated run files remain accessible in Git history because history has not been rewritten. Earlier public Actions run records may also remain visible.
 
 ## Branches
 
-- [`main`](https://github.com/hometownredesignsites/git-content/tree/main) is the clean shared setup and default branch. It contains the reusable Duck.ai runner, prompts, browser checks, and documentation. It intentionally has no Actions runner, target list, queue markers, or saved runs.
+- [`main`](https://github.com/hometownredesignsites/git-content/tree/main) is the clean shared setup and default branch. It contains the reusable Duck.ai runner, prompts, browser checks, and documentation. It intentionally has no GitHub Actions workflow, target list, queue markers, or saved runs.
 - [`duckai`](https://github.com/hometownredesignsites/git-content/tree/duckai) adds the Duck.ai GitHub Actions worker. It accepts opaque start markers from the private repo's local coordinator, processes one private target per run, and writes generated candidates and evidence to the private repo. It does not commit target rows or generated site files here.
 - [`chatgpt`](https://github.com/hometownredesignsites/git-content/tree/chatgpt) is an experimental provider branch; its end-to-end pipeline has not been validated.
 
