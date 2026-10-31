@@ -1,0 +1,77 @@
+{
+  "status": "pending",
+  "images": [
+    {
+      "url": "https://joshbrooksconstructionllc.com/wp-content/uploads/2026/04/IMG_20251112_220214_251.webp?w=400&ssl=1",
+      "observed_subject": "",
+      "relevant": false,
+      "crop_ok": false,
+      "alt_accurate": false
+    },
+    {
+      "url": "https://joshbrooksconstructionllc.com/wp-content/uploads/2026/09/finished-roof-ridge-thornton-co-768x1024.jpg",
+      "observed_subject": "",
+      "relevant": false,
+      "crop_ok": false,
+      "alt_accurate": false
+    },
+    {
+      "url": "https://joshbrooksconstructionllc.com/wp-content/uploads/2026/09/finished-roof-garage-dormer-thornton-768x1024.jpg",
+      "observed_subject": "",
+      "relevant": false,
+      "crop_ok": false,
+      "alt_accurate": false
+    },
+    {
+      "url": "https://joshbrooksconstructionllc.com/wp-content/uploads/2026/08/kitchen-island-quartz-after-erie-co-sm.jpg",
+      "observed_subject": "",
+      "relevant": false,
+      "crop_ok": false,
+      "alt_accurate": false
+    },
+    {
+      "url": "https://joshbrooksconstructionllc.com/wp-content/uploads/2026/10/longmont-bathroom-remodel-soaking-tub-lit-niches-brass-trim-1024x768.jpg",
+      "observed_subject": "",
+      "relevant": false,
+      "crop_ok": false,
+      "alt_accurate": false
+    },
+    {
+      "url": "https://joshbrooksconstructionllc.com/wp-content/uploads/2026/07/james-hardie-lap-siding-gable-over-brick-berthoud-co-joyful-stables-sm.webp",
+      "observed_subject": "",
+      "relevant": false,
+      "crop_ok": false,
+      "alt_accurate": false
+    },
+    {
+      "url": "https://joshbrooksconstructionllc.com/wp-content/uploads/2026/09/longmont-porch-trex-composite-decking-after-sm.jpg",
+      "observed_subject": "",
+      "relevant": false,
+      "crop_ok": false,
+      "alt_accurate": false
+    },
+    {
+      "url": "https://i.ytimg.com/vi/9HXPWXzRjws/hqdefault.jpg",
+      "observed_subject": "",
+      "relevant": false,
+      "crop_ok": false,
+      "alt_accurate": false
+    },
+    {
+      "url": "https://i.ytimg.com/vi/KMEKZa9FlQs/hqdefault.jpg",
+      "observed_subject": "",
+      "relevant": false,
+      "crop_ok": false,
+      "alt_accurate": false
+    },
+    {
+      "url": "https://joshbrooksconstructionllc.com/wp-content/uploads/2026/07/left-hand-canyon-roof-ridge-cap-repair-solar-reinstalled-rotated-sm.jpg",
+      "observed_subject": "",
+      "relevant": false,
+      "crop_ok": false,
+      "alt_accurate": false
+    }
+  ],
+  "reviewer": "",
+  "notes": "Inspect each rendered image and alt text; copy to ../image_review.json and record reviewed results."
+}

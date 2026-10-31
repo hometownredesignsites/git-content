@@ -1,0 +1,359 @@
+{
+  "session_folder": "run-41217983315-1-site-1-candidate-1",
+  "session_path": "/__w/git-content/git-content/chatgpt-runs/run-41217983315-1-site-1-candidate-1",
+  "html_path": "/__w/git-content/git-content/chatgpt-runs/run-41217983315-1-site-1-candidate-1/files/index.html",
+  "css_path": "/__w/git-content/git-content/chatgpt-runs/run-41217983315-1-site-1-candidate-1/files/styles.css",
+  "score": 87,
+  "checks_passed": 27,
+  "checks_total": 31,
+  "checks": {
+    "html_file_present": true,
+    "no_visible_template_credit": true,
+    "cta_buttons_no_arrows": true,
+    "accessible_mobile_hamburger": false,
+    "css_file_present": true,
+    "document_has_main": true,
+    "document_has_h1": true,
+    "document_closed": true,
+    "styles_css_linked": true,
+    "css_braces_balanced": true,
+    "footer_has_substance": true,
+    "section_contact": true,
+    "section_footer": true,
+    "section_hero": true,
+    "hero_has_image": true,
+    "hero_images_load_ok": true,
+    "all_images_load_ok": true,
+    "image_alt_text_present": true,
+    "image_coverage": true,
+    "visual_design_review_passed": false,
+    "browser_rendered_sections_visible_desktop_and_mobile": true,
+    "browser_hero_spans_viewport_desktop_and_mobile": true,
+    "browser_cta_visible_first_screen_desktop_and_mobile": true,
+    "browser_mobile_menu_clicks_work": false,
+    "browser_mobile_menu_keyboard_works": false,
+    "browser_mobile_has_no_horizontal_overflow": true,
+    "browser_fonts_load_in_browser": true,
+    "browser_images_load_in_browser": true,
+    "source_contact_form_present": true,
+    "source_contact_form_fields_preserved": true,
+    "source_contact_form_required_fields_preserved": true
+  },
+  "automated_success": false,
+  "required_sections": [
+    "contact",
+    "footer",
+    "hero"
+  ],
+  "missing_sections": [
+    "accessible three-bar mobile navigation button",
+    "screenshot-backed desktop/mobile visual design review",
+    "automated rendered-page browser checks",
+    "mobile menu opens and closes by click",
+    "mobile menu works with keyboard controls"
+  ],
+  "hero_image_present": true,
+  "hero_images_load_ok": true,
+  "hero_image_urls": [
+    "https://joshbrooksconstructionllc.com/wp-content/uploads/2026/04/IMG_20251112_220214_251.webp?w=400&ssl=1",
+    "https://joshbrooksconstructionllc.com/wp-content/uploads/2026/09/finished-roof-ridge-thornton-co-768x1024.jpg"
+  ],
+  "image_urls": [
+    "https://joshbrooksconstructionllc.com/wp-content/uploads/2026/04/IMG_20251112_220214_251.webp?w=400&ssl=1",
+    "https://joshbrooksconstructionllc.com/wp-content/uploads/2026/09/finished-roof-ridge-thornton-co-768x1024.jpg",
+    "https://joshbrooksconstructionllc.com/wp-content/uploads/2026/09/finished-roof-garage-dormer-thornton-768x1024.jpg",
+    "https://joshbrooksconstructionllc.com/wp-content/uploads/2026/08/kitchen-island-quartz-after-erie-co-sm.jpg",
+    "https://joshbrooksconstructionllc.com/wp-content/uploads/2026/10/longmont-bathroom-remodel-soaking-tub-lit-niches-brass-trim-1024x768.jpg",
+    "https://joshbrooksconstructionllc.com/wp-content/uploads/2026/07/james-hardie-lap-siding-gable-over-brick-berthoud-co-joyful-stables-sm.webp",
+    "https://joshbrooksconstructionllc.com/wp-content/uploads/2026/09/longmont-porch-trex-composite-decking-after-sm.jpg",
+    "https://i.ytimg.com/vi/9HXPWXzRjws/hqdefault.jpg",
+    "https://i.ytimg.com/vi/KMEKZa9FlQs/hqdefault.jpg",
+    "https://joshbrooksconstructionllc.com/wp-content/uploads/2026/07/left-hand-canyon-roof-ridge-cap-repair-solar-reinstalled-rotated-sm.jpg"
+  ],
+  "failed_image_urls": [],
+  "minimum_image_count": 3,
+  "visual_relevance_review_required": true,
+  "visual_review_status": "pending",
+  "visual_review_missing_urls": [
+    "https://joshbrooksconstructionllc.com/wp-content/uploads/2026/04/IMG_20251112_220214_251.webp?w=400&ssl=1",
+    "https://joshbrooksconstructionllc.com/wp-content/uploads/2026/09/finished-roof-ridge-thornton-co-768x1024.jpg",
+    "https://joshbrooksconstructionllc.com/wp-content/uploads/2026/09/finished-roof-garage-dormer-thornton-768x1024.jpg",
+    "https://joshbrooksconstructionllc.com/wp-content/uploads/2026/08/kitchen-island-quartz-after-erie-co-sm.jpg",
+    "https://joshbrooksconstructionllc.com/wp-content/uploads/2026/10/longmont-bathroom-remodel-soaking-tub-lit-niches-brass-trim-1024x768.jpg",
+    "https://joshbrooksconstructionllc.com/wp-content/uploads/2026/07/james-hardie-lap-siding-gable-over-brick-berthoud-co-joyful-stables-sm.webp",
+    "https://joshbrooksconstructionllc.com/wp-content/uploads/2026/09/longmont-porch-trex-composite-decking-after-sm.jpg",
+    "https://i.ytimg.com/vi/9HXPWXzRjws/hqdefault.jpg",
+    "https://i.ytimg.com/vi/KMEKZa9FlQs/hqdefault.jpg",
+    "https://joshbrooksconstructionllc.com/wp-content/uploads/2026/07/left-hand-canyon-roof-ridge-cap-repair-solar-reinstalled-rotated-sm.jpg"
+  ],
+  "visual_review_issues": [],
+  "visual_design_review_status": "pending",
+  "visual_design_review_missing": [
+    "debug/visual_review.json is missing"
+  ],
+  "visual_design_review_issues": [],
+  "browser_qa_status": "fail",
+  "browser_qa": {
+    "status": "fail",
+    "tested_file": "files/inlined/index.html",
+    "required_sections": [
+      "contact",
+      "footer",
+      "hero"
+    ],
+    "viewports": {
+      "desktop": {
+        "width": 1440,
+        "height": 900,
+        "sections": {
+          "contact": {
+            "visible": true,
+            "selector_hint": "span.contact-method-label",
+            "width": 28,
+            "height": 27
+          },
+          "footer": {
+            "visible": true,
+            "selector_hint": "footer#site-footer.site-footer",
+            "width": 1440,
+            "height": 1017
+          },
+          "hero": {
+            "visible": true,
+            "selector_hint": "section.hero",
+            "width": 1440,
+            "height": 1115
+          }
+        },
+        "all_required_sections_visible": true,
+        "hero": {
+          "present": true,
+          "left": 0,
+          "right": 1440,
+          "width": 1440,
+          "height": 1115,
+          "viewport_width": 1440,
+          "spans_viewport": true,
+          "media_covers_hero": false
+        },
+        "hero_spans_viewport": true,
+        "cta": {
+          "visible_first_screen": true,
+          "text": "Contact",
+          "bottom": 112
+        },
+        "cta_visible_first_screen": true,
+        "horizontal_overflow": {
+          "scroll_width": 1440,
+          "viewport_width": 1440,
+          "overflow": false
+        },
+        "no_horizontal_overflow": true,
+        "images": {
+          "image_count": 12,
+          "loaded_images": 12,
+          "failed_images": [],
+          "font_status": "loaded",
+          "loaded_faces": 0,
+          "failed_faces": 0
+        },
+        "images_loaded": true,
+        "fonts": {
+          "image_count": 12,
+          "loaded_images": 12,
+          "failed_images": [],
+          "font_status": "loaded",
+          "loaded_faces": 0,
+          "failed_faces": 0
+        },
+        "fonts_loaded": true,
+        "resource_errors": [],
+        "screenshot": "screenshots/desktop.png"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 844,
+        "sections": {
+          "contact": {
+            "visible": true,
+            "selector_hint": "span.contact-method-label",
+            "width": 28,
+            "height": 27
+          },
+          "footer": {
+            "visible": true,
+            "selector_hint": "footer#site-footer.site-footer",
+            "width": 390,
+            "height": 1403
+          },
+          "hero": {
+            "visible": true,
+            "selector_hint": "section.hero",
+            "width": 390,
+            "height": 1292
+          }
+        },
+        "all_required_sections_visible": true,
+        "hero": {
+          "present": true,
+          "left": 0,
+          "right": 390,
+          "width": 390,
+          "height": 1292,
+          "viewport_width": 390,
+          "spans_viewport": true,
+          "media_covers_hero": false
+        },
+        "hero_spans_viewport": true,
+        "cta": {
+          "visible_first_screen": true,
+          "text": "Get a Free Estimate",
+          "bottom": 82
+        },
+        "cta_visible_first_screen": true,
+        "horizontal_overflow": {
+          "scroll_width": 390,
+          "viewport_width": 390,
+          "overflow": false
+        },
+        "no_horizontal_overflow": true,
+        "images": {
+          "image_count": 12,
+          "loaded_images": 12,
+          "failed_images": [],
+          "font_status": "loaded",
+          "loaded_faces": 0,
+          "failed_faces": 0
+        },
+        "images_loaded": true,
+        "fonts": {
+          "image_count": 12,
+          "loaded_images": 12,
+          "failed_images": [],
+          "font_status": "loaded",
+          "loaded_faces": 0,
+          "failed_faces": 0
+        },
+        "fonts_loaded": true,
+        "resource_errors": [],
+        "screenshot": "screenshots/mobile.png"
+      }
+    },
+    "mobile_menu": {
+      "found": false,
+      "click_opens": false,
+      "click_closes": false,
+      "tab_reachable": false,
+      "enter_opens": false,
+      "space_toggles": false,
+      "escape_closes": false
+    },
+    "checks": {
+      "rendered_sections_visible_desktop_and_mobile": true,
+      "hero_spans_viewport_desktop_and_mobile": true,
+      "cta_visible_first_screen_desktop_and_mobile": true,
+      "mobile_menu_clicks_work": false,
+      "mobile_menu_keyboard_works": false,
+      "mobile_has_no_horizontal_overflow": true,
+      "fonts_load_in_browser": true,
+      "images_load_in_browser": true
+    },
+    "resource_errors": []
+  },
+  "source_image_urls_available": [],
+  "source_image_urls_used": [],
+  "parse_diagnostic": null,
+  "html_bytes": 37372,
+  "css_bytes": 44081,
+  "footer_text": "Josh Brooks Construction and Renovation Inc. Licensed Class C General Contractor. Fully insured.\n        License CON-24-0152. Explore Home Services Recent Projects Service Areas Contact Our Services Roofing Kitchen & Bath Remodeling General Contracting James Hardie Siding Basement Finishing Decks & Additions Get in Touch Discuss your roofing, remodeling, or restoration project. (720) 828-7997 Text photos of damage: (720) 453-5095 Request a Free Estimate © 2026 Josh Brooks Construction and Renovation Inc. About Josh Brooks Construction | Contact Back to top",
+  "footer_links": [
+    "#top",
+    "#top",
+    "#services",
+    "#projects",
+    "#service-areas",
+    "#contact",
+    "https://joshbrooksconstructionllc.com/roofing/",
+    "https://joshbrooksconstructionllc.com/kitchen-bath-remodeling/",
+    "https://joshbrooksconstructionllc.com/service-areas/",
+    "https://joshbrooksconstructionllc.com/service-areas/",
+    "https://joshbrooksconstructionllc.com/service-areas/",
+    "https://joshbrooksconstructionllc.com/service-areas/",
+    "tel:7208287997",
+    "sms:7204535095",
+    "#contact",
+    "https://joshbrooksconstructionllc.com/about-us/",
+    "https://joshbrooksconstructionllc.com/contact/",
+    "#top"
+  ],
+  "generated_form_fields": [
+    {
+      "tag": "input",
+      "type": "text",
+      "name": "g2-name",
+      "id": "g2-name",
+      "label": "Name *",
+      "placeholder": "",
+      "required": true
+    },
+    {
+      "tag": "input",
+      "type": "tel",
+      "name": "g2-phone",
+      "id": "g2-phone",
+      "label": "Phone *",
+      "placeholder": "",
+      "required": true
+    },
+    {
+      "tag": "input",
+      "type": "email",
+      "name": "g2-email",
+      "id": "g2-email",
+      "label": "Email",
+      "placeholder": "",
+      "required": false
+    },
+    {
+      "tag": "input",
+      "type": "text",
+      "name": "g2-propertyaddressorcity",
+      "id": "g2-propertyaddressorcity",
+      "label": "Property Address or City",
+      "placeholder": "",
+      "required": false
+    },
+    {
+      "tag": "select",
+      "type": "select",
+      "name": "g2-whatdoyouneed",
+      "id": "g2-whatdoyouneed",
+      "label": "What do you need?",
+      "placeholder": "",
+      "required": false
+    },
+    {
+      "tag": "textarea",
+      "type": "textarea",
+      "name": "g2-telljoshabouttheproject",
+      "id": "contact-form-comment-g2-telljoshabouttheproject",
+      "label": "Tell Josh about the project",
+      "placeholder": "",
+      "required": false
+    },
+    {
+      "tag": "textarea",
+      "type": "textarea",
+      "name": "ak_hp_textarea",
+      "id": "ak_hp_textarea",
+      "label": "Leave this field empty",
+      "placeholder": "",
+      "required": false
+    }
+  ],
+  "source_form_fields_missing": [],
+  "source_form_required_fields_missing": [],
+  "cta_arrow_issues": [],
+  "complete": false,
+  "final_success": false
+}
