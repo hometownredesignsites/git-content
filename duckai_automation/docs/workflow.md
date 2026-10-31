@@ -4,11 +4,11 @@ This guide describes the current GitHub Actions flow for the `duckai` branch. It
 
 ## Run inputs
 
-The **Duck.ai Website Automation** workflow starts on a push to `duckai` when `duckai_automation/source_urls.csv` changes. Changes to `website_request.txt` and `design_brief.txt` alone do not start a run. The workflow YAML also defines `workflow_dispatch`, but the workflow currently exists only on `duckai` while `main` is the default branch. GitHub requires the workflow file on the default branch for manual dispatch through the Actions interface, so the dispatch inputs described below are not currently available there. The CSV requires one row per site with `business`, `category`, and `website` columns; `location` is optional. A changed CSV processes every valid row.
+The **Duck.ai Website Automation** workflow starts on a push to `duckai` when `duckai_automation/source_urls.csv` changes. Changes to `website_request.txt` and `design_brief.txt` alone do not start a run. This direct path uses a public CSV and commits outputs to the public branch. The YAML also defines `workflow_dispatch`, but the workflow currently exists only on `duckai` while `main` is the default branch. GitHub requires the workflow file on the default branch for manual dispatch through the Actions interface, so those inputs are not currently available there. The CSV requires `website`, `business`, and `category`; `location` is optional. A changed CSV processes every valid row.
 
-The separate **Duck.ai Private Queue** workflow starts when an opaque marker is pushed to `.private-queue/pending/` on `duckai`. It retrieves the batch manifest and target rows from the private `git-content-private` repository at runtime. Candidate folders, diagnostics, and CSS-inlined HTML are committed to `git-content-private/results/`; this workflow does not commit those files or target rows to the public branch. See the private repository README for required secrets and privacy limits.
+The **Duck.ai Private Queue** workflow starts when an opaque marker is pushed to `.private-queue/start/` on `duckai`. The local coordinator in `git-content-private` first commits the CSV and per-row records privately, then sets temporary Actions secrets for one row and pushes a marker containing only a random job ID. The public worker runs one site and commits candidate files, diagnostics, and CSS-inlined HTML to `git-content-private/results/<job-id>/`. It does not fetch private queue files and does not commit row or candidate data to the public branch. The local coordinator waits for the matching run and deletes the temporary secrets before processing the next row. See the private repository README for setup and privacy limits.
 
-The target loader reads only these CSV columns:
+These are the CSV columns with built-in meanings in the Duck.ai prompt:
 
 | Column | Required | Meaning |
 | --- | --- | --- |
@@ -17,19 +17,22 @@ The target loader reads only these CSV columns:
 | `category` | Yes | Primary industry category, sent as unverified design context. |
 | `location` | No | Location clue sent as unverified context; use as a fact only if the website confirms it. |
 
-Any other CSV columns are ignored by the current loader. The CSV on the `duckai` branch has 21 rows. The business name, category, and optional location help identify the target and guide design; Duck.ai must verify metadata against the site and use the source assessment as the authority for factual claims.
+The public CSV loader uses these four fields. The private coordinator passes every CSV column in a row JSON secret and exports additional columns as `CSV_FIELD_<HEADER>` environment variables. Additional fields do not affect the prompt until the runner or prompt is explicitly updated. The public CSV on the `duckai` branch has 21 rows. The business name, category, and optional location help identify the target and guide design; Duck.ai must verify metadata against the site and use the source assessment as the authority for factual claims.
 
 The workflow's `smoke_test` input is intended to exercise the CSV path with one candidate from one row; `smoke_website` selects the row and blank uses the first CSV row. That mode cannot currently be started through the Actions interface because the workflow is absent from the default branch. A push-triggered test uses normal batch behavior for all rows present in the changed CSV; when testing one target this way, use a one-row CSV, which still seeks three automated passes for that target. A failed run commits available evidence for inspection.
 
-The checked-in website request and design brief are reusable instructions, not site-specific copy. The target CSV is tracked only on `duckai`. Keep them separate: the request defines scope, factual sourcing, content, assets, and output requirements; the design brief guides visual decisions. The business, category, and location values are treated as data, not instructions. The preparation job validates the CSV and creates one matrix job per website. Those jobs run serially. Each site job loops through full candidate runs until it gets three automated passes or reaches six attempts. This is one workflow execution, not three workflow executions per site. With the current 21-row CSV, the workflow can make up to 126 candidate attempts.
+The checked-in website request and design brief are reusable instructions, not site-specific copy. The public target CSV is tracked only on `duckai`; the private CSV is tracked only in `git-content-private`. The business, category, location, and additional row values are data, not instructions. The public preparation job creates one matrix job per website, and those jobs run serially. The private coordinator starts one site job at a time and waits for completion before using the shared temporary secrets for another row. Each site job loops through full candidate runs until it gets three automated passes or reaches six attempts. The current 21-row public CSV can create up to 126 attempts in one public batch.
 
 ## End-to-end flow
 
 ```mermaid
 flowchart TD
-    A[CSV changed and pushed to duckai] --> B[Validate CSV and create one job per target row]
+    A[Public CSV changed and pushed to duckai] --> B[Validate public CSV and create one job per target row]
     B --> C[GitHub Actions: Ubuntu and pinned Playwright Python container, one website at a time]
-    C --> C1[Read business, industry category, optional location, and source URL from row]
+    P[Private CSV edited locally] --> P1[Commit CSV and row records to private repo]
+    P1 --> P2[Set temporary row secret and push opaque start marker]
+    P2 --> C
+    C --> C1[Read row from public CSV or temporary private Actions secret]
     C1 --> C2[Start headed Chromium under Xvfb; create fresh logged-out Duck.ai chat]
     C2 --> D[Send business/category/location as unverified context]
     D --> E[Enable Web Search and request source assessment for the website]
@@ -49,13 +52,13 @@ flowchart TD
     Q --> S{Three automated passes for this site or six attempts?}
     R --> S
     S -- No --> C2
-    S -- Yes --> T[Commit this site's candidate evidence to duckai]
+    S -- Yes --> T[Commit this site's candidate evidence to public duckai or private results]
     T --> U{At least three automated passes for every site?}
     U -- Yes --> V[Workflow succeeds; visual approval is still a separate review]
     U -- No --> W[Workflow fails; inspect saved candidate reports]
 ```
 
-One workflow execution creates one matrix job for each website row. Each matrix job runs up to six complete candidate attempts for that website, stopping early once it has three `automated_success` candidates. Website jobs are serialized to limit inference load and avoid competing commits to the branch. Each candidate uses a fresh Duck.ai chat. The workflow commits evidence for successful and failed attempts before the final step checks that this website achieved three automated passes. A batch succeeds only when every website meets that target. For 21 rows, that is 21 site jobs and up to 126 candidate attempts in one workflow execution.
+The public CSV workflow creates one matrix job for each website row; the private worker creates one job for each opaque marker. Each job runs up to six complete candidate attempts for that website, stopping early once it has three `automated_success` candidates. Public site jobs are serialized to limit inference load and avoid competing commits. Private jobs are serialized by the local coordinator and workflow concurrency group. Each candidate uses a fresh Duck.ai chat. The workflow commits evidence for successful and failed attempts before checking the pass target. A public batch succeeds only when every website meets that target. For 21 public rows, that is 21 site jobs and up to 126 candidate attempts in one public workflow execution.
 
 ### Source assessment
 
@@ -86,7 +89,9 @@ These are deterministic browser/markup checks and do not call an AI model. Passi
 
 ## Candidate output layout
 
-Each candidate attempt is stored under:
+Each candidate attempt is stored in a run-specific folder. The direct public CSV path commits the folder under `duckai-runs/` on `duckai`. The private path copies the same folder into `results/<job-id>/run-<run-id>-<attempt>/candidates/` in `git-content-private` and does not commit it to the public branch.
+
+Candidate folder contents:
 
 ```text
 duckai-runs/run-<run-id>-<attempt>-site-<site-index>-candidate-<candidate-index>/
@@ -111,10 +116,10 @@ Some files are only present when the corresponding step completed; failed or par
 
 ## Rechecking a saved batch
 
-**Duck.ai Rendered Website QA** reruns browser QA and the structural checker on a committed batch, updates each candidate's QA evidence and run notes, and commits those evidence changes. It does not start new Duck.ai chats. The workflow declares inputs for a run ID and attempt (blank selects the newest saved candidate batch), but manual dispatch through the Actions interface is unavailable while its workflow file exists only on `duckai` and `main` remains the default branch.
+**Duck.ai Rendered Website QA** reruns browser QA and the structural checker on a public committed batch under `duckai-runs/`, updates each candidate's QA evidence and run notes, and commits those evidence changes. It does not start new Duck.ai chats and does not recheck private outputs. The workflow declares inputs for a run ID and attempt (blank selects the newest saved public candidate batch), but manual dispatch through the Actions interface is unavailable while its workflow file exists only on `duckai` and `main` remains the default branch.
 
 ## Runtime and access boundaries
 
 Both workflows use `mcr.microsoft.com/playwright/python:v1.58.0-noble` with the repository's pinned Playwright Python package. The generation workflow launches headed Chromium with `xvfb-run` to interact with Duck.ai. The rendered-page QA workflow checks the saved local HTML separately and does not use Duck.ai. Both run on GitHub-hosted Ubuntu.
 
-The automation uses a fresh, logged-out chat. If Duck.ai blocks guest access or presents a sign-in, usage, or human-verification gate, stop that candidate and preserve its failure report. Do not attempt to bypass the gate. The GitHub Actions token needs repository contents write access to commit candidate output.
+The automation uses a fresh, logged-out chat. If Duck.ai blocks guest access or presents a sign-in, usage, or human-verification gate, stop that candidate and preserve its failure report. Do not attempt to bypass the gate. The direct CSV workflow needs public repository contents write permission. The private worker uses `PRIVATE_RESULTS_TOKEN` (contents write on `git-content-private`) to commit candidate output. Its temporary row secret is configured by the local coordinator and removed after the matching run completes.
