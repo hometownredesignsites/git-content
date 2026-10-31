@@ -24,8 +24,8 @@ REPO = ROOT.parent
 RUN_ID = os.environ.get("GITHUB_RUN_ID", "local")
 RUN_ATTEMPT = os.environ.get("GITHUB_RUN_ATTEMPT", "1")
 CANDIDATE_INDEX = os.environ.get("CANDIDATE_INDEX", "1")
-if not CANDIDATE_INDEX.isdigit() or not 1 <= int(CANDIDATE_INDEX) <= 6:
-    raise RuntimeError("CANDIDATE_INDEX must be between 1 and 6.")
+if not CANDIDATE_INDEX.isdigit() or not 1 <= int(CANDIDATE_INDEX) <= 10:
+    raise RuntimeError("CANDIDATE_INDEX must be between 1 and 10.")
 SITE_INDEX = os.environ.get("SITE_INDEX", "1")
 if not SITE_INDEX.isdigit() or int(SITE_INDEX) < 1:
     raise RuntimeError("SITE_INDEX must be a positive integer.")
