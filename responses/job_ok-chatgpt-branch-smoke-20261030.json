@@ -1,0 +1,10 @@
+{
+  "job_id": "job_ok-chatgpt-branch-smoke-20261030",
+  "message": {
+    "role": "assistant",
+    "content": "OK"
+  },
+  "done": true,
+  "started_at": "2026-10-31T03:41:44Z",
+  "completed_at": "2026-10-31T03:45:28Z"
+}
