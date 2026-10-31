@@ -6,14 +6,14 @@ This directory contains the Duck.ai prompts, browser runner, checks, and workflo
 
 1. Edit the CSV in the private repository and run its local coordinator.
 2. The coordinator commits the CSV and per-target records to the private repository.
-3. For one target at a time, it sets temporary row and job-ID secrets and pushes an opaque start marker to the public `duckai` branch.
+3. For one target at a time, it sets the `DUCKAI_TARGET_ROW_JSON` and `DUCKAI_TARGET_JOB_ID` temporary secrets and pushes an opaque start marker to the public `duckai` branch.
 4. The Duck.ai private-queue workflow reads the temporary row, generates candidates, and runs structural and Playwright checks.
-5. The worker commits candidate files, diagnostics, and `files/inlined/index.html` to `git-content-private/results/<site-slug>/run-<workflow-id>-<attempt>/candidates/`. It does not persist target rows or generated sites on this public repository branch.
+5. The worker reads the authoritative job record from private `main`, then commits candidate files, diagnostics, and `files/inlined/index.html` to the private `duckai` branch at `results/<site-slug>/run-<workflow-id>-<attempt>/candidates/`. It does not persist target rows or generated sites on this public repository branch.
 6. The coordinator waits for the run, removes the temporary row secrets, and then handles the next target.
 
 The worker aims for three automated passes and stops after at most ten complete candidate attempts. Its progress messages contain attempt/pass counts, and the local coordinator reports the active workflow step and elapsed time. The shared secrets require serial processing.
 
-The public Actions run, timing, and opaque job marker are visible. The target row is temporarily available to the public GitHub Actions runner and is sent to Duck.ai. The `PRIVATE_RESULTS_TOKEN` secret lets the public workflow write results to the private repo. Restrict write access to trusted maintainers; workflow changes on the public branch can affect how the secret is used. Do not submit data that cannot be processed by GitHub Actions and Duck.ai. Earlier public CSV and generated run files remain in this repository's Git history; this workflow does not remove them from older commits.
+The public Actions run, timing, and opaque job marker are visible. The target row is temporarily available to the public GitHub Actions runner and is sent to Duck.ai. The `PRIVATE_RESULTS_TOKEN` secret lets the public workflow write results to the private `duckai` branch. Provider-specific row secrets prevent one provider's run from overwriting another provider's active row; the local coordinator still processes each provider's rows serially. Restrict write access to trusted maintainers; workflow changes on the public branch can affect how the secret is used. Do not submit data that cannot be processed by GitHub Actions and Duck.ai. Earlier public CSV and generated run files remain in this repository's Git history; this workflow does not remove them from older commits.
 
 ## Fields used by the generation prompt
 
