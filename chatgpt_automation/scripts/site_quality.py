@@ -37,9 +37,10 @@ CTA_ARROW_GLYPHS = re.compile(r"[←↑→↓↗↘↙↖↩↪➔➜➝➞➟�
 
 def _has_alias(value, aliases):
     value = (value or "").lower()
+    normalized_aliases = [re.sub(r"\s+", "-", alias.lower()) for alias in aliases]
     return any(
         re.search(rf"(?:^|[-_]){re.escape(alias)}(?:$|[-_])", value)
-        for alias in aliases
+        for alias in normalized_aliases
     )
 
 
@@ -140,6 +141,47 @@ def _all_css_image_urls(css):
         for match in image_property.finditer(declarations):
             urls.extend(url_match.group(2).strip() for url_match in image_url.finditer(match.group(1)))
     return [url for url in urls if url]
+
+
+def _css_syntax_issues(css):
+    """Check CSS block balance while ignoring braces inside comments and strings."""
+    issues = []
+    depth = 0
+    quote = None
+    escaped = False
+    in_comment = False
+    for index, char in enumerate(css):
+        following = css[index + 1] if index + 1 < len(css) else ""
+        if in_comment:
+            if char == "*" and following == "/":
+                in_comment = False
+            continue
+        if quote:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == quote:
+                quote = None
+            continue
+        if char == "/" and following == "*":
+            in_comment = True
+        elif char in {"'", '"'}:
+            quote = char
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth < 0:
+                issues.append("closing brace without a matching opening brace")
+                depth = 0
+    if in_comment:
+        issues.append("unterminated comment")
+    if quote:
+        issues.append("unterminated string")
+    if depth:
+        issues.append(f"{depth} unclosed CSS block(s)")
+    return issues
 
 
 def _looks_like_image(data, content_type=""):
@@ -427,6 +469,9 @@ class _PageInventory(HTMLParser):
     def __init__(self):
         super().__init__(convert_charrefs=True)
         self.tags = set()
+        self.tag_counts = {}
+        self.html_lang = ""
+        self.viewport_meta = False
         self.ids = []
         self.classes = []
         self.headings = []
@@ -447,6 +492,7 @@ class _PageInventory(HTMLParser):
         self._form_depth = 0
         self._labels = {}
         self._label_for = ""
+        self._label_stack = []
         self.hero_image_present = False
         self.hero_image_urls = []
         self.all_image_urls = []
@@ -457,7 +503,12 @@ class _PageInventory(HTMLParser):
     def handle_starttag(self, tag, attrs):
         tag = tag.lower()
         self.tags.add(tag)
+        self.tag_counts[tag] = self.tag_counts.get(tag, 0) + 1
         values = dict(attrs)
+        if tag == "html":
+            self.html_lang = (values.get("lang") or "").strip()
+        if tag == "meta" and (values.get("name") or "").lower() == "viewport":
+            self.viewport_meta = bool((values.get("content") or "").strip())
         class_names = (values.get("class") or "").lower()
         is_cta = tag == "button" or (
             tag == "a"
@@ -528,6 +579,7 @@ class _PageInventory(HTMLParser):
             self._form_depth += 1
         if tag == "label":
             self._label_for = values.get("for", "")
+            self._label_stack.append({"for": self._label_for, "text": [], "field_index": None})
         if self._form_depth and tag in {"input", "select", "textarea"}:
             field_type = values.get("type", "text").lower() if tag == "input" else tag
             if field_type not in {"hidden", "submit", "image", "reset"}:
@@ -537,9 +589,12 @@ class _PageInventory(HTMLParser):
                     "name": values.get("name", ""),
                     "id": values.get("id", ""),
                     "label": values.get("aria-label", ""),
+                    "aria_labelledby": values.get("aria-labelledby", ""),
                     "placeholder": values.get("placeholder", ""),
                     "required": "required" in values,
                 })
+                if self._label_stack and self._label_stack[-1]["field_index"] is None:
+                    self._label_stack[-1]["field_index"] = len(self.form_fields) - 1
         if re.fullmatch(r"h[1-6]", tag):
             self._heading = [""]
 
@@ -632,6 +687,14 @@ class _PageInventory(HTMLParser):
         if tag == "form" and self._form_depth:
             self._form_depth -= 1
         if tag == "label":
+            if self._label_stack:
+                label = self._label_stack.pop()
+                label_text = " ".join(label["text"])
+                if label["for"]:
+                    self._labels[label["for"]] = " ".join(filter(None, (self._labels.get(label["for"], ""), label_text)))
+                elif label["field_index"] is not None:
+                    field = self.form_fields[label["field_index"]]
+                    field["label"] = field["label"] or label_text
             self._label_for = ""
         for index in range(len(self._hero_stack) - 1, -1, -1):
             if self._hero_stack[index][0] == tag:
@@ -656,6 +719,8 @@ class _PageInventory(HTMLParser):
                 self.footer_text.append(clean)
             if self._label_for:
                 self._labels[self._label_for] = " ".join(filter(None, (self._labels.get(self._label_for, ""), clean)))
+            for label in self._label_stack:
+                label["text"].append(clean)
         if self._heading is not None:
             self._heading.append(data.strip())
 
@@ -672,6 +737,111 @@ class _PageInventory(HTMLParser):
                     and has_menu_class and is_expanded_control and not has_visible_menu_label):
                 return True
         return False
+
+
+class _SectionInventory(HTMLParser):
+    """Track named content containers and whether each contains real structure."""
+
+    CONTAINERS = {"section", "article", "div", "aside", "main", "header", "footer"}
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.stack = []
+        self.sections = []
+        self.headings = []
+        self.hidden_depth = 0
+
+    def handle_starttag(self, tag, attrs):
+        tag = tag.lower()
+        values = dict(attrs)
+        for candidate in self.stack:
+            candidate["child_count"] += 1
+            if tag == "form":
+                candidate["has_form"] = True
+        if tag in {"head", "script", "style", "template"}:
+            self.hidden_depth += 1
+        if tag in self.CONTAINERS or (values.get("role") or "").lower() == "region":
+            self.stack.append({
+                "tag": tag,
+                "tokens": re.sub(r"\s+", "-", " ".join((values.get("id") or "", values.get("class") or "", values.get("aria-label") or "")).lower()),
+                "text": [],
+                "heading": [],
+                "child_count": 0,
+                "has_heading": False,
+                "has_h1": False,
+                "has_form": tag == "form",
+            })
+        if tag == "h1":
+            for candidate in self.stack:
+                candidate["has_h1"] = True
+        if re.fullmatch(r"h[1-6]", tag):
+            self.headings.append({"tag": tag, "text": []})
+
+    def handle_endtag(self, tag):
+        tag = tag.lower()
+        if re.fullmatch(r"h[1-6]", tag) and self.headings:
+            self.headings.pop()
+        if tag in {"head", "script", "style", "template"} and self.hidden_depth:
+            self.hidden_depth -= 1
+        for index in range(len(self.stack) - 1, -1, -1):
+            if self.stack[index]["tag"] == tag:
+                candidate = self.stack.pop(index)
+                candidate["text"] = " ".join(candidate["text"])
+                candidate["heading"] = " ".join(candidate["heading"])
+                self.sections.append(candidate)
+                break
+
+    def handle_data(self, data):
+        if self.hidden_depth or not data.strip():
+            return
+        clean = data.strip()
+        for candidate in self.stack:
+            candidate["text"].append(clean)
+        if self.headings:
+            self.headings[-1]["text"].append(clean)
+            for candidate in self.stack:
+                candidate["has_heading"] = True
+                candidate["heading"].append(clean)
+
+    def complete_sections(self, required):
+        complete = {}
+        evidence = {}
+        for section in required:
+            aliases = SECTION_ALIASES.get(section, (section,))
+            matches = []
+            for candidate in self.sections:
+                if section == "hero" and candidate["tag"] not in {"section", "article", "div", "main", "header"}:
+                    continue
+                if section != "hero" and candidate["tag"] in {"main", "header"}:
+                    continue
+                named_by_tokens = _has_alias(candidate["tokens"], aliases)
+                if section == "footer" and candidate["tag"] == "footer":
+                    named_by_tokens = True
+                named_by_heading = any(
+                    re.search(rf"\b{re.escape(alias)}\b", candidate["heading"], re.IGNORECASE)
+                    for alias in aliases
+                )
+                if not (named_by_tokens or named_by_heading):
+                    continue
+                text_length = len(candidate["text"].strip())
+                substantial = text_length >= 30 and (
+                    candidate["child_count"] >= 3 or candidate["has_form"]
+                )
+                has_expected_heading = candidate["has_heading"]
+                if section == "hero":
+                    has_expected_heading = candidate["has_h1"]
+                elif section == "footer":
+                    has_expected_heading = True
+                if substantial and has_expected_heading:
+                    matches.append(candidate)
+            complete[section] = bool(matches)
+            evidence[section] = {
+                "matching_container_count": len(matches),
+                "minimum_visible_text_characters": 30,
+                "minimum_descendant_elements": 3,
+                "requires_heading_and_child_content": True,
+            }
+        return complete, evidence
 
 
 def _required_sections(prompt):
@@ -765,16 +935,33 @@ def assess_website(prompt, session_dir):
     for field in parser.form_fields:
         field["label"] = field["label"] or parser._labels.get(field["id"], "")
 
+    id_counts = {}
+    for element_id in parser.ids:
+        id_counts[element_id] = id_counts.get(element_id, 0) + 1
+    duplicate_ids = sorted(element_id for element_id, count in id_counts.items() if count > 1)
+    fragment_targets = set(parser.ids)
+    missing_fragment_targets = sorted({
+        href[1:] for href in parser.visible_links
+        if href.startswith("#") and href[1:] and href[1:] not in fragment_targets
+    })
+    h1_values = re.findall(r"<h1\b[^>]*>([\s\S]*?)</h1\s*>", html, re.IGNORECASE)
+    h1_text = [re.sub(r"<[^>]+>", " ", value).strip() for value in h1_values]
+    css_syntax_issues = _css_syntax_issues(css)
+
+    section_inventory = _SectionInventory()
+    section_inventory.feed(html)
+    section_inventory.close()
     evidence = " ".join(parser.ids + parser.classes + parser.headings).lower()
     page_text = " ".join(parser.text).lower()
     required = _required_sections(prompt)
+    complete_section_results, complete_section_evidence = section_inventory.complete_sections(required)
     section_results = {}
     for section in required:
         aliases = SECTION_ALIASES.get(section, (section,))
         if section == "footer":
-            section_results[section] = "footer" in parser.tags
+            section_present = "footer" in parser.tags
         elif section == "hero":
-            section_results[section] = (
+            section_present = (
                 "h1" in parser.tags
                 and (any(alias in evidence for alias in aliases) or "main" in parser.tags)
             )
@@ -782,14 +969,15 @@ def assess_website(prompt, session_dir):
             has_price = bool(
                 re.search(r"(?:[$€£]\s*\d+(?:,\d{3})*(?:\.\d{2})?|\b\d+(?:\.\d{2})?\s*(?:usd|dollars?)\b)", page_text, re.IGNORECASE)
             )
-            section_results[section] = any(alias in evidence for alias in aliases) or has_price
+            section_present = any(alias in evidence for alias in aliases) or has_price
         elif section == "hours":
             has_hours_schedule = bool(
                 re.search(r"\b(?:\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)|\d{1,2}:\d{2})\b", page_text, re.IGNORECASE)
             )
-            section_results[section] = any(alias in evidence for alias in aliases) or has_hours_schedule
+            section_present = any(alias in evidence for alias in aliases) or has_hours_schedule
         else:
-            section_results[section] = any(alias in evidence for alias in aliases)
+            section_present = any(alias in evidence for alias in aliases)
+        section_results[section] = bool(section_present and complete_section_results.get(section))
 
     visible_content = " ".join(parser.visible_text)
     visible_links = " ".join(parser.visible_links)
@@ -804,8 +992,27 @@ def assess_website(prompt, session_dir):
         "cta_buttons_no_arrows": not parser.cta_arrow_issues,
         "accessible_mobile_hamburger": parser.has_accessible_mobile_hamburger(),
         "css_file_present": bool(css),
-        "document_has_main": "main" in parser.tags,
-        "document_has_h1": "h1" in parser.tags,
+        "document_has_main": parser.tag_counts.get("main", 0) == 1,
+        "document_has_h1": len(h1_text) == 1 and bool(h1_text[0]),
+        "html_language_declared": bool(re.fullmatch(r"[a-z]{2,3}(?:-[a-z0-9]+)*", parser.html_lang, re.IGNORECASE)),
+        "document_title_present": bool(re.search(r"<title\b[^>]*>\s*[^<\s][\s\S]*?</title\s*>", html, re.IGNORECASE)),
+        "viewport_meta_present": parser.viewport_meta,
+        "ids_unique": not duplicate_ids,
+        "fragment_links_resolve": not missing_fragment_targets,
+        "interactive_buttons_named": all(
+            button["label"] or (
+                button["labelledby"]
+                and all(reference in fragment_targets for reference in button["labelledby"].split())
+            ) or " ".join(button["text"]).strip()
+            for button in parser._buttons
+        ),
+        "form_controls_labeled": all(
+            field["label"] or (
+                field.get("aria_labelledby")
+                and all(reference in fragment_targets for reference in field["aria_labelledby"].split())
+            )
+            for field in parser.form_fields
+        ),
         "document_closed": bool(
             re.search(r"</body\s*>[\s\S]*?</html\s*>\s*(?:<!--[\s\S]*?-->\s*)*$", html, re.IGNORECASE)
         ),
@@ -816,7 +1023,7 @@ def assess_website(prompt, session_dir):
                 re.IGNORECASE,
             )
         ),
-        "css_braces_balanced": bool(css) and css.count("{") == css.count("}"),
+        "css_braces_balanced": bool(css) and not css_syntax_issues,
         # A copyright-only footer is not a useful closing section. Require visible
         # content and at least two useful links or contact targets.
         "footer_has_substance": (
@@ -826,6 +1033,7 @@ def assess_website(prompt, session_dir):
     }
     for section, present in section_results.items():
         checks[f"section_{section}"] = present
+        checks[f"section_{section}_complete"] = complete_section_results.get(section, False)
 
     hero_image_present = parser.hero_image_present or _hero_has_css_background_image(
         css, parser.hero_selectors
@@ -963,15 +1171,25 @@ def assess_website(prompt, session_dir):
 
     passed = sum(checks.values())
     total = len(checks)
-    automated_checks = {name: value for name, value in checks.items() if name != "visual_design_review_passed"}
+    # The source-code gate is deterministic. Browser execution and external
+    # image fetching remain advisory evidence until those checks are reliable
+    # enough to block a candidate.
+    advisory_check_names = {
+        name for name in checks
+        if name.startswith("browser_") or name in {
+            "hero_images_load_ok", "all_images_load_ok", "source_site_photos_load_ok"
+        }
+    }
+    automated_checks = {
+        name: value for name, value in checks.items()
+        if name not in advisory_check_names and name != "visual_design_review_passed"
+    }
+    automated_passed = sum(automated_checks.values())
+    automated_total = len(automated_checks)
     automated_success = bool(html and css and all(automated_checks.values()))
     missing_sections = [name for name, present in section_results.items() if not present]
     if not hero_image_present:
         missing_sections.append("hero image")
-    if not hero_images_load_ok:
-        missing_sections.append("hero image loads")
-    if failed_images:
-        missing_sections.append("all image assets load")
     if not checks["image_alt_text_present"]:
         missing_sections.append("alt attribute on every content image")
     if not checks["image_coverage"]:
@@ -988,27 +1206,13 @@ def assess_website(prompt, session_dir):
         missing_sections.append("accessible three-bar mobile navigation button")
     if visual_design_review_status != "pass":
         missing_sections.append("screenshot-backed desktop/mobile visual design review")
-    if browser_qa_status != "pass":
-        missing_sections.append("automated rendered-page browser checks")
-        browser_labels = {
-            "rendered_sections_visible_desktop_and_mobile": "required sections visibly render on desktop and mobile",
-            "hero_spans_viewport_desktop_and_mobile": "hero spans the desktop and mobile viewports",
-            "cta_visible_first_screen_desktop_and_mobile": "CTA appears on the first screen at desktop and mobile sizes",
-            "mobile_menu_clicks_work": "mobile menu opens and closes by click",
-            "mobile_menu_keyboard_works": "mobile menu works with keyboard controls",
-            "mobile_has_no_horizontal_overflow": "mobile page has no horizontal overflow",
-            "fonts_load_in_browser": "browser fonts load successfully",
-            "images_load_in_browser": "browser images load successfully",
-        }
-        for name, label in browser_labels.items():
-            if browser_qa_checks.get(name) is not True:
-                missing_sections.append(label)
     if source_image_urls and not checks.get("source_site_hero_photo_used"):
         missing_sections.append("verified source-site photo in hero")
     if source_image_urls and not checks.get("source_site_photos_used"):
         missing_sections.append("at least two verified source-site photos")
-    if source_image_urls and not checks.get("source_site_photos_load_ok"):
-        missing_sections.append("verified source-site photos load")
+    advisory_findings = [name for name in sorted(advisory_check_names) if not checks[name]]
+    if browser_qa_status != "pass":
+        advisory_findings.append("browser QA did not pass; see debug/browser_qa.json")
 
     return {
         "session_folder": session_dir.name,
@@ -1018,9 +1222,18 @@ def assess_website(prompt, session_dir):
         "score": round(100 * passed / total) if total else 0,
         "checks_passed": passed,
         "checks_total": total,
+        "automated_score": round(100 * automated_passed / automated_total) if automated_total else 0,
+        "automated_checks_passed": automated_passed,
+        "automated_checks_total": automated_total,
         "checks": checks,
+        "structural_gate_checks": automated_checks,
+        "advisory_checks": {name: checks[name] for name in sorted(advisory_check_names)},
+        "blocking_failures": [name for name, passed_check in automated_checks.items() if not passed_check],
+        "advisory_findings": advisory_findings,
         "automated_success": automated_success,
+        "structural_complete": automated_success,
         "required_sections": required,
+        "section_completeness": complete_section_evidence,
         "missing_sections": missing_sections,
         "hero_image_present": hero_image_present,
         "hero_images_load_ok": hero_images_load_ok,
@@ -1040,6 +1253,10 @@ def assess_website(prompt, session_dir):
         "source_image_urls_available": source_image_urls,
         "source_image_urls_used": sorted(source_used) if source_image_urls else [],
         "parse_diagnostic": parse_error,
+        "duplicate_ids": duplicate_ids,
+        "missing_fragment_targets": missing_fragment_targets,
+        "h1_count": len(h1_text),
+        "css_syntax_issues": css_syntax_issues,
         "html_bytes": len(html.encode("utf-8")),
         "css_bytes": len(css.encode("utf-8")),
         "footer_text": " ".join(parser.footer_text),

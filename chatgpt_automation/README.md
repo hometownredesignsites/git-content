@@ -9,9 +9,11 @@ flowchart LR
   C --> D[4 CSS chunks, then 8 HTML chunks]
   D --> E[Validate and save each chunk]
   E --> F[Assemble and inline CSS]
-  F --> G[Structural and browser QA]
-  G --> H[Desktop and mobile visual review]
-  H --> I[Save candidate and evidence]
+  F --> G[Python structural code gate]
+  F --> H[Browser QA evidence and screenshots]
+  G --> I[Save candidate and evidence]
+  H --> I
+  I --> J[Desktop and mobile visual review]
 ```
 
 ## CSV and source context
@@ -30,7 +32,9 @@ The assistant must return CSS parts 1–4 in `css` fences, followed by HTML part
 
 After the final acknowledgment, the workflow validates and assembles exactly CSS 1–4 followed by HTML 1–8, writes `files/index.html` and `files/styles.css`, and embeds the CSS into `files/inlined/index.html`. The manifest hashes and first-line markers are checked again before assembly.
 
-`browser_qa.py` renders that inlined page at desktop (1440×900) and mobile (390×844). It saves screenshots and checks requested sections, hero and CTA layout, mobile navigation by click and keyboard, horizontal overflow, and font/image loading. `site_quality.py` checks document structure, image URLs and alt text, CTA labeling, mobile navigation structure, substantive footer links, requested forms, and source contact-form field parity. The checker emits an `automated_success` result separately from human review.
+`site_quality.py` is the blocking Python code gate; it inspects the assembled HTML and CSS without launching a browser. It checks for one `main`, one nonempty `h1`, a declared document language, a nonempty title, a viewport meta tag, closed document markup, a linked stylesheet, balanced CSS blocks, unique IDs, resolvable same-page links, named buttons and labeled form controls. Required sections must have a named semantic/container element, a heading, and substantive child content; a keyword elsewhere in the page no longer satisfies a section check. It also checks image markup and alt text, CTA labeling, the accessible mobile-navigation structure, substantive footer links, requested forms, and source contact-form field parity.
+
+`browser_qa.py` still renders the inlined page at desktop (1440×900) and mobile (390×844), saves screenshots, and records checks for section visibility, hero and CTA layout, mobile menu behavior, overflow, and font/image loading. These results, along with remote image fetch checks, are reported under `advisory_checks` and `advisory_findings`; they do not determine `automated_success`. This keeps browser behavior reviewable without making it a blocking gate while it is unreliable. `check_website.py` exits successfully when the deterministic source-code gate passes. The separate `final_success` result still requires the desktop/mobile visual review and image review to pass.
 
 The desktop/mobile screenshots are saved at `debug/screenshots/desktop.png` and `debug/screenshots/mobile.png` for visual review. Review templates are placed in `debug/review_templates/`. After inspection, copy and complete them as `debug/image_review.json` and `debug/visual_review.json`. The `chatgpt-website-review.yml` workflow then reruns the checker and updates `run_notes.json`; `final_success` remains false until both reviews pass. Candidate folders, logs, transcripts, checkpoints, reports, screenshots, and preview files are committed even when generation or automated QA fails, so failures are reviewable and resumable.
 

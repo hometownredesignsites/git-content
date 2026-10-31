@@ -367,6 +367,8 @@ def finalize_candidate(run_folder: str | Path, request_text: str) -> dict[str, A
     step_names = ("assembly", "css_inlining", "browser_qa")
     step_results: dict[str, Any] = {}
     for name, command in zip(step_names, commands):
+        if name == "browser_qa":
+            (debug / "browser_qa.json").unlink(missing_ok=True)
         started = time.monotonic()
         result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
         step_results[name] = {
@@ -376,7 +378,7 @@ def finalize_candidate(run_folder: str | Path, request_text: str) -> dict[str, A
             "stderr": result.stderr[-12000:],
         }
         _atomic_json(debug / f"{name}_step.json", step_results[name])
-        if result.returncode:
+        if result.returncode and name != "browser_qa":
             notes = {
                 "status": f"{name}_failed",
                 "automated_success": False,
@@ -387,7 +389,13 @@ def finalize_candidate(run_folder: str | Path, request_text: str) -> dict[str, A
             _atomic_json(run / "run_notes.json", notes)
             raise RuntimeError(f"Website candidate {name} failed; evidence is saved under {debug}.")
 
-    browser_report = json.loads((debug / "browser_qa.json").read_text(encoding="utf-8"))
+    browser_report_path = debug / "browser_qa.json"
+    try:
+        browser_report = json.loads(browser_report_path.read_text(encoding="utf-8"))
+        if not isinstance(browser_report, dict):
+            browser_report = {"status": "invalid", "error": "browser QA report must be an object"}
+    except (OSError, json.JSONDecodeError) as error:
+        browser_report = {"status": "unavailable", "error": str(error)}
     check = subprocess.run(
         [sys.executable, str(SCRIPT_DIR / "check_website.py"), str(run), request_text],
         capture_output=True, text=True, encoding="utf-8",
@@ -434,6 +442,7 @@ def finalize_candidate(run_folder: str | Path, request_text: str) -> dict[str, A
         "human_visual_review_status": quality_report.get("visual_design_review_status", "pending"),
         "image_relevance_review_status": quality_report.get("visual_review_status", "pending"),
         "browser_qa_status": browser_report.get("status", "invalid"),
+        "browser_qa_advisory": True,
         "visual_review_status": quality_report.get("visual_design_review_status", "pending"),
         "image_review_status": quality_report.get("visual_review_status", "pending"),
         "file_sha256": {

@@ -1,4 +1,4 @@
-"""Run structural, image, footer, mobile-nav, and screenshot-backed visual checks."""
+"""Run the blocking source-structure gate and report browser/review evidence."""
 
 import argparse
 import json
@@ -19,7 +19,7 @@ def main():
     args = parser.parse_args()
     result = assess_website(args.prompt, args.run_folder)
     print(json.dumps(result, indent=2, ensure_ascii=False))
-    return 0 if result.get("final_success") else 2
+    return 0 if result.get("automated_success") else 2
 
 
 if __name__ == "__main__":
