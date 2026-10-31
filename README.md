@@ -4,13 +4,13 @@ Git Content is a public workspace for source-informed website rebuilds. The repo
 
 ## Branches
 
-- [`main`](https://github.com/hometownredesignsites/git-content/tree/main) contains the shared Duck.ai setup: prompts, target CSV, runner, browser checks, and documentation. It has no GitHub Actions pipeline or saved run files.
-- [`duckai`](https://github.com/hometownredesignsites/git-content/tree/duckai) adds the Duck.ai workflows and saved candidate evidence under `duckai-runs/`. Pushing a change to `duckai_automation/source_urls.csv` starts a batch for every valid CSV row.
+- [`main`](https://github.com/hometownredesignsites/git-content/tree/main) contains the shared Duck.ai setup: prompts, runner, browser checks, and documentation. It has no target CSV, GitHub Actions pipeline, or saved run files.
+- [`duckai`](https://github.com/hometownredesignsites/git-content/tree/duckai) adds the target CSV, Duck.ai workflows, and saved candidate evidence under `duckai-runs/`. The CSV is tracked only on this branch. Pushing a change to `duckai_automation/source_urls.csv` starts a batch for every valid CSV row.
 - A ChatGPT provider branch is planned; it has not been created yet.
 
 ## Duck.ai pipeline
 
-Each CSV row supplies a business name, category, optional location, and source website. For each website, the pipeline attempts up to six complete candidates to obtain three automated passes. With the current 21-row CSV, a full batch can create up to 126 candidate folders. Generated HTML, including the CSS-inlined preview at `files/inlined/index.html`, and QA evidence are committed to `duckai`.
+Each CSV row supplies a business name, category, optional location, and source website. For each website, the pipeline attempts up to six complete candidates to obtain three automated passes. With the 21-row CSV on `duckai`, a full batch can create up to 126 candidate folders. Generated HTML, including the CSS-inlined preview at `files/inlined/index.html`, and QA evidence are committed to `duckai`.
 
 Automated passes cover structural and browser checks. They do not replace human review of visual quality, image relevance, or factual accuracy.
 

@@ -1,6 +1,6 @@
 # Duck.ai website generation
 
-This directory contains the shared Duck.ai prompts, CSV, runner, browser checks, and documentation. On `main` it is setup only; the `duckai` branch adds the GitHub Actions workflows and saves their outputs. Each candidate uses a fresh logged-out Duck.ai chat. The CSV supplies a website URL, business name, category, and optional location. Duck.ai receives the metadata as unverified context, assesses the live site in that same chat, and uses the audit as its factual source.
+This directory contains the shared Duck.ai prompts, runner, browser checks, and documentation. The target CSV is tracked only on `duckai`; `main` contains setup without target data or GitHub Actions workflows, while `duckai` adds the workflows and saves their outputs. Each candidate uses a fresh logged-out Duck.ai chat. The CSV supplies a website URL, business name, category, and optional location. Duck.ai receives the metadata as unverified context, assesses the live site in that same chat, and uses the audit as its factual source.
 
 ## Run it
 
@@ -17,11 +17,11 @@ The workflow YAML defines `workflow_dispatch` inputs for full batches, one-site 
 | `category` | Yes | Primary industry cue; sent to Duck.ai as unverified design context. |
 | `location` | No | Sent as unverified location context; use as a fact only if the source site confirms it. |
 
-Only these four columns are read. Other columns in a CSV are ignored. The website is authoritative for factual claims; business, category, and optional location help Duck.ai identify the target and guide design. The current CSV contains 21 websites.
+Only these four columns are read. Other columns in a CSV are ignored. The website is authoritative for factual claims; business, category, and optional location help Duck.ai identify the target and guide design. The `duckai` branch CSV currently contains 21 websites.
 
 - [`website_request.txt`](website_request.txt): reusable content, sourcing, asset, and output requirements.
 - [`design_brief.txt`](design_brief.txt): reusable guidance for deriving a brand-specific visual direction from the source.
-- [`source_urls.csv`](source_urls.csv): one row per website target; the business and category fields are sent to Duck.ai.
+- [`source_urls.csv` on `duckai`](https://github.com/hometownredesignsites/git-content/blob/duckai/duckai_automation/source_urls.csv): one row per website target; the business and category fields are sent to Duck.ai.
 
 Keep the request and brief separate: the request defines what to learn and build; the brief translates the source site's brand into a design, using industry cues as a secondary guide rather than assuming a preset palette. The runner combines them in the same prompt, so this separation does not add a chat turn.
 
