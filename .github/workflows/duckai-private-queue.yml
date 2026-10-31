@@ -1,0 +1,186 @@
+name: Duck.ai Private Queue
+
+on:
+  push:
+    branches:
+      - duckai
+    paths:
+      - ".private-queue/pending/*.json"
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      targets: ${{ steps.targets.outputs.targets }}
+    steps:
+      - name: Require the duckai branch
+        if: github.ref_name != 'duckai'
+        run: |
+          echo "Private queue jobs must run from duckai."
+          exit 1
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Resolve private target IDs
+        id: targets
+        env:
+          PRIVATE_REPO_TOKEN: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          GITHUB_EVENT_BEFORE: ${{ github.event.before }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: python duckai_automation/scripts/build_private_queue_matrix.py
+
+  generate:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        target: ${{ fromJSON(needs.prepare.outputs.targets) }}
+    container:
+      image: mcr.microsoft.com/playwright/python:v1.58.0-noble
+      options: --user root --shm-size=1gb
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install Playwright dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install -r .github/workflows/requirements-playwright.txt
+      - name: Load private target fields
+        id: load_target
+        env:
+          PRIVATE_REPO_TOKEN: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          BATCH_ID: ${{ matrix.target.batch_id }}
+          SITE_ID: ${{ matrix.target.site_id }}
+          SITE_INDEX: ${{ matrix.target.site_index }}
+        run: |
+          set -euo pipefail
+          python duckai_automation/scripts/load_private_queue_target.py
+          echo "SITE_INDEX=${SITE_INDEX}" >> "$GITHUB_ENV"
+      - name: Mask private target values
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          set -euo pipefail
+          echo "::add-mask::${SOURCE_URL}"
+          echo "::add-mask::${BUSINESS_NAME}"
+          echo "::add-mask::${INDUSTRY_CATEGORY}"
+          echo "::add-mask::${LOCATION}"
+      - name: Generate candidates without publishing private data to public logs
+        id: generate
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          set -euo pipefail
+          successful=0
+          attempt=0
+          target=3
+          max_attempts=6
+          while [[ "$successful" -lt "$target" && "$attempt" -lt "$max_attempts" ]]; do
+            attempt=$((attempt + 1))
+            run_dir="duckai-runs/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-site-${SITE_INDEX}-candidate-${attempt}"
+            action_log="${RUNNER_TEMP}/duckai-private-${SITE_INDEX}-${attempt}.log"
+            set +e
+            CANDIDATE_INDEX="$attempt" GITHUB_STEP_SUMMARY="" xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' python -u duckai_automation/run_duckai.py > "$action_log" 2>&1
+            candidate_exit=$?
+            set -e
+            if [[ "$candidate_exit" -eq 0 ]] && python -c 'import json,sys; raise SystemExit(0 if json.load(open(sys.argv[1], encoding="utf-8")).get("automated_success") else 1)' "$run_dir/run_notes.json" >/dev/null 2>&1; then
+              successful=$((successful + 1))
+            fi
+            if [[ ! -d "$run_dir" ]]; then
+              mkdir -p "$run_dir/debug"
+            fi
+            if [[ ! -f "$run_dir/run_notes.json" ]]; then
+              printf '{"site_index":%s,"candidate_index":%s,"automated_success":false,"status":"generation_failed"}\n' "$SITE_INDEX" "$attempt" > "$run_dir/run_notes.json"
+            fi
+            mkdir -p "$run_dir/debug"
+            cp "$action_log" "$run_dir/debug/action.log"
+          done
+          printf 'successful_count=%s\nattempt_count=%s\n' "$successful" "$attempt" >> "$GITHUB_OUTPUT"
+          echo "Completed private target ${PRIVATE_SITE_ID}: ${successful}/${target} automated passes after ${attempt} attempt(s)."
+      - name: Check out private results repository
+        if: always() && steps.load_target.outcome == 'success'
+        uses: actions/checkout@v4
+        with:
+          repository: hometownredesignsites/git-content-private
+          ref: main
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: private-results
+          fetch-depth: 0
+      - name: Commit candidate evidence to the private repository
+        if: always() && steps.load_target.outcome == 'success'
+        env:
+          TARGET_BRANCH: main
+          SUCCESSFUL_COUNT: ${{ steps.generate.outputs.successful_count }}
+          ATTEMPT_COUNT: ${{ steps.generate.outputs.attempt_count }}
+        run: |
+          set -euo pipefail
+          result_dir="private-results/results/${BATCH_ID}/${PRIVATE_SITE_ID}/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mkdir -p "$result_dir/candidates"
+          shopt -s nullglob
+          run_dirs=(duckai-runs/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-site-${SITE_INDEX}-candidate-*)
+          for run_dir in "${run_dirs[@]}"; do
+            [[ -d "$run_dir" ]] || continue
+            cp -R "$run_dir" "$result_dir/candidates/"
+          done
+          status="failed"
+          if [[ "${SUCCESSFUL_COUNT:-0}" -ge 3 ]]; then status="passed"; fi
+          python - "$result_dir/status.json" "$BATCH_ID" "$PRIVATE_SITE_ID" "$status" "${SUCCESSFUL_COUNT:-0}" "${ATTEMPT_COUNT:-0}" <<'PY'
+          import json, pathlib, sys
+          path = pathlib.Path(sys.argv[1])
+          path.parent.mkdir(parents=True, exist_ok=True)
+          path.write_text(json.dumps({
+              "batch_id": sys.argv[2],
+              "site_id": sys.argv[3],
+              "status": sys.argv[4],
+              "successful_candidates": int(sys.argv[5]),
+              "attempts": int(sys.argv[6]),
+              "public_workflow_run": int(__import__("os").environ["GITHUB_RUN_ID"]),
+          }, indent=2) + "\n", encoding="utf-8")
+          PY
+          cd private-results
+          git config --global --add safe.directory "$GITHUB_WORKSPACE/private-results"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- "results/${BATCH_ID}/${PRIVATE_SITE_ID}"
+          git commit -m "private: save Duck.ai result ${BATCH_ID}/${PRIVATE_SITE_ID} [skip ci]"
+          for attempt in 1 2 3 4 5; do
+            git fetch origin "$TARGET_BRANCH"
+            if ! git rebase "origin/$TARGET_BRANCH"; then
+              git rebase --abort || true
+              sleep 2
+              continue
+            fi
+            if git push origin "HEAD:refs/heads/${TARGET_BRANCH}"; then
+              echo "Saved candidate evidence to the private repository."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Could not commit private results after five attempts."
+          exit 1
+      - name: Require three automated passes
+        if: always() && steps.generate.outcome == 'success'
+        env:
+          SUCCESSFUL_COUNT: ${{ steps.generate.outputs.successful_count }}
+        run: |
+          if [[ "${SUCCESSFUL_COUNT:-0}" -lt 3 ]]; then
+            echo "This private target did not reach three automated passes. Its diagnostics were saved privately."
+            exit 1
+          fi
+          echo "Three candidates passed automated checks. Human visual and factual review remains pending."

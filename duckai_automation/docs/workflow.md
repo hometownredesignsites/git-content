@@ -6,6 +6,8 @@ This guide describes the current GitHub Actions flow for the `duckai` branch. It
 
 The **Duck.ai Website Automation** workflow starts on a push to `duckai` when `duckai_automation/source_urls.csv` changes. Changes to `website_request.txt` and `design_brief.txt` alone do not start a run. The workflow YAML also defines `workflow_dispatch`, but the workflow currently exists only on `duckai` while `main` is the default branch. GitHub requires the workflow file on the default branch for manual dispatch through the Actions interface, so the dispatch inputs described below are not currently available there. The CSV requires one row per site with `business`, `category`, and `website` columns; `location` is optional. A changed CSV processes every valid row.
 
+The separate **Duck.ai Private Queue** workflow starts when an opaque marker is pushed to `.private-queue/pending/` on `duckai`. It retrieves the batch manifest and target rows from the private `git-content-private` repository at runtime. Candidate folders, diagnostics, and CSS-inlined HTML are committed to `git-content-private/results/`; this workflow does not commit those files or target rows to the public branch. See the private repository README for required secrets and privacy limits.
+
 The target loader reads only these CSV columns:
 
 | Column | Required | Meaning |

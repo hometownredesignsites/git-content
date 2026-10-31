@@ -6,6 +6,8 @@ This directory contains the shared Duck.ai prompts, runner, browser checks, and 
 
 On branch `duckai`, a push that changes [`source_urls.csv`](source_urls.csv) starts a batch for every valid row in the file. The CSV requires `business`, `category`, and `website` columns; `location` is optional. Changes to the reusable request or design brief alone do not start a generation run.
 
+The `Duck.ai Private Queue` workflow is a second entry path. It runs only on opaque queue markers pushed to `duckai` by the private `git-content-private` coordinator. The public worker fetches target fields at runtime and stores candidate folders, QA evidence, and the inlined HTML in the private repository. It does not commit those results or the private target rows to the public branch. See the private repository README for secret setup and the privacy boundary.
+
 The workflow YAML defines `workflow_dispatch` inputs for full batches, one-site overrides, and a one-candidate CSV smoke mode. However, the workflow files currently exist only on `duckai`, while `main` is the default branch. GitHub requires the workflow to be present on the default branch for manual dispatch from the Actions interface, so those inputs are not currently available there. The supported trigger in this branch layout is the CSV push. A one-row CSV push still uses full-batch behavior for that row and seeks three automated passes; it is not the one-candidate smoke mode. See [GitHub's manual workflow documentation](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow).
 
 ### CSV fields currently used
@@ -41,7 +43,7 @@ The CTA rule is part of both the generation prompt and structural checker: CTA b
 
 ## Safety and access
 
-The browser stays logged out. If Duck.ai requires sign-in or presents a human-verification or usage gate, the candidate stops and saves its failure evidence; the workflow does not try to bypass the gate. Keep the CSV limited to the fields the workflow uses because it is committed to Git history. The action needs permission to write candidate evidence to the branch.
+The browser stays logged out. If Duck.ai requires sign-in or presents a human-verification or usage gate, the candidate stops and saves its failure evidence; the workflow does not try to bypass the gate. The public CSV remains committed to the `duckai` branch for public-target runs. Private queue rows are read from `git-content-private` only during the worker run, and all candidate evidence is committed to that private repository. The public worker needs a `PRIVATE_REPO_TOKEN` secret with access to the private repository.
 
 ## Multi-turn smoke test
 
