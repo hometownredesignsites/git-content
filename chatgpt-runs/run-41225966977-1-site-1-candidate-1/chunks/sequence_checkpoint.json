@@ -1,0 +1,60 @@
+{
+  "status": "interrupted",
+  "chat_id": "site-1-candidate-1",
+  "conversation_url": "https://chatgpt.com/uc/6ae629c0-1620-83ea-9ac0-6924c4b2d1b0",
+  "run_token": "fddb79eab578b130",
+  "context_mode": "source",
+  "brief_sha256": "361488a24f31a0a4d15c2ad3b39ac8322fc59bc1d666038771ef4c672e6cc47f",
+  "started_at_utc": "2026-10-31T17:45:44.410203+00:00",
+  "accepted_parts": [
+    "css-1",
+    "css-2"
+  ],
+  "pending_turn": {
+    "kind": "css",
+    "part": 3,
+    "attempt": 2,
+    "prompt": "Your previous response for CSS PART 3 OF 4 was rejected: capture rejected: expected exactly one fenced code block; found 0\nNow produce exactly CSS PART 3 OF 4 as a repair. Continue the established source-grounded website design and do not repeat earlier parts. State `RUN TOKEN: fddb79eab578b130` and `CSS PART 3 OF 4` outside the code block. Return exactly one fenced `css` code block; its first nonblank line must be `/* CSS PART 3 OF 4 */`. Do not add any other code blocks or continue to a later part.",
+    "started_at_utc": "2026-10-31T17:49:11.926051+00:00"
+  },
+  "last_response_at_utc": "2026-10-31T17:49:44.609376+00:00",
+  "last_accepted_at_utc": "2026-10-31T17:48:39.651071+00:00",
+  "last_capture": {
+    "accepted": true,
+    "part": "css 2/4",
+    "characters": 15286,
+    "sha256": "e90af8a1772758d62d3c1e1a690b947fcc7ff96328de1e2c4e86cb9df59e336d"
+  },
+  "last_error": {
+    "at_utc": "2026-10-31T17:49:44.644610+00:00",
+    "part": "CSS PART 3 OF 4",
+    "attempt": 2,
+    "classification": "response_format_rejected",
+    "error": "capture rejected: expected exactly one fenced code block; found 0",
+    "response_metadata": {
+      "attempt": 1,
+      "retry_count": 0,
+      "used_retry": false,
+      "page_refreshed": false,
+      "thread_reused": true,
+      "new_chat_started": false,
+      "failure_reason": null,
+      "attempt_failures": [],
+      "start_time": 1793468951.994497,
+      "end_time": 1793468984.5222735,
+      "duration_seconds": 32.528,
+      "dom_code_block_count": 0,
+      "dom_labeled_code_block_count": 0,
+      "normalization_error": "Expected exactly one rendered assistant code block.",
+      "page_state": {
+        "classification": "ready",
+        "url": "https://chatgpt.com/uc/6ae629c0-1620-83ea-9ac0-6924c4b2d1b0",
+        "title": "ChatGPT: Chat, Work, Create & Code with AI",
+        "conversation_gated": false,
+        "authentication_gated": false,
+        "visible_dialog_count": 0,
+        "signals": []
+      }
+    }
+  }
+}
