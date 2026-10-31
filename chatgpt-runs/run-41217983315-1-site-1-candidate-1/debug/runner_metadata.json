@@ -1,0 +1,14 @@
+{
+  "stage_name": "website",
+  "expect_json": false,
+  "parsed_json": false,
+  "response_mode": "text",
+  "response_chars": 356,
+  "attempt": 1,
+  "retry_count": 0,
+  "thread_reused": true,
+  "new_chat_started": false,
+  "website_chunks": true,
+  "accepted_parts": 12,
+  "final_url": "https://chatgpt.com/uc/6ae61285-7a48-83ea-90fb-8d4bb24b9878?__cf_chl_rt_tk=A6_mZq1LVvKZ_VU8Iz4.CzlR4iAAUtALd5P702Z.MsM-1793464288-1.0.1.1-gmjZmda3.zmJKqshkGC18wUuBx.K7BY_E1V14R0nnoo"
+}
