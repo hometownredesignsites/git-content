@@ -1,0 +1,589 @@
+CSS PART 1 OF 4
+
+RUN TOKEN: 90b2a1cfa8d67361
+```css
+/* CSS PART 1 OF 4 */
+
+/* =========================================
+   JOSH BROOKS CONSTRUCTION & RENOVATION INC.
+   Original design system
+   Visual direction: Modern Colorado craftsmanship
+   ========================================= */
+
+/* 1. DESIGN TOKENS
+   ========================================= */
+
+:root {
+  /* Brand-inspired color palette */
+  --color-ink: #192b35;
+  --color-ink-soft: #304550;
+  --color-slate: #526772;
+  --color-muted: #77868c;
+
+  --color-primary: #bd633e;
+  --color-primary-dark: #984a30;
+  --color-primary-light: #e7b49a;
+
+  --color-paper: #f8f7f3;
+  --color-white: #ffffff;
+  --color-surface: #efeee9;
+  --color-surface-dark: #e3e1d9;
+
+  --color-border: #deded7;
+  --color-border-dark: #c6c8c2;
+
+  --color-success: #52745f;
+  --color-focus: #e39b54;
+
+  /* Typography */
+  --font-heading: "Montserrat", "Arial", sans-serif;
+  --font-body: "Inter", "Helvetica Neue", sans-serif;
+
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.375rem;
+  --font-size-2xl: 1.75rem;
+  --font-size-3xl: 2.5rem;
+  --font-size-4xl: clamp(2.75rem, 5.5vw, 5.25rem);
+  --font-size-5xl: clamp(3.25rem, 7vw, 6.5rem);
+
+  --line-height-tight: 1.08;
+  --line-height-heading: 1.2;
+  --line-height-body: 1.75;
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-heavy: 800;
+
+  /* Layout */
+  --container-width: 1240px;
+  --container-narrow: 820px;
+  --container-wide: 1440px;
+
+  --page-gutter: clamp(1.25rem, 5vw, 5rem);
+
+  --section-space: clamp(4.5rem, 9vw, 8rem);
+  --section-space-small: clamp(3rem, 6vw, 5rem);
+
+  /* Spacing scale */
+  --space-1: 0.375rem;
+  --space-2: 0.625rem;
+  --space-3: 0.875rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 2.5rem;
+  --space-8: 3rem;
+  --space-9: 4rem;
+  --space-10: 5rem;
+
+  /* Borders and shapes */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-pill: 100px;
+
+  --border-standard: 1px solid var(--color-border);
+
+  /* Shadows */
+  --shadow-subtle: 0 4px 18px rgba(25, 43, 53, 0.06);
+  --shadow-medium: 0 12px 35px rgba(25, 43, 53, 0.12);
+  --shadow-deep: 0 24px 60px rgba(15, 30, 39, 0.2);
+
+  /* Transitions */
+  --transition-fast: 180ms ease;
+  --transition-standard: 280ms ease;
+  --transition-slow: 450ms ease;
+
+  /* Layering */
+  --z-base: 1;
+  --z-header: 100;
+  --z-overlay: 200;
+  --z-modal: 300;
+}
+
+
+/* 2. RESET AND GLOBAL FOUNDATIONS
+   ========================================= */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 100px;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+body,
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-body);
+}
+
+img,
+picture,
+video,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+img {
+  height: auto;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+ul,
+ol {
+  margin-top: 0;
+}
+
+p {
+  margin-top: 0;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin-top: 0;
+  color: var(--color-ink);
+  font-family: var(--font-heading);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-heading);
+  letter-spacing: -0.035em;
+}
+
+::selection {
+  background: var(--color-primary);
+  color: var(--color-white);
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 4px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+
+/* 3. TYPOGRAPHIC SYSTEM
+   ========================================= */
+
+h1 {
+  font-size: var(--font-size-5xl);
+  font-weight: var(--font-weight-heavy);
+  line-height: var(--line-height-tight);
+  letter-spacing: -0.055em;
+}
+
+h2 {
+  font-size: clamp(2rem, 4vw, 3.5rem);
+  line-height: 1.12;
+  letter-spacing: -0.045em;
+}
+
+h3 {
+  font-size: clamp(1.375rem, 2.3vw, 1.875rem);
+  line-height: 1.25;
+}
+
+h4 {
+  font-size: var(--font-size-lg);
+  line-height: 1.35;
+}
+
+p {
+  color: var(--color-slate);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-body);
+}
+
+strong,
+b {
+  color: var(--color-ink);
+  font-weight: var(--font-weight-semibold);
+}
+
+small {
+  font-size: var(--font-size-sm);
+}
+
+.text-large {
+  font-size: clamp(1.125rem, 2vw, 1.375rem);
+  line-height: 1.7;
+}
+
+.text-small {
+  font-size: var(--font-size-sm);
+}
+
+.text-muted {
+  color: var(--color-muted);
+}
+
+.text-light {
+  color: var(--color-white);
+}
+
+.text-accent {
+  color: var(--color-primary);
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+  color: var(--color-primary);
+  font-family: var(--font-heading);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.16em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.eyebrow::before {
+  width: 28px;
+  height: 2px;
+  background: currentColor;
+  content: "";
+}
+
+.section-heading {
+  max-width: 760px;
+  margin-bottom: 1.5rem;
+}
+
+.section-description {
+  max-width: 660px;
+  font-size: var(--font-size-lg);
+  line-height: 1.8;
+}
+
+
+/* 4. PAGE GRID AND CONTAINERS
+   ========================================= */
+
+.container {
+  width: min(
+    var(--container-width),
+    calc(100% - var(--page-gutter) * 2)
+  );
+  margin-inline: auto;
+}
+
+.container-wide {
+  width: min(
+    var(--container-wide),
+    calc(100% - var(--page-gutter) * 2)
+  );
+  margin-inline: auto;
+}
+
+.container-narrow {
+  width: min(
+    var(--container-narrow),
+    calc(100% - var(--page-gutter) * 2)
+  );
+  margin-inline: auto;
+}
+
+.section {
+  position: relative;
+  padding-block: var(--section-space);
+}
+
+.section-small {
+  padding-block: var(--section-space-small);
+}
+
+.section-paper {
+  background: var(--color-paper);
+}
+
+.section-white {
+  background: var(--color-white);
+}
+
+.section-dark {
+  background: var(--color-ink);
+  color: var(--color-white);
+}
+
+.section-dark h1,
+.section-dark h2,
+.section-dark h3,
+.section-dark h4 {
+  color: var(--color-white);
+}
+
+.section-dark p {
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.grid {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.grid-two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.grid-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.grid-four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.flex {
+  display: flex;
+}
+
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.flex-column {
+  display: flex;
+  flex-direction: column;
+}
+
+.align-center {
+  align-items: center;
+}
+
+.justify-center {
+  justify-content: center;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.mx-auto {
+  margin-inline: auto;
+}
+
+.relative {
+  position: relative;
+}
+
+.overflow-hidden {
+  overflow: hidden;
+}
+
+
+/* 5. SHARED VISUAL FOUNDATIONS
+   ========================================= */
+
+.surface {
+  background: var(--color-white);
+  border: var(--border-standard);
+  border-radius: var(--radius-lg);
+}
+
+.surface-soft {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+}
+
+.divider {
+  width: 100%;
+  height: 1px;
+  background: var(--color-border);
+}
+
+.accent-line {
+  width: 52px;
+  height: 3px;
+  background: var(--color-primary);
+}
+
+.image-frame {
+  position: relative;
+  overflow: hidden;
+  background: var(--color-surface-dark);
+  border-radius: var(--radius-md);
+}
+
+.image-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.image-cover {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.rounded {
+  border-radius: var(--radius-md);
+}
+
+.rounded-large {
+  border-radius: var(--radius-xl);
+}
+
+.shadow-subtle {
+  box-shadow: var(--shadow-subtle);
+}
+
+.shadow-medium {
+  box-shadow: var(--shadow-medium);
+}
+
+
+/* 6. RESPONSIVE FOUNDATIONS
+   ========================================= */
+
+@media (max-width: 1024px) {
+  :root {
+    --section-space: 5.5rem;
+    --container-width: 100%;
+  }
+
+  .grid-four {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  :root {
+    --page-gutter: 1.25rem;
+    --section-space: 4.5rem;
+    --section-space-small: 3rem;
+  }
+
+  html {
+    scroll-padding-top: 80px;
+  }
+
+  .grid-two,
+  .grid-three {
+    grid-template-columns: 1fr;
+  }
+
+  .grid-four {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .section-heading {
+    margin-bottom: 1.25rem;
+  }
+
+  .section-description {
+    font-size: var(--font-size-base);
+  }
+}
+
+@media (max-width: 480px) {
+  :root {
+    --page-gutter: 1rem;
+    --section-space: 3.75rem;
+  }
+
+  .grid-four {
+    grid-template-columns: 1fr;
+  }
+
+  h1 {
+    font-size: clamp(2.65rem, 12vw, 3.5rem);
+  }
+
+  h2 {
+    font-size: clamp(1.9rem, 9vw, 2.6rem);
+  }
+}
+
+
+/* 7. ACCESSIBILITY AND MOTION
+   ========================================= */
+
+.skip-link {
+  position: absolute;
+  z-index: 999;
+  top: 0.75rem;
+  left: 0.75rem;
+  padding: 0.875rem 1.25rem;
+  transform: translateY(-160%);
+  background: var(--color-ink);
+  color: var(--color-white);
+  border-radius: var(--radius-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+```

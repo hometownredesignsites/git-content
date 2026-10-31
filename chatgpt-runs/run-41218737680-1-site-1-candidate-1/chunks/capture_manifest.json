@@ -1,0 +1,26 @@
+{
+  "chat_id": "site-1-candidate-1",
+  "parts": [
+    {
+      "kind": "css",
+      "part": 1,
+      "response_file": "chunks/responses/css-1.txt",
+      "chunk_file": "chunks/css-1.css",
+      "captured_at_utc": "2026-10-31T16:18:18.526813+00:00",
+      "characters": 9762,
+      "sha256": "fa69ecc4dcccbd9e6b83c35b2da2269a3d6486835ca94aa6fe1b4bccadba8c77",
+      "run_token": "90b2a1cfa8d67361"
+    },
+    {
+      "kind": "css",
+      "part": 2,
+      "response_file": "chunks/responses/css-2.txt",
+      "chunk_file": "chunks/css-2.css",
+      "captured_at_utc": "2026-10-31T16:18:46.000962+00:00",
+      "characters": 13473,
+      "sha256": "3b1cfd4faa31df81301d2a3352a211c3729b95075d50ad13819b822aecc82639",
+      "run_token": "90b2a1cfa8d67361"
+    }
+  ],
+  "run_token": "90b2a1cfa8d67361"
+}
