@@ -1,0 +1,84 @@
+name: ChatGPT Incremental Generation Test
+
+on:
+  push:
+    branches: [chatgpt]
+    paths:
+      - "tools/chatgpt_incremental_smoke.py"
+      - ".github/workflows/chatgpt-incremental-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  incremental-test:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright/python:v1.58.0-noble
+      options: --user root --shm-size=1gb
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pinned Playwright dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r .github/workflows/requirements-playwright.txt
+
+      - name: Repeat passing two-turn baseline
+        run: |
+          set -euo pipefail
+          mkdir -p tmp/incremental-smoke/baseline
+          xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' \
+            python -u chatgpt_file_playwright_anonymous_ci.py \
+              --stage-name two_turn_smoke \
+              --input-file chatgpt_automation/two_turn_smoke.request.txt \
+              --output-file tmp/incremental-smoke/baseline/runner_output.txt \
+              --metadata-output-file tmp/incremental-smoke/baseline/runner_metadata.json \
+              --url https://chatgpt.com/ \
+              --user-data-dir tmp/playwright-profiles/incremental-baseline \
+              --chunks 2 --chunk-mode legacy --start-new-chat \
+              --wait-seconds 45 --timeout-ms 180000 \
+              --post-response-wait-seconds 3 --response-settle-seconds 3 \
+              --max-settle-wait-seconds 180 \
+              --error-screenshot tmp/incremental-smoke/baseline/chatgpt_error.png
+
+      - name: Verify baseline recalled the first-turn token
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path("tmp/incremental-smoke/baseline")
+          output = (root / "runner_output.txt").read_text(encoding="utf-8")
+          metadata = json.loads((root / "runner_metadata.json").read_text(encoding="utf-8"))
+          marker = "--- CHUNK 2/2 RESPONSE ---"
+          if marker not in output or output.rsplit(marker, 1)[1].strip() != "ORBIT-731":
+              raise SystemExit("The repeated two-turn baseline did not recall ORBIT-731.")
+          if metadata.get("chunks") != 2 or metadata.get("chunk_mode") != "legacy":
+              raise SystemExit(f"Unexpected runner configuration: {metadata!r}")
+          print("PASS: repeated two-turn baseline recalled ORBIT-731.")
+          PY
+
+      - name: Test short setup, then CSS 1-4 and HTML 1-8 in one conversation
+        run: |
+          set -euo pipefail
+          mkdir -p tmp/playwright-profiles/incremental-ladder
+          xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' \
+            python -u tools/chatgpt_incremental_smoke.py \
+              --run-folder tmp/incremental-smoke/ladder \
+              --user-data-dir tmp/playwright-profiles/incremental-ladder \
+              --error-screenshot tmp/incremental-smoke/ladder/chatgpt_error.png \
+              --wait-seconds 45 --timeout-ms 180000 --settle-seconds 3
+
+      - name: Upload stage-by-stage evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chatgpt-incremental-smoke-${{ github.run_id }}
+          path: tmp/incremental-smoke/
+          if-no-files-found: warn
+          retention-days: 14
