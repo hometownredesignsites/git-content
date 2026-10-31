@@ -205,6 +205,12 @@ def run() -> int:
                         re.IGNORECASE,
                     )
                     if not expected_part:
+                        if re.fullmatch(
+                            r"HTML PART 8 OF 8 was validated and saved\. Reply exactly: ACK HTML 8/8",
+                            turn_text.strip(),
+                            re.IGNORECASE,
+                        ):
+                            return response_text, {**response_metadata, "website_final_ack": True}
                         raise RuntimeError("Website turn prompt is missing its exact part label.")
                     normalized_text, dom_metadata = restore_newest_code_block_fences(
                         page, response_text, expected_part.group(1).lower(), int(expected_part.group(2))
