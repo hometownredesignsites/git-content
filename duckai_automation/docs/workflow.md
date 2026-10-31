@@ -4,7 +4,7 @@ This guide describes the current GitHub Actions flow for the `duckai` branch. It
 
 ## Run inputs
 
-The **Duck.ai Website Automation** workflow starts on a push to `duckai` when `duckai_automation/source_urls.csv` changes, or when a user manually dispatches it on that branch. Changes to `website_request.txt` and `design_brief.txt` alone do not start a run. The CSV requires one row per site with `business`, `category`, and `website` columns; `location` is optional. A changed CSV processes every valid row. Manual `full_batch` mode processes the CSV or accepts a single-site URL and metadata override. Manual `smoke_test` mode selects exactly one row from the CSV by `smoke_website`, or uses the first row when that input is blank.
+The **Duck.ai Website Automation** workflow starts on a push to `duckai` when `duckai_automation/source_urls.csv` changes. Changes to `website_request.txt` and `design_brief.txt` alone do not start a run. The workflow YAML also defines `workflow_dispatch`, but the workflow currently exists only on `duckai` while `main` is the default branch. GitHub requires the workflow file on the default branch for manual dispatch through the Actions interface, so the dispatch inputs described below are not currently available there. The CSV requires one row per site with `business`, `category`, and `website` columns; `location` is optional. A changed CSV processes every valid row.
 
 The target loader reads only these CSV columns:
 
@@ -17,7 +17,7 @@ The target loader reads only these CSV columns:
 
 Any other CSV columns are ignored by the current loader. The checked-in CSV has 21 rows. The business name, category, and optional location help identify the target and guide design; Duck.ai must verify metadata against the site and use the source assessment as the authority for factual claims.
 
-Use `smoke_test` from **Actions → Duck.ai Website Automation → Run workflow** to exercise the CSV path without starting all site jobs. It runs one full candidate for one CSV row and requires one automated pass. It still performs the in-chat site assessment, CSS/`acknowledged`/HTML sequence, assembly, and Playwright QA. Select a row by entering its exact `website` value in `smoke_website`; blank selects the first CSV row. A failed one-candidate smoke run saves its evidence and marks the workflow failed for inspection.
+The workflow's `smoke_test` input is intended to exercise the CSV path with one candidate from one row; `smoke_website` selects the row and blank uses the first CSV row. That mode cannot currently be started through the Actions interface because the workflow is absent from the default branch. A push-triggered test uses normal batch behavior for all rows present in the changed CSV; when testing one target this way, use a one-row CSV, which still seeks three automated passes for that target. A failed run commits available evidence for inspection.
 
 The checked-in website request and design brief are reusable instructions, not site-specific copy. Keep them separate: the request defines scope, factual sourcing, content, assets, and output requirements; the design brief guides visual decisions. The business, category, and location values are treated as data, not instructions. The preparation job validates the CSV and creates one matrix job per website. Those jobs run serially. Each site job loops through full candidate runs until it gets three automated passes or reaches six attempts. This is one workflow execution, not three workflow executions per site. With the current 21-row CSV, the workflow can make up to 126 candidate attempts.
 
@@ -25,7 +25,7 @@ The checked-in website request and design brief are reusable instructions, not s
 
 ```mermaid
 flowchart TD
-    A[CSV changed and pushed, or workflow manually dispatched on duckai] --> B[Validate CSV and create one job per target row]
+    A[CSV changed and pushed to duckai] --> B[Validate CSV and create one job per target row]
     B --> C[GitHub Actions: Ubuntu and pinned Playwright Python container, one website at a time]
     C --> C1[Read business, industry category, optional location, and source URL from row]
     C1 --> C2[Start headed Chromium under Xvfb; create fresh logged-out Duck.ai chat]
@@ -109,7 +109,7 @@ Some files are only present when the corresponding step completed; failed or par
 
 ## Rechecking a saved batch
 
-**Duck.ai Rendered Website QA** reruns browser QA and the structural checker on a committed batch, updates each candidate's QA evidence and run notes, and commits those evidence changes. It does not start new Duck.ai chats. A manual dispatch can specify a run ID and attempt; leaving the run ID blank selects the newest saved candidate batch.
+**Duck.ai Rendered Website QA** reruns browser QA and the structural checker on a committed batch, updates each candidate's QA evidence and run notes, and commits those evidence changes. It does not start new Duck.ai chats. The workflow declares inputs for a run ID and attempt (blank selects the newest saved candidate batch), but manual dispatch through the Actions interface is unavailable while its workflow file exists only on `duckai` and `main` remains the default branch.
 
 ## Runtime and access boundaries
 
