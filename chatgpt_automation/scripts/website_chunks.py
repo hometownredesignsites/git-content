@@ -92,6 +92,19 @@ def _part_prompt(kind: str, number: int, token: str, brief: str, previous: tuple
     return shell + contract
 
 
+def _repair_prompt(kind: str, number: int, token: str, error: str) -> str:
+    total = TOTALS[kind]
+    marker = f"/* CSS PART {number} OF {total} */" if kind == "css" else f"<!-- HTML PART {number} OF {total} -->"
+    fence = "css" if kind == "css" else "text"
+    return (
+        f"Your previous response for {kind.upper()} PART {number} OF {total} was rejected: {error[:240]}\n"
+        "Retry this same part only. Continue the established website design and do not repeat earlier parts. "
+        f"State `RUN TOKEN: {token}` and `{kind.upper()} PART {number} OF {total}` outside the code block. "
+        f"Return exactly one fenced `{fence}` code block; its first nonblank line must be `{marker}`. "
+        "Do not add any other code blocks or continue to a later part."
+    )
+
+
 def _append_turn(transcript: Path, *, role: str, text: str, part: str, metadata: dict[str, Any] | None = None) -> None:
     transcript.parent.mkdir(parents=True, exist_ok=True)
     item = {"at_utc": _now(), "role": role, "part": part, "text": text}
@@ -198,41 +211,72 @@ def run_website_chunks(
             if current_pending and current_pending.get("kind") == kind and current_pending.get("part") == number
             else _part_prompt(kind, number, token, source_facts_and_design_brief, (kind, number - 1) if number > 1 else ("css", 4) if kind == "html" else None)
         )
-        _append_turn(transcript, role="user", text=prompt, part=label)
-        state["pending_turn"] = {"kind": kind, "part": number, "prompt": prompt, "started_at_utc": _now()}
-        state["status"] = "running"
-        if conversation_url:
-            state["conversation_url"] = conversation_url()
-        _atomic_json(state_path, state)
-        started = time.monotonic()
-        try:
-            raw_response, metadata = _response_text(exchange(prompt))
-        except Exception as error:
+        current_attempt = (
+            int(current_pending.get("attempt", 1))
+            if current_pending and current_pending.get("kind") == kind and current_pending.get("part") == number
+            else 1
+        )
+        while True:
+            _append_turn(transcript, role="user", text=prompt, part=label,
+                         metadata={"attempt": current_attempt, "repair": current_attempt > 1})
+            state["pending_turn"] = {
+                "kind": kind,
+                "part": number,
+                "attempt": current_attempt,
+                "prompt": prompt,
+                "started_at_utc": _now(),
+            }
+            state["status"] = "running" if current_attempt == 1 else "repairing_part"
             if conversation_url:
                 state["conversation_url"] = conversation_url()
-            state["last_error"] = {"at_utc": _now(), "part": label, "error": str(error)}
-            state["status"] = "interrupted"
             _atomic_json(state_path, state)
-            raise
-        duration = round(time.monotonic() - started, 3)
-        _append_turn(transcript, role="assistant", text=raw_response, part=label,
-                     metadata={**metadata, "duration_seconds": duration})
-        if conversation_url:
-            state["conversation_url"] = conversation_url()
-        state["last_response_at_utc"] = _now()
-        _atomic_json(state_path, state)
-        raw_path = run / "debug" / "captured_responses" / f"{kind}-{number}.txt"
-        raw_path.parent.mkdir(parents=True, exist_ok=True)
-        raw_path.write_text(raw_response, encoding="utf-8")
-        command = [sys.executable, str(CAPTURE_SCRIPT), str(run), str(raw_path), "--kind", kind,
-                   "--part", str(number), "--chat-id", chat_id, "--run-token", token]
-        result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
-        if result.returncode:
-            state["last_error"] = {"at_utc": _now(), "part": label, "error": result.stderr.strip() or result.stdout.strip()}
-            state["status"] = "interrupted"
+            started = time.monotonic()
+            try:
+                raw_response, metadata = _response_text(exchange(prompt))
+            except Exception as error:
+                if conversation_url:
+                    state["conversation_url"] = conversation_url()
+                state["last_error"] = {"at_utc": _now(), "part": label, "attempt": current_attempt, "error": str(error)}
+                state["status"] = "interrupted"
+                _atomic_json(state_path, state)
+                raise
+            duration = round(time.monotonic() - started, 3)
+            _append_turn(transcript, role="assistant", text=raw_response, part=label,
+                         metadata={**metadata, "attempt": current_attempt, "duration_seconds": duration})
+            if conversation_url:
+                state["conversation_url"] = conversation_url()
+            state["last_response_at_utc"] = _now()
             _atomic_json(state_path, state)
-            raise RuntimeError(f"Rejected {label}; no next part was requested. {state['last_error']['error']}")
-        capture_result = json.loads(result.stdout)
+            raw_path = run / "debug" / "captured_responses" / f"{kind}-{number}-attempt-{current_attempt}.txt"
+            raw_path.parent.mkdir(parents=True, exist_ok=True)
+            raw_path.write_text(raw_response, encoding="utf-8")
+            command = [sys.executable, str(CAPTURE_SCRIPT), str(run), str(raw_path), "--kind", kind,
+                       "--part", str(number), "--chat-id", chat_id, "--run-token", token]
+            result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
+            if not result.returncode:
+                capture_result = json.loads(result.stdout)
+                break
+
+            rejection = result.stderr.strip() or result.stdout.strip()
+            state["last_error"] = {
+                "at_utc": _now(), "part": label, "attempt": current_attempt, "error": rejection,
+            }
+            if current_attempt >= 2:
+                state["status"] = "interrupted"
+                _atomic_json(state_path, state)
+                raise RuntimeError(f"Rejected {label} after one repair attempt; no next part was requested. {rejection}")
+            prompt = _repair_prompt(kind, number, token, rejection)
+            current_attempt += 1
+            state["pending_turn"] = {
+                "kind": kind,
+                "part": number,
+                "attempt": current_attempt,
+                "prompt": prompt,
+                "started_at_utc": _now(),
+            }
+            state["status"] = "repairing_part"
+            _atomic_json(state_path, state)
+
         state["accepted_parts"].append(f"{kind}-{number}")
         state["last_accepted_at_utc"] = _now()
         state["last_capture"] = capture_result

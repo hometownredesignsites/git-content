@@ -43,21 +43,26 @@ def restore_newest_code_block_fences(page, response_text: str, kind: str, part: 
     """
     messages = assistant_turns(page)
     if messages.count() == 0:
-        raise RuntimeError("No newest assistant message is available for code-block normalization.")
+        return response_text, {"dom_code_block_count": 0, "normalization_error": "No newest assistant message is available."}
     message = messages.last
     pre_blocks = message.locator("pre")
     code_blocks = message.locator("pre code[data-code-language]")
     if pre_blocks.count() != 1 or code_blocks.count() != 1:
-        raise RuntimeError(
-            f"Expected exactly one rendered assistant code block; found {pre_blocks.count()} pre blocks "
-            f"and {code_blocks.count()} labeled code blocks."
-        )
+        return response_text, {
+            "dom_code_block_count": pre_blocks.count(),
+            "dom_labeled_code_block_count": code_blocks.count(),
+            "normalization_error": "Expected exactly one rendered assistant code block.",
+        }
 
     code_block = code_blocks.first
     language = (code_block.get_attribute("data-code-language") or "").strip().lower()
     expected_language = "css" if kind == "css" else "text"
     if language != expected_language:
-        raise RuntimeError(f"Expected a rendered {expected_language} code block; found {language!r}.")
+        return response_text, {
+            "dom_code_block_count": 1,
+            "dom_code_language": language,
+            "normalization_error": f"Expected a rendered {expected_language} code block.",
+        }
     code = code_block.inner_text().strip("\r\n")
     expected_marker = (
         f"/* CSS PART {part} OF 4 */" if kind == "css"
@@ -65,14 +70,26 @@ def restore_newest_code_block_fences(page, response_text: str, kind: str, part: 
     )
     marker = re.search(rf"(?m)^[ \t]*{re.escape(expected_marker)}[ \t]*$", code)
     if not marker:
-        raise RuntimeError("Rendered code block does not begin with the expected in-code part marker.")
+        return response_text, {
+            "dom_code_block_count": 1,
+            "dom_code_language": language,
+            "normalization_error": "Rendered code block does not begin with the expected in-code part marker.",
+        }
 
     code_offset = response_text.find(code)
     if code_offset < 0:
-        raise RuntimeError("Newest-response text did not contain the rendered code block contents.")
+        return response_text, {
+            "dom_code_block_count": 1,
+            "dom_code_language": language,
+            "normalization_error": "Newest-response text did not contain the rendered code block contents.",
+        }
     prefix_lines = response_text[:code_offset].rstrip().splitlines()
     if not prefix_lines or prefix_lines[-1].strip().lower() != language:
-        raise RuntimeError("Newest-response text is missing the code block language label before its contents.")
+        return response_text, {
+            "dom_code_block_count": 1,
+            "dom_code_language": language,
+            "normalization_error": "Newest-response text is missing the code block language label before its contents.",
+        }
     outside_before = "\n".join(prefix_lines[:-1]).rstrip()
     outside_after = response_text[code_offset + len(code):]
     normalized = f"{outside_before}\n```{language}\n{code}\n```{outside_after}"
