@@ -1,0 +1,7 @@
+{
+  "url": "https://chatgpt.com/",
+  "title": "Just a moment...",
+  "network_events": [
+    "403 GET chatgpt.com/"
+  ]
+}
