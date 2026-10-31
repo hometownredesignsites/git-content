@@ -15,6 +15,7 @@ from playwright_runner.diagnostics import enable_network_logging, save_failure_d
 from playwright_runner.prompt_contracts import build_prompt_text, extract_json_payload
 from playwright_runner.recovery import refresh_chat, start_new_chat_if_available
 from playwright_runner.stage_runner import run_stage_once, write_stage_outputs
+from playwright_runner.browser_session import assistant_turns
 from chatgpt_automation.scripts.website_chunks import run_website_chunks
 
 
@@ -29,6 +30,57 @@ def ensure_package(module_name: str, pip_name: str | None = None):
 
 def ensure_browser_installed() -> None:
     subprocess.check_call([sys.executable, "-m", "playwright", "install", "chromium"])
+
+
+def restore_newest_code_block_fences(page, response_text: str, kind: str, part: int) -> tuple[str, dict]:
+    """Restore Markdown fences omitted by Playwright's existing DOM inner_text capture.
+
+    The runner still determines and captures the newest assistant response. ChatGPT's
+    rendered code block exposes its language and contents as DOM, while ``inner_text``
+    omits the literal triple-backtick delimiters. This adapter validates that the
+    newest assistant message has exactly one real code block and reconstructs its
+    Markdown representation for the chunk validator.
+    """
+    messages = assistant_turns(page)
+    if messages.count() == 0:
+        raise RuntimeError("No newest assistant message is available for code-block normalization.")
+    message = messages.last
+    pre_blocks = message.locator("pre")
+    code_blocks = message.locator("pre code[data-code-language]")
+    if pre_blocks.count() != 1 or code_blocks.count() != 1:
+        raise RuntimeError(
+            f"Expected exactly one rendered assistant code block; found {pre_blocks.count()} pre blocks "
+            f"and {code_blocks.count()} labeled code blocks."
+        )
+
+    code_block = code_blocks.first
+    language = (code_block.get_attribute("data-code-language") or "").strip().lower()
+    expected_language = "css" if kind == "css" else "text"
+    if language != expected_language:
+        raise RuntimeError(f"Expected a rendered {expected_language} code block; found {language!r}.")
+    code = code_block.inner_text().strip("\r\n")
+    expected_marker = (
+        f"/* CSS PART {part} OF 4 */" if kind == "css"
+        else f"<!-- HTML PART {part} OF 8 -->"
+    )
+    marker = re.search(rf"(?m)^[ \t]*{re.escape(expected_marker)}[ \t]*$", code)
+    if not marker:
+        raise RuntimeError("Rendered code block does not begin with the expected in-code part marker.")
+
+    code_offset = response_text.find(code)
+    if code_offset < 0:
+        raise RuntimeError("Newest-response text did not contain the rendered code block contents.")
+    prefix_lines = response_text[:code_offset].rstrip().splitlines()
+    if not prefix_lines or prefix_lines[-1].strip().lower() != language:
+        raise RuntimeError("Newest-response text is missing the code block language label before its contents.")
+    outside_before = "\n".join(prefix_lines[:-1]).rstrip()
+    outside_after = response_text[code_offset + len(code):]
+    normalized = f"{outside_before}\n```{language}\n{code}\n```{outside_after}"
+    return normalized, {
+        "dom_code_block_count": 1,
+        "dom_code_language": language,
+        "markdown_fences_restored_from_rendered_dom": True,
+    }
 
 
 def parse_args() -> argparse.Namespace:
@@ -118,7 +170,7 @@ def run() -> int:
 
                 def exchange_website_turn(turn_text: str):
                     # Reuse the existing newest-assistant-response capture on this same page.
-                    return run_stage_once(
+                    response_text, response_metadata = run_stage_once(
                         page=page,
                         timeout_ms=args.timeout_ms,
                         prompt_text=turn_text,
@@ -130,6 +182,13 @@ def run() -> int:
                         stage_name="website_chunk",
                         error_screenshot=error_screenshot,
                     )
+                    expected_part = re.search(r"Now produce exactly (CSS|HTML) PART (\d+) OF \d+", turn_text)
+                    if not expected_part:
+                        raise RuntimeError("Website turn prompt is missing its exact part label.")
+                    normalized_text, dom_metadata = restore_newest_code_block_fences(
+                        page, response_text, expected_part.group(1).lower(), int(expected_part.group(2))
+                    )
+                    return normalized_text, {**response_metadata, **dom_metadata}
 
                 website_brief = "\n\n".join(part for part in (instructions_text, prompt_text) if part).strip()
                 source_match = re.search(r'"requested_url"\s*:\s*"(https?://[^\"]+)"', prompt_text)
