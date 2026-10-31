@@ -1,0 +1,8 @@
+{
+  "job_id": "job_ok-smoke",
+  "started_at": "2026-10-31T02:09:18Z",
+  "error": {
+    "code": "ROUTER_STAGE_FAILED",
+    "message": "Router stage execution failed."
+  }
+}

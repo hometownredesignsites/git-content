@@ -1,0 +1,9 @@
+{
+  "job_id": "job_ok-smoke",
+  "state": "failed",
+  "intent_type": null,
+  "task_type": null,
+  "current_stage": "router",
+  "updated_at": "2026-10-31T02:13:10Z",
+  "created_at": "2026-10-31T02:09:18Z"
+}
