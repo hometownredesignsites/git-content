@@ -1,0 +1,33 @@
+{
+  "status": "interrupted",
+  "chat_id": "site-1-candidate-1",
+  "conversation_url": "https://chatgpt.com/uc/6ae61f69-0644-83ea-aca6-44d1d6b2c533",
+  "run_token": "76f152d87e6674dd",
+  "brief_sha256": "4c51e9ed28b4d53faf3afd3a1d9c9d611db72aa6c8abed613df8bc755abc23b3",
+  "started_at_utc": "2026-10-31T17:01:37.152569+00:00",
+  "accepted_parts": [
+    "css-1",
+    "css-2"
+  ],
+  "pending_turn": {
+    "kind": "css",
+    "part": 3,
+    "attempt": 2,
+    "prompt": "Your previous response for CSS PART 3 OF 4 was rejected: capture rejected: expected exactly one fenced code block; found 0\nNow produce exactly CSS PART 3 OF 4 as a repair. Continue the established website design and do not repeat earlier parts. State `RUN TOKEN: 76f152d87e6674dd` and `CSS PART 3 OF 4` outside the code block. Return exactly one fenced `css` code block; its first nonblank line must be `/* CSS PART 3 OF 4 */`. Do not add any other code blocks or continue to a later part.",
+    "started_at_utc": "2026-10-31T17:05:04.913999+00:00"
+  },
+  "last_response_at_utc": "2026-10-31T17:05:34.942354+00:00",
+  "last_accepted_at_utc": "2026-10-31T17:04:32.491560+00:00",
+  "last_capture": {
+    "accepted": true,
+    "part": "css 2/4",
+    "characters": 14949,
+    "sha256": "983b98c1955ed37bf47cf59092d404bca331ab933941ca73135d468cffc0fe7b"
+  },
+  "last_error": {
+    "at_utc": "2026-10-31T17:05:34.971535+00:00",
+    "part": "CSS PART 3 OF 4",
+    "attempt": 2,
+    "error": "capture rejected: expected exactly one fenced code block; found 0"
+  }
+}
