@@ -1,0 +1,10 @@
+{
+  "job_id": "job_fcb2e1bfac5f46ca_allpar_02_git-chatgpt",
+  "message": {
+    "role": "assistant",
+    "content": "Current weather in Indianapolis, IN, USA (April 25, 2026, 2:16 PM UTC / 10:16 AM local time):\n\nTemperature: 63°F (17°C)\n\nConditions: Mostly cloudy\n\nWind: 10 mph from the northwest\n\nPrecipitation: Low chance of rain today\n\nTelegram update (concise version):\n\"Indianapolis: 63°F, mostly cloudy. Light NW wind 10 mph, low rain risk.\""
+  },
+  "done": true,
+  "started_at": "2026-04-25T14:19:09Z",
+  "completed_at": "2026-04-25T14:19:43Z"
+}

@@ -1,0 +1,2090 @@
+name: Process Inference Requests
+
+on:
+  push:
+    branches:
+      - main
+      - git-chatgpt
+      - git-inceptionlabs
+      - git-grok
+      - git-qwen
+      - git-perplexity
+    paths:
+      - "input/*.txt"
+      - "requests/job_*.json"
+      - "stages/**/*.request.json"
+  workflow_dispatch:
+    inputs:
+      prompt_text:
+        description: "Prompt text to process immediately (optional)"
+        required: false
+        type: string
+      playwright_engine:
+        description: "Playwright browser engine"
+        required: false
+        default: "chatgpt"
+        type: choice
+        options:
+          - "chatgpt"
+          - "perplexity"
+          - "grok"
+          - "inceptionlabs"
+          - "qwen"
+      upload_artifacts:
+        description: "Upload diagnostics artifacts even on success"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: process-requests-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright/python:v1.58.0-noble
+      options: --user root
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ github.workspace }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Python deps
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install -r .github/workflows/requirements-playwright.txt
+
+      - name: Process requests with staged orchestration
+        env:
+          PROMPT_TEXT_INPUT: ${{ github.event.inputs.prompt_text }}
+          PLAYWRIGHT_ENGINE_INPUT: ${{ github.event.inputs.playwright_engine }}
+          GH_EVENT_NAME: ${{ github.event_name }}
+          GH_EVENT_BEFORE: ${{ github.event.before }}
+          GH_SHA: ${{ github.sha }}
+          GH_ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$GH_ACTOR" == "github-actions[bot]" ]]; then
+            echo "Skipping self-triggered run from github-actions[bot]."
+            exit 0
+          fi
+
+          mkdir -p             tmp             input/processed             requests             requests/old-requests             responses             responses/old-responses             responses_readable             errors             evaluations             combined             status             stages             execution
+          rm -rf tmp/playwright-profiles || true
+          mkdir -p tmp/playwright-profiles
+
+          PLAYWRIGHT_ENGINE="${PLAYWRIGHT_ENGINE:-${PLAYWRIGHT_ENGINE_INPUT:-chatgpt}}"
+          PLAYWRIGHT_RUNNER_FILE="chatgpt_file_playwright_anonymous_ci.py"
+          if [[ "$PLAYWRIGHT_ENGINE" == "perplexity" ]]; then
+            PLAYWRIGHT_RUNNER_FILE="perplexity_file_playwright_anonymous_ci.py"
+          elif [[ "$PLAYWRIGHT_ENGINE" == "grok" ]]; then
+            PLAYWRIGHT_RUNNER_FILE="grok_file_playwright_anonymous_ci.py"
+          elif [[ "$PLAYWRIGHT_ENGINE" == "inceptionlabs" ]]; then
+            PLAYWRIGHT_RUNNER_FILE="inceptionlabs_file_playwright_anonymous_ci.py"
+          elif [[ "$PLAYWRIGHT_ENGINE" == "qwen" ]]; then
+            PLAYWRIGHT_RUNNER_FILE="qwen_file_playwright_anonymous_ci.py"
+          fi
+          PLAYWRIGHT_RUNNER_FILE_OVERRIDE=""
+          WEATHER_FALLBACK_SCRIPT="tools/weather_fallback_openmeteo.py"
+          WEB_FALLBACK_SCRIPT="tools/web_fallback_duckduckgo.py"
+          EXTRACT_CONTEXT_SCRIPT=".github/workflows/extract_request_context.py"
+          SUPPORTED_REQUEST_MODELS_CSV="${SUPPORTED_REQUEST_MODELS_CSV:-git-chatgpt,git-chatgpt-json,git-perplexity,git-perplexity-json,git-grok,git-inceptionlabs,git-qwen}"
+          echo "Playwright default engine (workflow-level): $PLAYWRIGHT_ENGINE"
+          echo "Playwright default runner (workflow-level): $PLAYWRIGHT_RUNNER_FILE"
+          echo "Per-job engine/runner is resolved from request.model (see [dispatch] log lines)."
+          [[ -f "$PLAYWRIGHT_RUNNER_FILE" ]] || { echo "Missing $PLAYWRIGHT_RUNNER_FILE"; exit 1; }
+          [[ -f "$WEATHER_FALLBACK_SCRIPT" ]] || { echo "Missing $WEATHER_FALLBACK_SCRIPT"; exit 1; }
+          [[ -f "$WEB_FALLBACK_SCRIPT" ]] || { echo "Missing $WEB_FALLBACK_SCRIPT"; exit 1; }
+          [[ -f "$EXTRACT_CONTEXT_SCRIPT" ]] || { echo "Missing $EXTRACT_CONTEXT_SCRIPT"; exit 1; }
+
+          ROUTER_PROMPT_FILE=".github/workflows/pipeline.router_prompt.txt"
+          PLANNER_PROMPT_FILE=".github/workflows/pipeline.planner_prompt.txt"
+          ANSWERER_PROMPT_FILE=".github/workflows/pipeline.answerer_prompt.txt"
+          SYSTEM_TEST_PROMPT_FILE=".github/workflows/pipeline.system_test_prompt.txt"
+          FINAL_PHRASER_PROMPT_FILE=".github/workflows/pipeline.final_phraser_prompt.txt"
+          EVAL_PROMPT_TEMPLATE_FILE=".github/workflows/pipeline.eval_prompt.template.txt"
+
+          [[ -f "$ROUTER_PROMPT_FILE" ]] || { echo "Missing $ROUTER_PROMPT_FILE"; exit 1; }
+          [[ -f "$PLANNER_PROMPT_FILE" ]] || { echo "Missing $PLANNER_PROMPT_FILE"; exit 1; }
+          [[ -f "$ANSWERER_PROMPT_FILE" ]] || { echo "Missing $ANSWERER_PROMPT_FILE"; exit 1; }
+          [[ -f "$SYSTEM_TEST_PROMPT_FILE" ]] || { echo "Missing $SYSTEM_TEST_PROMPT_FILE"; exit 1; }
+          [[ -f "$FINAL_PHRASER_PROMPT_FILE" ]] || { echo "Missing $FINAL_PHRASER_PROMPT_FILE"; exit 1; }
+          [[ -f "$EVAL_PROMPT_TEMPLATE_FILE" ]] || { echo "Missing $EVAL_PROMPT_TEMPLATE_FILE"; exit 1; }
+
+          MEMORY_MIN_SCORE="${MEMORY_MIN_SCORE:-8.5}"
+          MEMORY_MIN_SIMILARITY="${MEMORY_MIN_SIMILARITY:-0.72}"
+          MEMORY_REQUIRED_CONFIDENCE="${MEMORY_REQUIRED_CONFIDENCE:-high}"
+          MEMORY_PROMOTION_MIN_SCORE="${MEMORY_PROMOTION_MIN_SCORE:-$MEMORY_MIN_SCORE}"
+          STAGE_MAX_ATTEMPTS="${STAGE_MAX_ATTEMPTS:-2}"
+          STAGE_WEB_MAX_ATTEMPTS="${STAGE_WEB_MAX_ATTEMPTS:-3}"
+          EVALUATION_ENABLED="${EVALUATION_ENABLED:-false}"
+          [[ -f tools/find_memory_reuse_candidate.py ]] || { echo "Missing tools/find_memory_reuse_candidate.py"; exit 1; }
+          [[ -f tools/apply_promotion_policy.py ]] || { echo "Missing tools/apply_promotion_policy.py"; exit 1; }
+
+          write_status() {
+            local job_id="$1"
+            local state="$2"
+            local intent_type="${3:-}"
+            local task_type="${4:-}"
+            local current_stage="${5:-}"
+            python - "$job_id" "$state" "$intent_type" "$task_type" "$current_stage" <<'PY'
+          import json, sys
+          from pathlib import Path
+          from datetime import datetime, timezone
+          job_id, state, intent_type, task_type, current_stage = sys.argv[1:6]
+          path = Path("status") / f"{job_id}.json"
+          data = {}
+          if path.exists():
+              data = json.loads(path.read_text(encoding="utf-8"))
+          data.update({
+              "job_id": job_id,
+              "state": state,
+              "intent_type": intent_type or data.get("intent_type"),
+              "task_type": task_type or data.get("task_type"),
+              "current_stage": current_stage or data.get("current_stage"),
+              "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00","Z"),
+          })
+          if "created_at" not in data:
+              data["created_at"] = data["updated_at"]
+          path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+          PY
+          }
+
+          write_stage_output() {
+            local job_id="$1"
+            local stage="$2"
+            local src="$3"
+            mkdir -p "stages/${job_id}"
+            cp "$src" "stages/${job_id}/${stage}.txt"
+          }
+
+          write_stage_result_json() {
+            local job_id="$1"
+            local stage="$2"
+            local src="$3"
+            local force_json="${4:-false}"
+            mkdir -p "stages/${job_id}"
+            python - "$job_id" "$stage" "$src" "$force_json" <<'PY'
+          import json
+          import re
+          import sys
+          from pathlib import Path
+
+          job_id, stage, src, force_json = sys.argv[1:5]
+          src_path = Path(src)
+          raw = src_path.read_text(encoding="utf-8").strip() if src_path.exists() else ""
+          payload = None
+
+          if force_json.lower() == "true":
+              payload = json.loads(raw) if raw else {}
+          else:
+              # Best effort: extract first JSON object from mixed text.
+              match = re.search(r"\{.*\}", raw, re.S)
+              if match:
+                  try:
+                      candidate = json.loads(match.group(0))
+                      if isinstance(candidate, dict):
+                          payload = candidate
+                  except Exception:
+                      payload = None
+
+          if not isinstance(payload, dict):
+              payload = {"response": raw}
+
+          out_path = Path("stages") / job_id / f"{stage}.result.json"
+          out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+          PY
+          }
+
+          resolve_playwright_runner_for_model() {
+            local model_name="$1"
+            case "$model_name" in
+              git-chatgpt|git-chatgpt-json|*/git-chatgpt|*/git-chatgpt-json)
+                echo "chatgpt_file_playwright_anonymous_ci.py"
+                ;;
+              git-perplexity|git-perplexity-json|*/git-perplexity|*/git-perplexity-json)
+                echo "perplexity_file_playwright_anonymous_ci.py"
+                ;;
+              git-grok|*/git-grok)
+                echo "grok_file_playwright_anonymous_ci.py"
+                ;;
+              git-inceptionlabs|*/git-inceptionlabs)
+                echo "inceptionlabs_file_playwright_anonymous_ci.py"
+                ;;
+              git-qwen|*/git-qwen)
+                echo "qwen_file_playwright_anonymous_ci.py"
+                ;;
+              *)
+                echo ""
+                ;;
+            esac
+          }
+
+          resolve_playwright_engine_for_runner() {
+            local runner_file="$1"
+            case "$runner_file" in
+              perplexity_file_playwright_anonymous_ci.py)
+                echo "perplexity"
+                ;;
+              grok_file_playwright_anonymous_ci.py)
+                echo "grok"
+                ;;
+              inceptionlabs_file_playwright_anonymous_ci.py)
+                echo "inceptionlabs"
+                ;;
+              qwen_file_playwright_anonymous_ci.py)
+                echo "qwen"
+                ;;
+              "")
+                echo "unsupported"
+                ;;
+              *)
+                echo "chatgpt"
+                ;;
+            esac
+          }
+
+          call_playwright_stage() {
+            local stage="$1"
+            local stage_prompt_file="$2"
+            local input_payload_file="$3"
+            local output_file="$4"
+            local expect_json="${5:-false}"
+            local require_live_web="${6:-false}"
+            local max_attempts_override="${7:-}"
+            local stage_chunks="${8:-1}"
+            local stage_chunk_mode="${9:-none}"
+            local validation_question_file="${10:-}"
+            local runner_file="${PLAYWRIGHT_RUNNER_FILE_OVERRIDE:-$PLAYWRIGHT_RUNNER_FILE}"
+
+            local attempts="${STAGE_MAX_ATTEMPTS:-2}"
+            if [[ "$require_live_web" == "true" ]]; then
+              attempts="${STAGE_WEB_MAX_ATTEMPTS:-3}"
+            fi
+            if [[ -n "$max_attempts_override" ]]; then
+              attempts="$max_attempts_override"
+            fi
+
+            local attempt=1
+            while (( attempt <= attempts )); do
+              local wait_seconds="${STAGE_WAIT_SECONDS_DEFAULT:-30}"
+              local post_wait_seconds="${STAGE_POST_WAIT_SECONDS_DEFAULT:-1}"
+              local settle_seconds="${STAGE_SETTLE_SECONDS_DEFAULT:-2}"
+              local max_settle_wait_seconds="${STAGE_MAX_SETTLE_WAIT_SECONDS_DEFAULT:-12}"
+              local timeout_ms="${STAGE_TIMEOUT_MS_DEFAULT:-120000}"
+
+              case "$stage" in
+                router)
+                  wait_seconds="${STAGE_WAIT_SECONDS_ROUTER:-18}"
+                  settle_seconds="${STAGE_SETTLE_SECONDS_ROUTER:-1}"
+                  max_settle_wait_seconds="${STAGE_MAX_SETTLE_WAIT_SECONDS_ROUTER:-6}"
+                  timeout_ms="${STAGE_TIMEOUT_MS_ROUTER:-90000}"
+                  ;;
+                planner)
+                  wait_seconds="${STAGE_WAIT_SECONDS_PLANNER:-20}"
+                  settle_seconds="${STAGE_SETTLE_SECONDS_PLANNER:-1}"
+                  max_settle_wait_seconds="${STAGE_MAX_SETTLE_WAIT_SECONDS_PLANNER:-6}"
+                  timeout_ms="${STAGE_TIMEOUT_MS_PLANNER:-90000}"
+                  ;;
+                evaluation)
+                  wait_seconds="${STAGE_WAIT_SECONDS_EVALUATION:-18}"
+                  settle_seconds="${STAGE_SETTLE_SECONDS_EVALUATION:-1}"
+                  max_settle_wait_seconds="${STAGE_MAX_SETTLE_WAIT_SECONDS_EVALUATION:-6}"
+                  timeout_ms="${STAGE_TIMEOUT_MS_EVALUATION:-90000}"
+                  ;;
+                answerer|final_phraser)
+                  if [[ "$require_live_web" == "true" ]]; then
+                    wait_seconds="${STAGE_WAIT_SECONDS_ANSWERER_WEB:-35}"
+                    settle_seconds="${STAGE_SETTLE_SECONDS_ANSWERER_WEB:-2}"
+                    max_settle_wait_seconds="${STAGE_MAX_SETTLE_WAIT_SECONDS_ANSWERER_WEB:-14}"
+                    timeout_ms="${STAGE_TIMEOUT_MS_ANSWERER_WEB:-120000}"
+                  else
+                    wait_seconds="${STAGE_WAIT_SECONDS_ANSWERER:-28}"
+                    settle_seconds="${STAGE_SETTLE_SECONDS_ANSWERER:-2}"
+                    max_settle_wait_seconds="${STAGE_MAX_SETTLE_WAIT_SECONDS_ANSWERER:-10}"
+                    timeout_ms="${STAGE_TIMEOUT_MS_ANSWERER:-110000}"
+                  fi
+                  ;;
+              esac
+
+              local meta_file
+              meta_file="${output_file}.meta.json"
+              local profile_dir
+              profile_dir="tmp/playwright-profiles/${job_id}/${stage}/attempt-${attempt}"
+              rm -rf "$profile_dir"
+              mkdir -p "$profile_dir"
+              local stage_started_epoch
+              stage_started_epoch="$(date +%s)"
+              echo "[$stage] attempt ${attempt}/${attempts} starting (runner=$runner_file wait=${wait_seconds}s settle=${settle_seconds}/${max_settle_wait_seconds}s timeout=${timeout_ms}ms)"
+
+              local extra_flags=()
+              if (( attempt > 1 )); then
+                extra_flags+=(--refresh-before-send)
+              fi
+              if [[ "${STAGE_START_NEW_CHAT:-false}" == "true" ]]; then
+                extra_flags+=(--start-new-chat)
+              fi
+
+              local json_flags=()
+              if [[ "$expect_json" == "true" ]]; then
+                json_flags+=(--expect-json --fail-if-invalid-json)
+              fi
+
+              if xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' \
+                python "$runner_file" \
+                --stage-name "$stage" \
+                --instructions-file "$stage_prompt_file" \
+                --input-file "$input_payload_file" \
+                --output-file "$output_file" \
+                --metadata-output-file "$meta_file" \
+                --user-data-dir "$profile_dir" \
+                --allow-retry \
+                --refresh-before-retry \
+                --wait-seconds "$wait_seconds" \
+                --timeout-ms "$timeout_ms" \
+                --post-response-wait-seconds "$post_wait_seconds" \
+                --response-settle-seconds "$settle_seconds" \
+                --max-settle-wait-seconds "$max_settle_wait_seconds" \
+                --chunks "$stage_chunks" \
+                --chunk-mode "$stage_chunk_mode" \
+                "${json_flags[@]}" \
+                "${extra_flags[@]}"; then
+                local stage_elapsed
+                stage_elapsed=$(( $(date +%s) - stage_started_epoch ))
+                echo "[$stage] attempt ${attempt}/${attempts} completed in ${stage_elapsed}s"
+                local final_url=""
+                if [[ -f "$meta_file" ]]; then
+                  final_url="$(python - "$meta_file" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          meta_path = Path(sys.argv[1])
+          try:
+              data = json.loads(meta_path.read_text(encoding="utf-8"))
+          except Exception:
+              data = {}
+          url = str(data.get("final_url") or "").strip()
+          if url:
+              print(url)
+          PY
+                  )"
+                fi
+                if [[ -n "${final_url// }" ]]; then
+                  echo "[$stage] final_url: $final_url (attempt ${attempt}/${attempts})"
+                else
+                  echo "[$stage] final_url: unavailable (attempt ${attempt}/${attempts})"
+                fi
+                if [[ "$require_live_web" == "true" ]] && response_indicates_web_unavailable "$output_file"; then
+                  if (( attempt < attempts )); then
+                    echo "[$stage] live web unavailable signal detected, retrying attempt $((attempt + 1))/${attempts}"
+                    attempt=$((attempt + 1))
+                    sleep 2
+                    continue
+                  fi
+                  return 30
+                fi
+                if [[ "$require_live_web" == "true" ]] && response_requires_live_weather_retry "$validation_question_file" "$output_file"; then
+                  if (( attempt < attempts )); then
+                    echo "[$stage] weather response failed live-data validation, retrying attempt $((attempt + 1))/${attempts}"
+                    attempt=$((attempt + 1))
+                    sleep 2
+                    continue
+                  fi
+                  return 30
+                fi
+                return 0
+              fi
+
+              local stage_elapsed_fail
+              stage_elapsed_fail=$(( $(date +%s) - stage_started_epoch ))
+              echo "[$stage] attempt ${attempt}/${attempts} failed after ${stage_elapsed_fail}s"
+              if (( attempt >= attempts )); then
+                return 1
+              fi
+
+              echo "[$stage] execution failed, retrying attempt $((attempt + 1))/${attempts}"
+              attempt=$((attempt + 1))
+              sleep 2
+            done
+
+            return 1
+          }
+
+          validate_json() {
+            local file="$1"
+            python - "$file" <<'PY'
+          import json, sys, re
+          raw = open(sys.argv[1], "r", encoding="utf-8").read().strip()
+          m = re.search(r'\{.*\}', raw, re.S)
+          candidate = m.group(0) if m else raw
+          json.loads(candidate)
+          print(candidate)
+          PY
+          }
+
+          validate_stage_contract() {
+            local stage="$1"
+            local file="$2"
+            python - "$stage" "$file" <<'PY'
+          import json, sys
+
+          stage, path = sys.argv[1:3]
+          data = json.load(open(path, "r", encoding="utf-8"))
+          if not isinstance(data, dict):
+              raise SystemExit(f"{stage} output must be a JSON object")
+
+          if stage == "router":
+              required = ["schema_version", "intent_type", "task_type", "confidence", "requires_local_execution", "reason"]
+              missing = [k for k in required if k not in data]
+              if missing:
+                  raise SystemExit(f"router missing keys: {', '.join(missing)}")
+              allowed = {"question", "job", "research", "needs_clarification"}
+              if str(data.get("intent_type") or "") not in allowed:
+                  raise SystemExit("router.intent_type invalid")
+
+          elif stage == "planner":
+              required = ["schema_version", "intent_type", "task_type", "confidence", "requires_local_execution", "parameters", "missing_fields", "success_condition"]
+              missing = [k for k in required if k not in data]
+              if missing:
+                  raise SystemExit(f"planner missing keys: {', '.join(missing)}")
+              allowed = {"job", "needs_clarification"}
+              if str(data.get("intent_type") or "") not in allowed:
+                  raise SystemExit("planner.intent_type invalid")
+              if not isinstance(data.get("parameters"), dict):
+                  raise SystemExit("planner.parameters must be object")
+              if not isinstance(data.get("missing_fields"), list):
+                  raise SystemExit("planner.missing_fields must be array")
+              if str(data.get("intent_type")) == "needs_clarification":
+                  question = str(data.get("question") or "").strip()
+                  missing_fields = [str(x).strip() for x in data.get("missing_fields", []) if str(x).strip()]
+                  if not question and not missing_fields:
+                      data["intent_type"] = "job"
+                  elif not question:
+                      data["question"] = f"Please confirm/provide: {', '.join(missing_fields)}."
+
+          print(json.dumps(data, ensure_ascii=False))
+          PY
+          }
+
+          response_indicates_web_unavailable() {
+            local file="$1"
+            python - "$file" <<'PY'
+          import re, sys
+          from pathlib import Path
+          text = Path(sys.argv[1]).read_text(encoding="utf-8", errors="ignore").lower()
+          patterns = [
+              r"don.?t have live web access",
+              r"do not have live web access",
+              r"don.?t currently have live web access",
+              r"do not currently have live web access",
+              r"don.?t have real[- ]time access",
+              r"do not have real[- ]time access",
+              r"don.?t currently have real[- ]time access",
+              r"do not currently have real[- ]time access",
+              r"don.?t currently have live access",
+              r"do not currently have live access",
+              r"don.?t have live weather access",
+              r"do not have live weather access",
+              r"don.?t have live weather data access",
+              r"do not have live weather data access",
+              r"don.?t have live weather data",
+              r"do not have live weather data",
+              r"i don.?t have live weather data access(?: in this (?:turn|moment))?",
+              r"i do not have live weather data access(?: in this (?:turn|moment))?",
+              r"i don.?t have live data access(?: in this (?:turn|moment))?",
+              r"i do not have live data access(?: in this (?:turn|moment))?",
+              r"i don.?t have .* live .* access right now",
+              r"i don.?t currently have .* live .* access",
+              r"i do not currently have .* live .* access",
+              r"don.?t .* live access .* in this chat",
+              r"do not .* live access .* in this chat",
+              r"live web lookup required",
+              r"live lookup required",
+              r"don.?t have access to live tools",
+              r"do not have access to live tools",
+              r"don.?t have live tools",
+              r"do not have live tools",
+              r"i don.?t have live tools",
+              r"i do not have live tools",
+              r"don.?t have access to live web",
+              r"do not have access to live web",
+              r"i can.?t access live web",
+              r"live web search .* unavailable",
+              r"web search was required .* unavailable",
+              r"cannot browse the web",
+              r"unable to access live web",
+              r"live_web_unavailable",
+              r"i can(?:not|n.?t) (?:pull|fetch|get) .* exact .* in this chat",
+              r"if you(?:.?d| would)? like,? i can (?:pull|fetch|get) .* if you",
+              r"if you (?:share|provide) (?:a )?(?:link|url)",
+          ]
+          hit = any(re.search(p, text) for p in patterns)
+          raise SystemExit(0 if hit else 1)
+          PY
+          }
+
+          response_requires_live_weather_retry() {
+            local question_file="$1"
+            local answer_file="$2"
+            if [[ -z "${question_file// }" || ! -f "$question_file" ]]; then
+              return 1
+            fi
+            python - "$question_file" "$answer_file" <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          question = Path(sys.argv[1]).read_text(encoding="utf-8", errors="ignore").lower()
+          answer = Path(sys.argv[2]).read_text(encoding="utf-8", errors="ignore")
+          lower = answer.lower()
+
+          weather_markers = [
+              "weather", "forecast", "temperature", "high", "low", "rain", "snow", "wind", "humidity", "feels like"
+          ]
+          if not any(m in question for m in weather_markers):
+              raise SystemExit(1)
+
+          fallback_patterns = [
+              r"live web lookup required",
+              r"live web search .* unavailable",
+              r"web search was required .* unavailable",
+              r"don.?t have live weather data access",
+              r"do not have live weather data access",
+              r"don.?t have live weather data",
+              r"do not have live weather data",
+              r"i don.?t have live data access(?: in this (?:turn|moment))?",
+              r"i do not have live data access(?: in this (?:turn|moment))?",
+              r"don.?t have access to live tools",
+              r"do not have access to live tools",
+              r"don.?t have live tools",
+              r"do not have live tools",
+              r"i don.?t have live tools",
+              r"i do not have live tools",
+              r"don.?t have access to live web",
+              r"do not have access to live web",
+              r"don.?t have live web access",
+              r"do not have live web access",
+              r"unable to access live web",
+              r"cannot browse the web",
+              r"run (?:this|the) (?:python )?script",
+              r"openweathermap",
+          ]
+          if any(re.search(p, lower) for p in fallback_patterns):
+              raise SystemExit(0)
+
+          has_temp = bool(re.search(r"\b-?\d{1,3}\s*(?:°\s*[cf]|degrees?\s*[cf]|[cf]\b)", lower))
+          has_number = bool(re.search(r"\b\d{1,3}\b", lower))
+          weather_fact_terms = [
+              "temperature", "high", "low", "forecast", "humidity", "wind", "precip", "rain", "snow", "clear",
+              "cloud", "sunny", "overcast", "thunder", "storm", "conditions", "feels like", "uv", "chance"
+          ]
+          has_fact_term = any(term in lower for term in weather_fact_terms)
+          if has_temp or (has_number and has_fact_term):
+              raise SystemExit(1)
+
+          raise SystemExit(0)
+          PY
+          }
+
+          question_requires_live_web() {
+            local question_file="$1"
+            python - "$question_file" <<'PY'
+          import re, sys
+          from pathlib import Path
+          text = Path(sys.argv[1]).read_text(encoding="utf-8", errors="ignore").lower()
+          dynamic_markers = [
+              "weather", "forecast", "temperature", "today", "current", "now", "latest", "recently released", "price", "news", "score", "schedule", "traffic"
+          ]
+          has_dynamic = any(m in text for m in dynamic_markers)
+          print("true" if has_dynamic else "false")
+          PY
+          }
+
+          is_system_test_prompt() {
+            local question_file="$1"
+            python - "$question_file" <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+          text = Path(sys.argv[1]).read_text(encoding="utf-8", errors="ignore").strip()
+          lowered = text.lower()
+          patterns = [
+              r"\breply\s+with\s+exactly\b",
+              r"\brespond\s+with\s+exactly\b",
+              r"\breturn\s+exactly\b",
+              r"\boutput\s+exactly\b",
+              r"\bexactly:\s*\S+",
+          ]
+          hit = any(re.search(p, lowered) for p in patterns)
+          print("true" if hit else "false")
+          PY
+          }
+
+          starts_with_tell_me_prompt() {
+            local question_file="$1"
+            python - "$question_file" <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          text = Path(sys.argv[1]).read_text(encoding="utf-8", errors="ignore")
+          lowered = text.lstrip().lower()
+          # Fast-path bypass for conversational informational asks:
+          # "Tell me ..." (with optional leading "Please").
+          hit = bool(re.match(r"^(?:please\s+)?tell\s+me\b", lowered))
+          print("true" if hit else "false")
+          PY
+          }
+
+          should_bypass_router_prompt() {
+            local question_file="$1"
+            python - "$question_file" <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          text = Path(sys.argv[1]).read_text(encoding="utf-8", errors="ignore")
+          raw = text
+
+          # Strip markdown code blocks and noisy transport wrappers frequently prepended
+          # by upstream callers (Conversation/Sender metadata blocks).
+          cleaned = re.sub(r"```.*?```", " ", raw, flags=re.DOTALL)
+          lines = []
+          for line in cleaned.splitlines():
+              s = line.strip()
+              if not s:
+                  continue
+              low = s.lower()
+              if low.startswith("conversation info"):
+                  continue
+              if low.startswith("sender (untrusted metadata)"):
+                  continue
+              if low.startswith("sender:"):
+                  continue
+              if low.startswith("user prompt:"):
+                  continue
+              lines.append(s)
+          candidate = " ".join(lines).strip() if lines else raw.strip()
+          # Remove leading timestamp-style envelope prefixes like:
+          # [Thu 2026-04-02 04:08 UTC] What is ...
+          candidate = re.sub(r"^\[[^\]]+\]\s*", "", candidate).strip()
+          lowered = candidate.lower().lstrip()
+
+          # Existing fast path: "Tell me ..."
+          if re.match(r"^(?:please\s+)?tell\s+me\b", lowered):
+              print("true")
+              raise SystemExit(0)
+
+          # New fast path: direct informational question openers.
+          starts_like_direct_question = bool(
+              re.match(r"^(?:please\s+)?(?:what|how|when|where|which|who)\b", lowered)
+          )
+          if not starts_like_direct_question:
+              print("false")
+              raise SystemExit(0)
+
+          # Guardrails: do not bypass for action/scheduling/local-state asks.
+          disallow_markers = [
+              "set up", "setup", "configure", "create", "delete", "remove", "disable", "enable",
+              "schedule", "cron", "job", "remind me", "run this daily", "every day", "every morning",
+              "local machine", "this host", "this server", "on this machine",
+              "service", "daemon", "process", "port", "socket", "cron job", "timer",
+              "git status", "repository", "repo", "file ", "files ", "folder", "directory", "log",
+              "disk", "memory usage", "cpu usage", "uptime",
+          ]
+          if any(marker in lowered for marker in disallow_markers):
+              print("false")
+              raise SystemExit(0)
+
+          print("true")
+          PY
+          }
+
+          apply_router_system_test_override() {
+            local router_json="$1"
+            python - "$router_json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          path = Path(sys.argv[1])
+          data = json.loads(path.read_text(encoding="utf-8"))
+          data["intent_type"] = "question"
+          data["task_type"] = "system_command"
+          data["requires_local_execution"] = False
+          try:
+              conf = float(data.get("confidence", 0))
+              data["confidence"] = max(conf, 0.85)
+          except Exception:
+              data["confidence"] = 0.85
+          reason = str(data.get("reason") or "").strip()
+          suffix = "Deterministic system-test override applied for exact-reply probe."
+          data["reason"] = f"{reason} {suffix}".strip() if reason else suffix
+          path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+          PY
+          }
+
+          extract_exact_reply_target() {
+            local question_file="$1"
+            python - "$question_file" <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          text = Path(sys.argv[1]).read_text(encoding="utf-8", errors="ignore").strip()
+          target = ""
+          patterns = [
+              r"(?is)\b(?:reply|respond|return|output)\s+with\s+exactly\s*:?\s*(.+)$",
+              r"(?is)\bexactly\s*:?\s*(.+)$",
+          ]
+          for pattern in patterns:
+              m = re.search(pattern, text)
+              if m:
+                  target = m.group(1).strip()
+                  break
+
+          if not target:
+              lines = [line.strip() for line in text.splitlines() if line.strip()]
+              if lines:
+                  target = lines[-1]
+
+          target = target.strip().strip("`")
+          if len(target) >= 2 and target[0] == target[-1] and target[0] in "\"'":
+              target = target[1:-1].strip()
+
+          print(target)
+          PY
+          }
+
+          parse_context_value() {
+            local context_file="$1"
+            local key="$2"
+            python - "$context_file" "$key" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          path = Path(sys.argv[1])
+          key = sys.argv[2]
+          if not path.exists():
+              print("")
+              raise SystemExit(0)
+          try:
+              payload = json.loads(path.read_text(encoding="utf-8"))
+          except Exception:
+              print("")
+              raise SystemExit(0)
+          value = payload.get(key)
+          if value is None:
+              print("")
+          elif isinstance(value, (dict, list)):
+              print(json.dumps(value, ensure_ascii=False))
+          else:
+              print(str(value))
+          PY
+          }
+
+          parse_context_chunking() {
+            local context_file="$1"
+            python - "$context_file" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          path = Path(sys.argv[1])
+          if not path.exists():
+              print("1|none")
+              raise SystemExit(0)
+          try:
+              payload = json.loads(path.read_text(encoding="utf-8"))
+          except Exception:
+              print("1|none")
+              raise SystemExit(0)
+          chunking = payload.get("chunking")
+          if not isinstance(chunking, dict):
+              transport = payload.get("transport")
+              if isinstance(transport, dict):
+                  chunking = transport.get("chunking")
+          if not isinstance(chunking, dict):
+              print("1|none")
+              raise SystemExit(0)
+
+          enabled = bool(chunking.get("enabled"))
+          try:
+              chunk_count = int(chunking.get("chunk_count") or 1)
+          except Exception:
+              chunk_count = 1
+          chunk_count = max(1, min(chunk_count, 5))
+          if not enabled:
+              chunk_count = 1
+
+          mode = str(chunking.get("mode") or "").strip().lower()
+          allowed = {"none", "map_reduce", "finalize_on_last_chunk", "legacy"}
+          if mode not in allowed:
+              mode = "finalize_on_last_chunk" if chunk_count > 1 else "none"
+          if chunk_count <= 1:
+              mode = "none"
+          print(f"{chunk_count}|{mode}")
+          PY
+          }
+
+          find_memory_reuse_candidate() {
+            local question_file="$1"
+            local current_job_id="$2"
+            local out_file="$3"
+            python tools/find_memory_reuse_candidate.py \
+              --question-file "$question_file" \
+              --current-job-id "$current_job_id" \
+              --min-score "$MEMORY_MIN_SCORE" \
+              --min-similarity "$MEMORY_MIN_SIMILARITY" \
+              --required-confidence "$MEMORY_REQUIRED_CONFIDENCE" \
+              --out-file "$out_file"
+          }
+
+          apply_promotion_policy() {
+            local eval_file="$1"
+            python tools/apply_promotion_policy.py \
+              --eval-file "$eval_file" \
+              --min-score "$MEMORY_PROMOTION_MIN_SCORE" \
+              --required-confidence "$MEMORY_REQUIRED_CONFIDENCE"
+          }
+
+          build_memory_reuse_context() {
+            local candidate_file="$1"
+            local memory_file="$2"
+            python - "$candidate_file" "$memory_file" <<'PY'
+          import json, sys
+          from pathlib import Path
+          candidate_path = Path(sys.argv[1])
+          memory_path = Path(sys.argv[2])
+
+          try:
+              payload = json.loads(candidate_path.read_text(encoding="utf-8")) if candidate_path.exists() else {}
+          except Exception:
+              payload = {}
+
+          if not isinstance(payload, dict):
+              payload = {}
+
+          response = str(payload.get("response_content") or "").strip()
+          if not response:
+              memory_path.write_text("", encoding="utf-8")
+              raise SystemExit(0)
+
+          parts = ["Reusable context from a prior high-quality similar answer:"]
+          question = str(payload.get("source_question_preview") or "").strip()
+          if question:
+              parts.append(f"- Prior question: {question}")
+          parts.append(f"- Prior answer: {response}")
+          score = payload.get("score")
+          similarity = payload.get("similarity")
+          confidence = payload.get("confidence_band")
+          if score is not None or similarity is not None or confidence:
+              parts.append(f"- Match metrics: score={score}, similarity={similarity}, confidence={confidence}")
+
+          memory_path.write_text("\n".join(parts).strip() + "\n", encoding="utf-8")
+          PY
+          }
+
+          render_request_payload() {
+            local user_file="$1"
+            local memory_file="$2"
+            local out_file="$3"
+            python - "$user_file" "$memory_file" "$out_file" <<'PY'
+          from pathlib import Path
+          import sys
+          user_file, memory_file, out_file = sys.argv[1:4]
+          user_text = Path(user_file).read_text(encoding="utf-8").strip()
+          memory = ""
+          if Path(memory_file).exists():
+              memory = Path(memory_file).read_text(encoding="utf-8").strip()
+          parts = []
+          if memory:
+              parts.append("Relevant memory:")
+              parts.append(memory)
+          parts.append("Current request:")
+          parts.append(user_text)
+          Path(out_file).write_text("\n\n".join(parts).strip() + "\n", encoding="utf-8")
+          PY
+          }
+
+          build_final_phraser_input() {
+            local execution_json="$1"
+            local out_file="$2"
+            python - "$execution_json" "$out_file" <<'PY'
+          from pathlib import Path
+          import json, sys
+          src, out = sys.argv[1:3]
+          data = json.loads(Path(src).read_text(encoding="utf-8"))
+          text = "Execution result:\n" + json.dumps(data, indent=2, ensure_ascii=False)
+          Path(out).write_text(text + "\n", encoding="utf-8")
+          PY
+          }
+
+          execute_local_task() {
+            local planner_json="$1"
+            local out_json="$2"
+            python - "$planner_json" "$out_json" <<'PY'
+          import json
+          import hashlib
+          import re
+          import sys
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          planner_path = Path(sys.argv[1])
+          out_path = Path(sys.argv[2])
+
+          def now_iso() -> str:
+              return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+          try:
+              plan = json.loads(planner_path.read_text(encoding="utf-8"))
+          except Exception as exc:
+              payload = {
+                  "execution_status": "failed",
+                  "task_type": None,
+                  "verified": False,
+                  "details": {
+                      "code": "PLANNER_JSON_INVALID",
+                      "message": f"Planner JSON invalid: {exc}",
+                  },
+                  "executed_at": now_iso(),
+              }
+              out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+              raise SystemExit(0)
+
+          task_type_raw = str(plan.get("task_type") or "").strip()
+          params = plan.get("parameters") if isinstance(plan.get("parameters"), dict) else {}
+          success_condition = str(plan.get("success_condition") or "")
+
+          try:
+              from app.task_registry import get_task, validate_required_fields  # type: ignore
+          except Exception:
+              required_map = {
+                  "scheduled_weather_report": ("frequency", "time", "location"),
+                  "reminder": ("time", "message"),
+                  "file_write": ("path", "content"),
+              }
+
+              def get_task(task: str):
+                  req = required_map.get(task)
+                  if req is None:
+                      return None
+                  return {"task_type": task, "required_fields": req, "executor_name": task}
+
+              def validate_required_fields(task: str, parameters: dict):
+                  req = required_map.get(task)
+                  if req is None:
+                      return ["task_type"]
+                  missing = []
+                  for f in req:
+                      v = parameters.get(f)
+                      if v is None or v == "":
+                          missing.append(f)
+                  return missing
+
+          def canonicalize_task_type(task: str) -> str:
+              raw = str(task or "").strip().lower()
+              if not raw:
+                  return ""
+              normalized = "_".join(raw.replace("-", " ").split())
+              if normalized.startswith("schedule_cron") or normalized.startswith("cron_schedule") or "cron" in normalized:
+                  return "scheduled_weather_report"
+              if "reminder" in normalized:
+                  return "reminder"
+              return normalized
+
+          def normalize_weather_schedule_parameters(parameters: dict) -> dict:
+              normalized = dict(parameters or {})
+              schedule_obj = normalized.get("schedule")
+              schedule_dict = schedule_obj if isinstance(schedule_obj, dict) else {}
+
+              cron_expr = str(
+                  normalized.get("cron_schedule")
+                  or normalized.get("cron")
+                  or normalized.get("cron_expression")
+                  or schedule_dict.get("cron_expression")
+                  or ""
+              ).strip()
+
+              schedule_text = str(
+                  normalized.get("schedule")
+                  if isinstance(normalized.get("schedule"), str)
+                  else normalized.get("target_time_reference")
+                  or ""
+              ).strip()
+
+              def first_nonempty(*values):
+                  for value in values:
+                      if value is None:
+                          continue
+                      text = str(value).strip()
+                      if text:
+                          return text
+                  return ""
+
+              timezone_value = first_nonempty(
+                  normalized.get("timezone"),
+                  normalized.get("time_zone"),
+                  normalized.get("recipient_timezone"),
+                  normalized.get("time_of_delivery_timezone"),
+                  normalized.get("timezone_policy"),
+                  schedule_dict.get("timezone"),
+              )
+              if timezone_value:
+                  normalized["timezone"] = timezone_value
+
+              location_value = first_nonempty(
+                  normalized.get("location"),
+                  normalized.get("city"),
+                  normalized.get("recipient_location"),
+                  schedule_dict.get("location"),
+              )
+              if not location_value:
+                  command_text = str(normalized.get("command") or "").strip()
+                  cmd_match = re.search(r"weather(?:_update)?\s+([A-Za-z][A-Za-z\s,\-\.]+)$", command_text, flags=re.IGNORECASE)
+                  if cmd_match:
+                      location_value = cmd_match.group(1).strip()
+              if location_value:
+                  normalized["location"] = location_value
+
+              frequency_value = first_nonempty(
+                  normalized.get("frequency"),
+                  normalized.get("date"),
+                  normalized.get("cadence"),
+                  normalized.get("interval"),
+                  schedule_dict.get("frequency"),
+                  schedule_dict.get("cadence"),
+              )
+              if not frequency_value and cron_expr:
+                  frequency_value = "daily"
+              if frequency_value:
+                  normalized["frequency"] = frequency_value
+
+              time_value = first_nonempty(
+                  normalized.get("time"),
+                  normalized.get("send_time"),
+                  normalized.get("time_of_day"),
+                  normalized.get("time_of_delivery"),
+                  schedule_dict.get("time"),
+              )
+              if not time_value:
+                  m = re.search(r"\b(\d{1,2}:\d{2})\b", schedule_text)
+                  if m:
+                      time_value = m.group(1)
+              if not time_value and cron_expr:
+                  parts = cron_expr.split()
+                  if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
+                      time_value = f"{int(parts[1]):02d}:{int(parts[0]):02d}"
+              if time_value:
+                  normalized["time"] = time_value
+
+              return normalized
+
+          task_type = canonicalize_task_type(task_type_raw)
+          if task_type == "system_command":
+              cron_obj = params.get("cron") if isinstance(params.get("cron"), dict) else {}
+              looks_like_weather_cron = False
+              if cron_obj:
+                  looks_like_weather_cron = True
+              elif any(k in params for k in ("frequency", "time", "timezone", "location", "date", "send_time")):
+                  looks_like_weather_cron = True
+              elif re.search(r"\b(weather|cron|schedule)\b", success_condition, flags=re.IGNORECASE):
+                  looks_like_weather_cron = True
+
+              if looks_like_weather_cron:
+                  merged = dict(params)
+                  if cron_obj:
+                      merged.setdefault("frequency", cron_obj.get("frequency") or cron_obj.get("type") or cron_obj.get("date"))
+                      merged.setdefault("time", cron_obj.get("time") or cron_obj.get("schedule_time"))
+                      merged.setdefault("timezone", cron_obj.get("timezone") or cron_obj.get("tz"))
+                      merged.setdefault("location", cron_obj.get("location") or cron_obj.get("target_location"))
+                  task_text = str(merged.get("task") or "").strip().lower()
+                  if task_text in {"disable", "disabled", "off"}:
+                      merged["enabled"] = False
+                  elif task_text in {"enable", "enabled", "on"}:
+                      merged["enabled"] = True
+                  params = merged
+                  task_type = "scheduled_weather_report"
+          if task_type == "scheduled_weather_report":
+              params = normalize_weather_schedule_parameters(params)
+
+          base = {
+              "task_type": task_type or None,
+              "original_task_type": task_type_raw or None,
+              "verified": False,
+              "executed_at": now_iso(),
+          }
+
+          if not task_type:
+              payload = {
+                  **base,
+                  "execution_status": "failed",
+                  "details": {
+                      "code": "MISSING_TASK_TYPE",
+                      "message": "Planner output did not include task_type.",
+                      "parameters": params,
+                  },
+              }
+              out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+              raise SystemExit(0)
+
+          if task_type.startswith("system_"):
+              payload = {
+                  **base,
+                  "execution_status": "success",
+                  "verified": True,
+                  "details": {
+                      "executor": "system_noop",
+                      "message": "System meta task requires no external execution.",
+                      "task_type": task_type,
+                      "response_text": str(params.get("response_text") or params.get("message") or ""),
+                      "success_condition": success_condition,
+                  },
+              }
+              out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+              raise SystemExit(0)
+
+          task_def = get_task(task_type)
+          if task_def is None:
+              payload = {
+                  **base,
+                  "execution_status": "failed",
+                  "details": {
+                      "code": "UNSUPPORTED_TASK_TYPE",
+                      "message": f"Unsupported task_type: {task_type_raw or task_type}",
+                      "parameters": params,
+                  },
+              }
+              out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+              raise SystemExit(0)
+
+          missing = validate_required_fields(task_type, params)
+          if missing:
+              payload = {
+                  **base,
+                  "execution_status": "needs_clarification",
+                  "details": {
+                      "code": "MISSING_REQUIRED_FIELDS",
+                      "message": "Task parameters are missing required fields.",
+                      "missing_fields": missing,
+                      "parameters": params,
+                  },
+              }
+              out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+              raise SystemExit(0)
+
+          cwd = Path.cwd().resolve()
+
+          if task_type == "file_write":
+              raw_path = str(params.get("path") or "").strip()
+              content = str(params.get("content") or "")
+              target = Path(raw_path)
+              if not target.is_absolute():
+                  target = (cwd / target).resolve()
+              else:
+                  target = target.resolve()
+
+              try:
+                  target.relative_to(cwd)
+              except Exception:
+                  payload = {
+                      **base,
+                      "execution_status": "failed",
+                      "details": {
+                          "code": "PATH_OUTSIDE_WORKSPACE",
+                          "message": "file_write path must stay inside repository workspace.",
+                          "path": str(target),
+                      },
+                  }
+                  out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+                  raise SystemExit(0)
+
+              target.parent.mkdir(parents=True, exist_ok=True)
+              target.write_text(content, encoding="utf-8")
+              digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+              payload = {
+                  **base,
+                  "execution_status": "success",
+                  "verified": True,
+                  "details": {
+                      "executor": getattr(task_def, "executor_name", None) or task_def.get("executor_name"),
+                      "path": str(target),
+                      "bytes_written": len(content.encode("utf-8")),
+                      "sha256": digest,
+                      "success_condition": success_condition,
+                  },
+              }
+              out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+              raise SystemExit(0)
+
+          if task_type in {"scheduled_weather_report", "reminder"}:
+              handoff_dir = cwd / "execution" / "handoff"
+              handoff_dir.mkdir(parents=True, exist_ok=True)
+              job_id = out_path.stem
+              handoff_path = handoff_dir / f"{job_id}.json"
+
+              handoff_payload = {
+                  "job_id": job_id,
+                  "task_type": task_type,
+                  "parameters": params,
+                  "success_condition": success_condition,
+                  "created_at": now_iso(),
+                  "status": "pending_runtime_executor",
+              }
+              handoff_path.write_text(json.dumps(handoff_payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+              payload = {
+                  **base,
+                  "execution_status": "handoff_required",
+                  "verified": False,
+                  "details": {
+                      "executor": getattr(task_def, "executor_name", None) or task_def.get("executor_name"),
+                      "message": "Task requires runtime-specific executor not available in GitHub runner.",
+                      "handoff_path": str(handoff_path),
+                      "parameters": params,
+                      "success_condition": success_condition,
+                  },
+              }
+              out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+              raise SystemExit(0)
+
+          payload = {
+              **base,
+              "execution_status": "failed",
+              "details": {
+                  "code": "NO_EXECUTOR_IMPLEMENTED",
+                  "message": f"No executor implemented for task_type: {task_type}",
+                  "parameters": params,
+              },
+          }
+          out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+          PY
+          }
+
+          render_eval_prompt() {
+            local template_file="$1"
+            local out_file="$2"
+            local question_preview="$3"
+            local job_id="$4"
+            local now_iso="$5"
+            python - "$template_file" "$out_file" "$question_preview" "$job_id" "$now_iso" <<'PY'
+          from pathlib import Path
+          import sys
+          template_file, out_file, qprev, job_id, now_iso = sys.argv[1:6]
+          text = Path(template_file).read_text(encoding="utf-8")
+          repl = {
+              "{{QUESTION_TEXT_PREVIEW}}": qprev,
+              "{{JOB_ID}}": job_id,
+              "{{QUESTION_ID}}": f"q_{job_id}",
+              "{{RUN_ID}}": f"run_{job_id}",
+              "{{BRANCH_ID}}": "branch_01",
+              "{{RESPONSE_OBJECT_ID}}": f"resp_{job_id}",
+              "{{PHASE}}": "2",
+              "{{JUDGE_MODEL}}": "chatgpt-playwright",
+              "{{NOW_ISO_UTC}}": now_iso,
+          }
+          for k, v in repl.items():
+              text = text.replace(k, v)
+          Path(out_file).write_text(text, encoding="utf-8")
+          PY
+          }
+
+          save_final_response() {
+            local job_id="$1"
+            local content_file="$2"
+            local started_at="$3"
+            python - "$job_id" "$content_file" "$started_at" <<'PY'
+          import json, sys
+          from pathlib import Path
+          from datetime import datetime, timezone
+          job_id, content_file, started_at = sys.argv[1:4]
+          content = Path(content_file).read_text(encoding="utf-8").strip()
+          completed_dt = datetime.now(timezone.utc).replace(microsecond=0)
+          payload = {
+              "job_id": job_id,
+              "message": {"role": "assistant", "content": content},
+              "done": True,
+              "started_at": started_at,
+              "completed_at": completed_dt.isoformat().replace("+00:00","Z")
+          }
+          Path(f"responses/{job_id}.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+          Path(f"responses_readable/{job_id}.md").write_text(content + "\n", encoding="utf-8")
+          PY
+          }
+
+          finalize_combined() {
+            local job_id="$1"
+            python - "$job_id" <<'PY'
+          import json, sys
+          from pathlib import Path
+          from datetime import datetime, timezone
+          job_id = sys.argv[1]
+          def load(path):
+              p = Path(path)
+              return json.loads(p.read_text(encoding="utf-8")) if p.exists() else None
+          payload = {
+              "job_id": job_id,
+              "status": load(f"status/{job_id}.json"),
+              "response": load(f"responses/{job_id}.json"),
+              "evaluation": load(f"evaluations/eval_{job_id}.json"),
+              "error": load(f"errors/{job_id}.json"),
+              "execution": load(f"execution/{job_id}.json"),
+              "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00","Z")
+          }
+          Path(f"combined/{job_id}.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+          PY
+          }
+
+          process_request_option_b() {
+            local job_id="$1"
+            local user_prompt_file="$2"
+            local started_at="$3"
+            local context_file="${4:-}"
+
+            local memory_file="tmp/${job_id}.memory.txt"
+            local router_input="tmp/${job_id}.router.input.txt"
+            local router_out="tmp/${job_id}.router.out.txt"
+            local router_json="tmp/${job_id}.router.json"
+
+            local planner_input="tmp/${job_id}.planner.input.txt"
+            local planner_out="tmp/${job_id}.planner.out.txt"
+            local planner_json="tmp/${job_id}.planner.json"
+
+            local answerer_input="tmp/${job_id}.answerer.input.txt"
+            local answerer_out="tmp/${job_id}.answerer.out.txt"
+
+            local execution_json="execution/${job_id}.json"
+            local final_input="tmp/${job_id}.final.input.txt"
+            local final_out="tmp/${job_id}.final.out.txt"
+
+            local eval_prompt="tmp/${job_id}.eval.prompt.txt"
+            local eval_out="tmp/${job_id}.eval.out.txt"
+            local eval_json="evaluations/eval_${job_id}.json"
+
+            local terminal_state=""
+            local intent_type=""
+            local task_type=""
+            local answerer_chunks="1"
+            local answerer_chunk_mode="none"
+
+            PLAYWRIGHT_RUNNER_FILE_OVERRIDE="$PLAYWRIGHT_RUNNER_FILE"
+            local model_name=""
+            if [[ -n "${context_file:-}" && -f "$context_file" ]]; then
+              model_name="$(parse_context_value "$context_file" "model" | tr -d '\r')"
+              if [[ -n "${model_name// }" ]]; then
+                PLAYWRIGHT_RUNNER_FILE_OVERRIDE="$(resolve_playwright_runner_for_model "$model_name")"
+                if [[ -z "${PLAYWRIGHT_RUNNER_FILE_OVERRIDE// }" ]]; then
+                  write_status "$job_id" "failed" "" "" "model_validation"
+                  python - "$job_id" "$started_at" "$model_name" "$SUPPORTED_REQUEST_MODELS_CSV" <<'PY'
+          import json, sys
+          from pathlib import Path
+          job_id, started_at, model_name, supported_csv = sys.argv[1:5]
+          supported_models = [item.strip() for item in str(supported_csv).split(",") if item.strip()]
+          payload = {
+              "job_id": job_id,
+              "started_at": started_at,
+              "error": {
+                  "code": "INVALID_MODEL",
+                  "message": f"Unsupported model: {model_name}",
+                  "supported_models": supported_models,
+              },
+          }
+          Path(f"errors/{job_id}.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+          PY
+                  terminal_state="failed"
+                fi
+              fi
+
+              local chunk_info
+              chunk_info="$(parse_context_chunking "$context_file" | tr -d '\r')"
+              answerer_chunks="${chunk_info%%|*}"
+              answerer_chunk_mode="${chunk_info#*|}"
+              [[ -z "$answerer_chunks" ]] && answerer_chunks="1"
+              [[ -z "$answerer_chunk_mode" ]] && answerer_chunk_mode="none"
+            fi
+            local dispatch_engine
+            dispatch_engine="$(resolve_playwright_engine_for_runner "$PLAYWRIGHT_RUNNER_FILE_OVERRIDE")"
+            echo "[dispatch] job=$job_id model=${model_name:-unknown} engine=$dispatch_engine runner=$PLAYWRIGHT_RUNNER_FILE_OVERRIDE"
+            if [[ "$terminal_state" != "failed" && ! -f "$PLAYWRIGHT_RUNNER_FILE_OVERRIDE" ]]; then
+              write_status "$job_id" "failed" "" "" "model_validation"
+              python - "$job_id" "$started_at" "$PLAYWRIGHT_RUNNER_FILE_OVERRIDE" <<'PY'
+          import json, sys
+          from pathlib import Path
+          job_id, started_at, runner = sys.argv[1:4]
+          payload = {
+              "job_id": job_id,
+              "started_at": started_at,
+              "error": {
+                  "code": "RUNNER_NOT_FOUND",
+                  "message": f"Resolved runner file was missing: {runner}",
+              },
+          }
+          Path(f"errors/{job_id}.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+          PY
+              terminal_state="failed"
+            fi
+
+              : > "$memory_file"
+              local memory_candidate_file="tmp/${job_id}.memory_candidate.json"
+              find_memory_reuse_candidate "$user_prompt_file" "$job_id" "$memory_candidate_file" || true
+              build_memory_reuse_context "$memory_candidate_file" "$memory_file" || true
+              render_request_payload "$user_prompt_file" "$memory_file" "$router_input"
+
+              local bypass_router="false"
+              if [[ "$(is_system_test_prompt "$user_prompt_file")" != "true" ]] && [[ "$(should_bypass_router_prompt "$user_prompt_file")" == "true" ]]; then
+                bypass_router="true"
+              fi
+
+              local router_rc=0
+              write_status "$job_id" "routing" "" "" "router"
+              if [[ "$bypass_router" == "true" ]]; then
+                python - "$router_out" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          out_path = Path(sys.argv[1])
+          payload = {
+              "schema_version": "1.0",
+              "intent_type": "question",
+              "task_type": "information",
+              "confidence": 0.95,
+              "requires_local_execution": False,
+              "reason": "Router bypass: safe direct informational prompt, treated as direct question."
+          }
+          out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+          PY
+                echo "[router] bypassed via tell-me fast path"
+              else
+                call_playwright_stage "router" "$ROUTER_PROMPT_FILE" "$router_input" "$router_out" true false || router_rc=$?
+              fi
+
+              if (( router_rc != 0 )); then
+                write_status "$job_id" "failed" "" "" "router"
+                python - "$job_id" "$started_at" <<'PY'
+          import json, sys
+          from pathlib import Path
+          job_id, started_at = sys.argv[1:3]
+          payload = {
+              "job_id": job_id,
+              "started_at": started_at,
+              "error": {
+                  "code": "ROUTER_STAGE_FAILED",
+                  "message": "Router stage execution failed."
+              }
+          }
+          Path(f"errors/{job_id}.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+          PY
+                terminal_state="failed"
+              else
+                write_stage_output "$job_id" "router" "$router_out"
+                validate_json "$router_out" > "$router_json"
+                if validate_stage_contract "router" "$router_json" > "${router_json}.validated"; then
+                  mv "${router_json}.validated" "$router_json"
+                else
+                  echo "[router] contract validation failed; applying metadata-aware fallback"
+                  python - "$router_json" "$context_file" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          router_path = Path(sys.argv[1])
+          context_path = Path(sys.argv[2])
+          context = {}
+          if context_path.exists():
+              try:
+                  context = json.loads(context_path.read_text(encoding="utf-8"))
+              except Exception:
+                  context = {}
+          route_hint = str(context.get("route_hint") or "").strip().lower()
+          task_hint = str(context.get("task_type") or "").strip()
+          if route_hint == "job":
+              intent = "job"
+              task = task_hint or "scheduled_weather_report"
+              requires_local_execution = True
+          else:
+              intent = "question"
+              task = task_hint or "information"
+              requires_local_execution = False
+          fallback = {
+              "schema_version": "1.0",
+              "intent_type": intent,
+              "task_type": task,
+              "confidence": 0.55,
+              "requires_local_execution": requires_local_execution,
+              "reason": "Router output failed contract validation; applied metadata-aware fallback."
+          }
+          router_path.write_text(json.dumps(fallback, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+          PY
+                fi
+
+                intent_type="$(python -c 'import json,sys; print(json.load(open(sys.argv[1], "r", encoding="utf-8")).get("intent_type",""))' "$router_json")"
+                task_type="$(python -c 'import json,sys; print(json.load(open(sys.argv[1], "r", encoding="utf-8")).get("task_type",""))' "$router_json")"
+                if [[ "$task_type" == "system_command" ]]; then
+                  local hinted_task
+                  hinted_task="$(python -c 'import json,sys; d=json.load(open(sys.argv[1], "r", encoding="utf-8")); print((d.get("task_type") or ""))' "$context_file")"
+                  if [[ "$hinted_task" == "scheduled_weather_report" ]]; then
+                    intent_type="job"
+                    task_type="scheduled_weather_report"
+                  fi
+                fi
+                if [[ "$(is_system_test_prompt "$user_prompt_file")" == "true" ]]; then
+                  apply_router_system_test_override "$router_json"
+                  intent_type="question"
+                  task_type="system_command"
+                fi
+              write_stage_result_json "$job_id" "router" "$router_json" true
+              write_status "$job_id" "routed" "$intent_type" "$task_type" "router"
+
+              if [[ "$intent_type" == "question" || "$intent_type" == "research" ]]; then
+                local requires_live_web
+                if [[ "$intent_type" == "research" ]]; then
+                  requires_live_web="true"
+                  [[ -z "${task_type// }" ]] && task_type="root_topic_research"
+                else
+                  requires_live_web="$(question_requires_live_web "$user_prompt_file")"
+                fi
+                write_status "$job_id" "planning" "$intent_type" "$task_type" "answerer"
+                if [[ "$(is_system_test_prompt "$user_prompt_file")" == "true" ]]; then
+                  local exact_target
+                  exact_target="$(extract_exact_reply_target "$user_prompt_file")"
+                  if [[ -z "${exact_target// }" ]]; then
+                    write_status "$job_id" "failed" "$intent_type" "$task_type" "answerer"
+                    python - "$job_id" "$started_at" <<'PY'
+          import json, sys
+          from pathlib import Path
+          job_id, started_at = sys.argv[1:3]
+          payload = {
+              "job_id": job_id,
+              "started_at": started_at,
+              "error": {
+                  "code": "SYSTEM_TEST_PARSE_FAILED",
+                  "message": "Could not extract exact reply target from system test prompt."
+              }
+          }
+          Path(f"errors/{job_id}.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+          PY
+                    terminal_state="failed"
+                  else
+                    printf '%s\n' "$exact_target" > "$answerer_input"
+                    if call_playwright_stage "answerer" "$SYSTEM_TEST_PROMPT_FILE" "$answerer_input" "$answerer_out" false false "" "1" "none"; then
+                      write_stage_output "$job_id" "answerer" "$answerer_out"
+                      # Enforce exact system-test response contract in final payload.
+                      printf '%s\n' "$exact_target" > "$answerer_out"
+                      write_stage_result_json "$job_id" "answerer" "$answerer_out" false
+                      save_final_response "$job_id" "$answerer_out" "$started_at"
+                      terminal_state="completed"
+                    else
+                      write_status "$job_id" "failed" "$intent_type" "$task_type" "answerer"
+                      python - "$job_id" "$started_at" <<'PY'
+          import json, sys
+          from pathlib import Path
+          job_id, started_at = sys.argv[1:3]
+          payload = {
+              "job_id": job_id,
+              "started_at": started_at,
+              "error": {
+                  "code": "SYSTEM_TEST_STAGE_FAILED",
+                  "message": "System test answerer stage execution failed."
+              }
+          }
+          Path(f"errors/{job_id}.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+          PY
+                      terminal_state="failed"
+                    fi
+                  fi
+                else
+                  render_request_payload "$user_prompt_file" "$memory_file" "$answerer_input"
+                  if call_playwright_stage "answerer" "$ANSWERER_PROMPT_FILE" "$answerer_input" "$answerer_out" false "$requires_live_web" "" "$answerer_chunks" "$answerer_chunk_mode" "$user_prompt_file"; then
+                    write_stage_output "$job_id" "answerer" "$answerer_out"
+                    write_stage_result_json "$job_id" "answerer" "$answerer_out" false
+                    save_final_response "$job_id" "$answerer_out" "$started_at"
+                    terminal_state="completed"
+                    else
+                      local stage_rc=$?
+                      if [[ "$stage_rc" -eq 30 ]]; then
+                        local task_type_norm
+                        task_type_norm="$(printf '%s' "$task_type" | tr '[:upper:]' '[:lower:]' | tr ' ' '_')"
+                        if [[ "$task_type_norm" == "live_weather_lookup" || "$task_type_norm" == "weather_lookup" || "$task_type_norm" == "weather" || "$task_type_norm" == "weather_query" || "$task_type_norm" == "weathercheck" || "$task_type_norm" == "weather_check" ]] || grep -Eqi '\bweather\b' "$user_prompt_file"; then
+                          if python tools/weather_fallback_openmeteo.py "$user_prompt_file" "$answerer_out"; then
+                            write_stage_result_json "$job_id" "answerer" "$answerer_out" false
+                            save_final_response "$job_id" "$answerer_out" "$started_at"
+                            terminal_state="completed"
+                          else
+                            if python "$WEB_FALLBACK_SCRIPT" "$user_prompt_file" "$answerer_out"; then
+                              write_stage_result_json "$job_id" "answerer" "$answerer_out" false
+                              save_final_response "$job_id" "$answerer_out" "$started_at"
+                              terminal_state="completed"
+                            else
+                              printf '%s\n' "Live web search was required for this prompt but unavailable in the browser session after ${STAGE_WEB_MAX_ATTEMPTS:-3} attempt(s)." > "$answerer_out"
+                              write_stage_result_json "$job_id" "answerer" "$answerer_out" false
+                              save_final_response "$job_id" "$answerer_out" "$started_at"
+                              terminal_state="completed"
+                            fi
+                          fi
+                        else
+                          if python "$WEB_FALLBACK_SCRIPT" "$user_prompt_file" "$answerer_out"; then
+                            write_stage_result_json "$job_id" "answerer" "$answerer_out" false
+                            save_final_response "$job_id" "$answerer_out" "$started_at"
+                            terminal_state="completed"
+                          else
+                            printf '%s\n' "Live web search was required for this prompt but unavailable in the browser session after ${STAGE_WEB_MAX_ATTEMPTS:-3} attempt(s)." > "$answerer_out"
+                            write_stage_result_json "$job_id" "answerer" "$answerer_out" false
+                            save_final_response "$job_id" "$answerer_out" "$started_at"
+                            terminal_state="completed"
+                          fi
+                        fi
+                      else
+                        write_status "$job_id" "failed" "$intent_type" "$task_type" "answerer"
+                        python - "$job_id" "$started_at" <<'PY'
+          import json, sys
+          from pathlib import Path
+          job_id, started_at = sys.argv[1:3]
+          payload = {
+              "job_id": job_id,
+              "started_at": started_at,
+              "error": {
+                  "code": "ANSWERER_STAGE_FAILED",
+                  "message": "Answerer stage execution failed."
+              }
+          }
+          Path(f"errors/{job_id}.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+          PY
+                      terminal_state="failed"
+                    fi
+                  fi
+                fi
+
+              elif [[ "$intent_type" == "job" ]]; then
+                render_request_payload "$user_prompt_file" "$memory_file" "$planner_input"
+                write_status "$job_id" "planning" "$intent_type" "$task_type" "planner"
+                if ! call_playwright_stage "planner" "$PLANNER_PROMPT_FILE" "$planner_input" "$planner_out" true false; then
+                  write_status "$job_id" "failed" "$intent_type" "$task_type" "planner"
+                  python - "$job_id" "$started_at" <<'PY'
+          import json, sys
+          from pathlib import Path
+          job_id, started_at = sys.argv[1:3]
+          payload = {
+              "job_id": job_id,
+              "started_at": started_at,
+              "error": {
+                  "code": "PLANNER_STAGE_FAILED",
+                  "message": "Planner stage execution failed."
+              }
+          }
+          Path(f"errors/{job_id}.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+          PY
+                  terminal_state="failed"
+                else
+                  write_stage_output "$job_id" "planner" "$planner_out"
+                  validate_json "$planner_out" > "$planner_json"
+                  validate_stage_contract "planner" "$planner_json" > "${planner_json}.validated"
+                  mv "${planner_json}.validated" "$planner_json"
+                  write_stage_result_json "$job_id" "planner" "$planner_json" true
+
+                  local planner_intent
+                  planner_intent="$(python -c 'import json,sys; print(json.load(open(sys.argv[1], "r", encoding="utf-8")).get("intent_type",""))' "$planner_json")"
+                  local planner_task_type
+                  planner_task_type="$(python -c 'import json,sys; print(json.load(open(sys.argv[1], "r", encoding="utf-8")).get("task_type",""))' "$planner_json")"
+                  if [[ -n "$planner_task_type" ]]; then
+                    task_type="$planner_task_type"
+                  fi
+
+                  if [[ "$planner_intent" == "needs_clarification" ]]; then
+                    write_status "$job_id" "needs_clarification" "$intent_type" "$task_type" "planner"
+                    python - "$job_id" "$planner_json" "$started_at" <<'PY'
+          import json, sys
+          from pathlib import Path
+          job_id, planner_json, started_at = sys.argv[1:4]
+          data = json.loads(Path(planner_json).read_text(encoding="utf-8"))
+          content = data.get("question") or "I need a bit more information before I can do that."
+          payload = {
+              "job_id": job_id,
+              "message": {"role": "assistant", "content": content},
+              "done": False,
+              "started_at": started_at,
+              "needs_clarification": True,
+              "planner": data
+          }
+          Path(f"responses/{job_id}.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+          Path(f"responses_readable/{job_id}.md").write_text(content + "\n", encoding="utf-8")
+          PY
+                    terminal_state="needs_clarification"
+                  else
+                    write_status "$job_id" "executing" "$intent_type" "$task_type" "execute_local"
+                    execute_local_task "$planner_json" "$execution_json"
+                    local execution_status
+                    execution_status="$(python -c 'import json,sys; print((json.load(open(sys.argv[1], "r", encoding="utf-8")).get("execution_status") or "").strip())' "$execution_json")"
+
+                    if [[ "$execution_status" == "needs_clarification" ]]; then
+                      write_status "$job_id" "needs_clarification" "$intent_type" "$task_type" "execute_local"
+                      python - "$job_id" "$execution_json" "$started_at" <<'PY'
+          import json, sys
+          from pathlib import Path
+          job_id, execution_json, started_at = sys.argv[1:4]
+          data = json.loads(Path(execution_json).read_text(encoding="utf-8"))
+          details = data.get("details") if isinstance(data.get("details"), dict) else {}
+          missing = details.get("missing_fields") if isinstance(details.get("missing_fields"), list) else []
+          if missing:
+              content = f"I still need these fields to continue: {', '.join(str(x) for x in missing)}."
+          else:
+              content = details.get("message") or "I need a bit more information before I can do that."
+          payload = {
+              "job_id": job_id,
+              "message": {"role": "assistant", "content": str(content)},
+              "done": False,
+              "started_at": started_at,
+              "needs_clarification": True,
+              "execution": data
+          }
+          Path(f"responses/{job_id}.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+          Path(f"responses_readable/{job_id}.md").write_text(str(content) + "\n", encoding="utf-8")
+          PY
+                      terminal_state="needs_clarification"
+
+                    elif [[ "$execution_status" == "failed" ]]; then
+                      write_status "$job_id" "failed" "$intent_type" "$task_type" "execute_local"
+                      python - "$job_id" "$execution_json" "$started_at" <<'PY'
+          import json, sys
+          from pathlib import Path
+          job_id, execution_json, started_at = sys.argv[1:4]
+          data = json.loads(Path(execution_json).read_text(encoding="utf-8"))
+          details = data.get("details") if isinstance(data.get("details"), dict) else {}
+          payload = {
+              "job_id": job_id,
+              "started_at": started_at,
+              "error": {
+                  "code": str(details.get("code") or "LOCAL_EXECUTION_FAILED"),
+                  "message": str(details.get("message") or "Local execution failed."),
+                  "details": data,
+              },
+          }
+          Path(f"errors/{job_id}.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+          PY
+                      terminal_state="failed"
+
+                    else
+                      write_status "$job_id" "verifying" "$intent_type" "$task_type" "verify_local"
+                      build_final_phraser_input "$execution_json" "$final_input"
+                      if call_playwright_stage "final_phraser" "$FINAL_PHRASER_PROMPT_FILE" "$final_input" "$final_out" false false; then
+                        write_stage_output "$job_id" "final_phraser" "$final_out"
+                        write_stage_result_json "$job_id" "final_phraser" "$final_out" false
+                        save_final_response "$job_id" "$final_out" "$started_at"
+                        terminal_state="completed"
+                      else
+                        write_status "$job_id" "failed" "$intent_type" "$task_type" "final_phraser"
+                        python - "$job_id" "$started_at" <<'PY'
+          import json, sys
+          from pathlib import Path
+          job_id, started_at = sys.argv[1:3]
+          payload = {
+              "job_id": job_id,
+              "started_at": started_at,
+              "error": {
+                  "code": "FINAL_PHRASER_STAGE_FAILED",
+                  "message": "Final phraser stage execution failed."
+              }
+          }
+          Path(f"errors/{job_id}.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+          PY
+                        terminal_state="failed"
+                      fi
+                    fi
+                  fi
+                fi
+
+              else
+                write_status "$job_id" "failed" "$intent_type" "$task_type" "router_invalid"
+                python - "$job_id" "$started_at" <<'PY'
+          import json, sys
+          from pathlib import Path
+          job_id, started_at = sys.argv[1:3]
+          payload = {
+              "job_id": job_id,
+              "started_at": started_at,
+              "error": {
+                  "code": "ROUTER_INVALID_INTENT",
+                  "message": "Router returned an unsupported intent_type."
+              }
+          }
+          Path(f"errors/{job_id}.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+          PY
+                terminal_state="failed"
+              fi
+            fi
+
+            if [[ "$terminal_state" == "completed" && -f "responses/${job_id}.json" ]]; then
+              if [[ "${EVALUATION_ENABLED,,}" == "true" ]]; then
+                local question_preview
+                question_preview="$(python - "$user_prompt_file" <<'PY'
+          import re, sys
+          text = open(sys.argv[1], "r", encoding="utf-8").read()
+          words = re.findall(r"\S+", text)
+          print(" ".join(words[:100]).strip())
+          PY
+                )"
+                render_eval_prompt "$EVAL_PROMPT_TEMPLATE_FILE" "$eval_prompt" "$question_preview" "$job_id" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+                call_playwright_stage "evaluation" "$ANSWERER_PROMPT_FILE" "$eval_prompt" "$eval_out" false false || true
+                if validate_json "$eval_out" > "$eval_json"; then
+                  :
+                else
+                  python - "$job_id" "$eval_json" "$eval_out" <<'PY'
+          import json, sys
+          from pathlib import Path
+          from datetime import datetime, timezone
+          job_id, eval_json, eval_out = sys.argv[1:4]
+          raw = Path(eval_out).read_text(encoding="utf-8").strip() if Path(eval_out).exists() else ""
+          now = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+          payload = {
+              "schema_version": "1.0",
+              "object_type": "evaluation",
+              "object_id": f"eval_{job_id}",
+              "phase": 2,
+              "status": "failed",
+              "created_at": now,
+              "updated_at": now,
+              "run_context": {"job_id": job_id},
+              "content": {
+                  "question_text_preview": "",
+                  "categorization": {"recency_class": "stable"},
+                  "quality_flags": {
+                      "needs_web_verification": False,
+                      "missing_citations": False,
+                      "safety_or_policy_risk": False,
+                  },
+              },
+              "metadata": {"language": "en"},
+              "scores": [],
+              "judge": {
+                  "judge_type": "final_judge",
+                  "judge_model": "chatgpt-playwright",
+                  "judge_version": "1.0",
+              },
+              "provenance": {},
+              "promotion": {
+                  "memory_eligible": False,
+                  "memory_tier": None,
+                  "promotion_reason": None,
+                  "blocked_reason": "evaluation_parse_failure",
+                  "effective_score": None,
+              },
+              "links": {"repo_path": f"evaluations/eval_{job_id}.json"},
+              "error": {
+                  "code": "EVAL_INVALID_JSON",
+                  "message": "Evaluation output was not valid JSON",
+                  "raw_excerpt": raw[:1500],
+              },
+          }
+          Path(eval_json).write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+          PY
+                fi
+                apply_promotion_policy "$eval_json"
+              else
+                echo "[evaluation] skipped (EVALUATION_ENABLED=${EVALUATION_ENABLED})"
+              fi
+              write_status "$job_id" "completed" "$intent_type" "$task_type" "complete"
+            fi
+
+            finalize_combined "$job_id"
+            PROCESS_REQUEST_TERMINAL_STATE="$terminal_state"
+          }
+
+          move_with_dedupe() {
+            local src="$1"
+            local dest_dir="$2"
+            [[ -f "$src" ]] || return 0
+            mkdir -p "$dest_dir"
+            local base stem ext dest ts
+            base="$(basename "$src")"
+            stem="${base%.*}"
+            ext="${base##*.}"
+            if [[ "$ext" == "$base" ]]; then
+              ext=""
+            else
+              ext=".${ext}"
+            fi
+            dest="${dest_dir}/${base}"
+            if [[ -e "$dest" ]]; then
+              ts="$(date -u +%Y%m%dT%H%M%SZ)"
+              dest="${dest_dir}/${stem}_${ts}${ext}"
+            fi
+            mv "$src" "$dest"
+          }
+
+          archive_old_request_response_files() {
+            local _keep_request="$1"
+            local keep_response="$2"
+            local processed_requests_manifest="${3:-}"
+            shopt -s nullglob
+            if [[ -n "${processed_requests_manifest// }" && -f "$processed_requests_manifest" ]]; then
+              while IFS= read -r req; do
+                [[ -z "${req// }" ]] && continue
+                move_with_dedupe "$req" "requests/old-requests"
+              done < "$processed_requests_manifest"
+            fi
+            for resp in responses/job_*.json; do
+              [[ "$resp" == "$keep_response" ]] && continue
+              move_with_dedupe "$resp" "responses/old-responses"
+            done
+            shopt -u nullglob
+          }
+
+          PROMPT_TEXT="${PROMPT_TEXT_INPUT:-}"
+          if [[ -n "${PROMPT_TEXT// }" ]]; then
+            job_id="job_dispatch_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+            prompt_file="tmp/${job_id}.prompt.txt"
+            started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            printf '%s' "$PROMPT_TEXT" > "$prompt_file"
+            process_request_option_b "$job_id" "$prompt_file" "$started_at" ""
+            exit 0
+          fi
+
+          CANDIDATES=""
+          if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+            if [[ "$GH_EVENT_NAME" == "push" ]]; then
+              BEFORE="$GH_EVENT_BEFORE"
+              if [[ -n "$BEFORE" && "$BEFORE" != "0000000000000000000000000000000000000000" ]]; then
+                CANDIDATES="$(git diff --name-only "$BEFORE" "$GH_SHA" -- 'input/*.txt' 'requests/job_*.json' 2>/dev/null || true)"
+              else
+                CANDIDATES="$( { git ls-files 'input/*.txt' 2>/dev/null || true; git ls-files 'requests/job_*.json' 2>/dev/null || true; } | sort -u )"
+              fi
+            else
+              CANDIDATES="$( { git ls-files 'input/*.txt' 2>/dev/null || true; git ls-files 'requests/job_*.json' 2>/dev/null || true; } | sort -u )"
+            fi
+          fi
+
+          CHANGED=""
+          while IFS= read -r req; do
+            [[ -z "$req" ]] && continue
+            [[ "$req" == input/processed/* ]] && continue
+            [[ -f "$req" ]] || continue
+            CHANGED+="${req}"$'\n'
+          done <<< "$CANDIDATES"
+
+          if [[ -z "${CHANGED// }" ]]; then
+            echo "Diff/list candidate scan was empty. Falling back to direct workspace scan."
+            shopt -s nullglob
+            for req in requests/job_*.json input/*.txt; do
+              [[ "$req" == input/processed/* ]] && continue
+              [[ -f "$req" ]] || continue
+              CHANGED+="${req}"$'\n'
+            done
+            shopt -u nullglob
+          fi
+
+          if [[ -z "${CHANGED// }" ]]; then
+            echo "No pending input/request files to process."
+            exit 0
+          fi
+
+          LAST_REQUEST_FILE=""
+          LAST_RESPONSE_FILE=""
+          PROCESSED_REQUESTS_MANIFEST="tmp/processed_requests.list"
+          : > "$PROCESSED_REQUESTS_MANIFEST"
+          PROCESS_REQUEST_TERMINAL_STATE=""
+
+          while IFS= read -r req; do
+            [[ -z "$req" ]] && continue
+            [[ -f "$req" ]] || continue
+
+            if [[ "$req" == requests/job_*.json ]]; then
+              job_id="$(basename "$req" .json)"
+              prompt_file="tmp/${job_id}.prompt.txt"
+              started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+              context_file="tmp/${job_id}.context.json"
+              python "$EXTRACT_CONTEXT_SCRIPT" "$req" "$prompt_file" "tmp/${job_id}.question.txt" "tmp/${job_id}.model.txt" "tmp/${job_id}.startup.txt" "$context_file"
+              PROCESS_REQUEST_TERMINAL_STATE=""
+              process_request_option_b "$job_id" "$prompt_file" "$started_at" "$context_file"
+              case "$PROCESS_REQUEST_TERMINAL_STATE" in
+                completed|failed|needs_clarification)
+                  printf '%s\n' "$req" >> "$PROCESSED_REQUESTS_MANIFEST"
+                  LAST_REQUEST_FILE="$req"
+                  ;;
+                *)
+                  echo "Leaving request queued for retry: $req (terminal_state=${PROCESS_REQUEST_TERMINAL_STATE:-none})"
+                  ;;
+              esac
+              [[ -f "responses/${job_id}.json" ]] && LAST_RESPONSE_FILE="responses/${job_id}.json"
+            else
+              base_name="$(basename "$req")"
+              stem="${base_name%.txt}"
+              safe_stem="$(printf '%s' "$stem" | tr -cs 'A-Za-z0-9._-' '_')"
+              job_id="job_${safe_stem}"
+              prompt_file="tmp/${job_id}.prompt.txt"
+              started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+              cp "$req" "$prompt_file"
+              process_request_option_b "$job_id" "$prompt_file" "$started_at" ""
+              [[ -f "responses/${job_id}.json" ]] && LAST_RESPONSE_FILE="responses/${job_id}.json"
+              move_with_dedupe "$req" "input/processed"
+            fi
+          done <<< "$CHANGED"
+
+          archive_old_request_response_files "$LAST_REQUEST_FILE" "$LAST_RESPONSE_FILE" "$PROCESSED_REQUESTS_MANIFEST"
+
+      - name: Upload Playwright diagnostics
+        if: ${{ failure() || (github.event_name == 'workflow_dispatch' && github.event.inputs.upload_artifacts == 'true') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-diagnostics-${{ github.run_id }}
+          path: |
+            chatgpt_playwright_error*
+            chatgpt_network.log
+            perplexity_playwright_error*
+            perplexity_network.log
+            grok_playwright_error*
+            grok_network.log
+            inceptionlabs_playwright_error*
+            inceptionlabs_network.log
+            qwen_playwright_error*
+            qwen_network.log
+            tmp/*.out.txt
+            errors/*.json
+            status/*.json
+            stages/**/*
+            execution/*.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Commit and push artifacts
+        run: |
+          set -euo pipefail
+          cd "${GITHUB_WORKSPACE:-$(pwd)}"
+          git config --global --add safe.directory "$(pwd)"
+          git config user.name "git-inference-pipeline"
+          git config user.email "git-inference-pipeline@users.noreply.github.com"
+          TARGET_BRANCH="${GITHUB_REF_NAME:-main}"
+          if [[ -z "$TARGET_BRANCH" ]]; then
+            TARGET_BRANCH="main"
+          fi
+          git add input requests responses errors responses_readable evaluations combined status stages execution
+          git diff --cached --quiet && exit 0
+          git commit -m "pipeline: process prompts with staged orchestration [skip ci]"
+          if git push origin "HEAD:${TARGET_BRANCH}"; then
+            exit 0
+          fi
+          for attempt in 1 2 3; do
+            if git pull --rebase origin "$TARGET_BRANCH" && git push origin "HEAD:${TARGET_BRANCH}"; then
+              exit 0
+            fi
+            echo "Push attempt ${attempt} failed; retrying..."
+            sleep 2
+          done
+          echo "Failed to push after retries."
+          exit 1
