@@ -247,6 +247,21 @@ class ChatGPTPageStateTest(unittest.TestCase):
         self.assertEqual(captcha["classification"], "captcha_required")
         self.assertEqual(ready["classification"], "ready")
 
+    def test_chatgpt_connection_failure_text_in_page_body_is_classified(self):
+        page = _FakePage()
+        page.body = _FakeLocator(
+            text=(
+                "Chat stopped unexpectedly. No internet. Unable to connect. "
+                "ChatGPT is temporarily experiencing issues. We're working to restore service."
+            )
+        )
+
+        observation = inspect_chatgpt_page_state(page)
+
+        self.assertEqual(observation["classification"], "service_error")
+        self.assertIn("visible ChatGPT connection", observation["signals"][0])
+        self.assertIn("Unable to connect", observation["visible_text_excerpt"])
+
     def test_access_failure_class_and_observation_are_checkpointed(self):
         with tempfile.TemporaryDirectory(prefix="chatgpt-access-state-") as temporary:
             run = Path(temporary) / "candidate"

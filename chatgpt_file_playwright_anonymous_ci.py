@@ -156,12 +156,19 @@ def inspect_chatgpt_page_state(page) -> dict:
     elif conversation_gated:
         classification = "conversation_gated"
         signals.append("ChatGPT page marks the conversation as gated")
-    elif re.search(r"something went wrong|error generating response|failed to load conversation", dialog_text, re.IGNORECASE):
-        classification = "service_error"
-        signals.append("visible ChatGPT error dialog")
     elif re.search(r"log in or sign up|sign in to continue", dialog_text, re.IGNORECASE):
         classification = "login_required"
         signals.append("visible login dialog blocks the conversation")
+    elif re.search(
+        r"something went wrong|error generating response|failed to load conversation|"
+        r"chat stopped unexpectedly|unable to connect|no internet|"
+        r"temporarily experiencing issues|working to restore service|"
+        r"this (?:may|might) take a while",
+        combined_text,
+        re.IGNORECASE,
+    ):
+        classification = "service_error"
+        signals.append("visible ChatGPT connection, response, or service error")
 
     observation = {
         "classification": classification,
