@@ -1,24 +1,22 @@
 # Git Content
 
-Git Content contains the Duck.ai website rebuild automation and its shared prompts, browser checks, and documentation. Target data and generated output can be handled through either the public CSV flow or the private local-coordinator flow.
+Git Content holds shared prompts and tooling for rebuilding business websites with Duck.ai. The repository is public, so it contains no target CSV or generated customer-site output. Private input data and generated results live in [`git-content-private`](https://github.com/hometownredesignsites/git-content-private).
 
 ## Branches
 
-- [`main`](https://github.com/hometownredesignsites/git-content/tree/main) is the clean shared setup: Duck.ai runner, reusable prompts, browser QA, and documentation. It has no target CSV, provider workflow, or saved candidate runs.
-- [`duckai`](https://github.com/hometownredesignsites/git-content/tree/duckai) contains the tested Duck.ai workflow, a current public target CSV for direct runs, and public candidate evidence under `duckai-runs/`. It also accepts opaque start markers from the private local coordinator.
-- [`chatgpt`](https://github.com/hometownredesignsites/git-content/tree/chatgpt) is experimental and has not yet been tested end to end.
+- [`main`](https://github.com/hometownredesignsites/git-content/tree/main) is the clean shared setup and default branch. It contains the reusable Duck.ai runner, prompts, browser checks, and documentation. It intentionally has no Actions runner, target list, queue markers, or saved runs.
+- [`duckai`](https://github.com/hometownredesignsites/git-content/tree/duckai) adds the Duck.ai GitHub Actions worker. It accepts opaque start markers from the private repo's local coordinator, processes one private target per run, and writes generated candidates and evidence to the private repo. It does not commit target rows or generated site files here.
+- [`chatgpt`](https://github.com/hometownredesignsites/git-content/tree/chatgpt) is an experimental provider branch; its end-to-end pipeline has not been validated.
 
-## Duck.ai run paths
+## Private Duck.ai workflow
 
-**Direct public CSV run:** a push changing `duckai_automation/source_urls.csv` on `duckai` starts the public batch workflow. The CSV is public and every valid row is processed. Candidate files, including `files/inlined/index.html`, are committed to this public branch.
+Edit the CSV in `git-content-private` and run its local coordinator. The coordinator commits the CSV and target records privately, sets temporary Actions secrets for one row, and pushes an opaque marker to `duckai`. The public GitHub Actions worker then processes that one row and commits candidate evidence and inlined HTML to `git-content-private/results/<site-slug>/run-<workflow-id>-<attempt>/`. Three automated passes are sought, with up to ten candidate attempts. Rows are processed serially because the temporary row secrets are shared.
 
-**Private CSV run:** edit and commit the CSV in [`git-content-private`](https://github.com/hometownredesignsites/git-content-private), then run its local coordinator. It commits the CSV and private row records to the private repo, sets temporary Actions secrets for one row, and commits an opaque start marker to this branch. The private-queue workflow runs that one row and saves candidate files, QA evidence, and inlined HTML under `results/<site-slug>/run-<workflow-id>-<attempt>/` in the private repository. Site slugs come from a persistent hostname-to-slug map in the private repo, so runs for the same website are grouped without exposing job UUIDs in the results paths. While running, it reports sanitized attempt numbers and automated pass counts. The local coordinator also displays the active workflow step and elapsed time. It waits for each run before setting secrets for the next row.
+The public Actions run, timing, and opaque marker are visible. During processing, the target row is temporarily available to GitHub Actions and is sent to Duck.ai. Generated site files are persisted only in the private repository. Limit write access to trusted maintainers and only process data that may be handled by GitHub Actions and Duck.ai. See the private repository README for local setup and token permissions.
 
-The private flow keeps CSV and generated files private at rest. A row is temporarily available to the public GitHub Actions runner and is sent to Duck.ai. The public workflow run and its timing remain visible, and the public workflow can access the temporary row secret and the private-results token. Use it only for data that may be processed by GitHub Actions and Duck.ai. See the private repository README for token scopes and setup.
-
-Each site run seeks three automated passes from at most six candidates. Automated structural and browser checks do not replace human review of visual quality, image relevance, or factual accuracy.
+Automated browser and structural checks do not establish visual quality or factual accuracy; review generated pages before use.
 
 ## Documentation
 
-- [`duckai_automation/README.md`](duckai_automation/README.md): run paths, current input fields, QA scope, and setup notes.
-- [`duckai_automation/docs/workflow.md`](duckai_automation/docs/workflow.md): detailed run and candidate evidence flow.
+- [`duckai_automation/README.md`](duckai_automation/README.md): provider setup, private workflow, inputs, and checks.
+- [`duckai_automation/docs/workflow.md`](duckai_automation/docs/workflow.md): generation sequence, evidence, and private output layout.
