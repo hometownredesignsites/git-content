@@ -290,22 +290,34 @@ def run_website_chunks(
     # Send an explicit final acknowledgment after the last accepted HTML part.
     final_ack = "HTML PART 8 OF 8 was validated and saved. Reply exactly: ACK HTML 8/8"
     pending = state.get("pending_turn")
-    ack_prompt = pending["prompt"] if pending and pending.get("kind") == "ack" else final_ack
     if not state.get("complete"):
-        _append_turn(transcript, role="user", text=ack_prompt, part="final acknowledgment")
-        state["pending_turn"] = {"kind": "ack", "prompt": ack_prompt, "started_at_utc": _now()}
-        _atomic_json(state_path, state)
-        started = time.monotonic()
-        ack_response, ack_metadata = _response_text(exchange(ack_prompt))
-        duration = round(time.monotonic() - started, 3)
-        _append_turn(transcript, role="assistant", text=ack_response, part="final acknowledgment",
-                     metadata={**ack_metadata, "duration_seconds": duration})
-        if re.sub(r"\s+", " ", ack_response).strip() != "ACK HTML 8/8":
-            state["status"] = "interrupted"
-            state["last_error"] = {"at_utc": _now(), "part": "final acknowledgment", "error": "Unexpected acknowledgment response."}
+        all_parts_saved = [(entry["kind"], entry["part"]) for entry in entries] == PARTS
+        if pending and pending.get("kind") == "ack" and all_parts_saved:
+            # A resumed anonymous ChatGPT session may no longer expose a composer.
+            # All twelve parts are already validated, so record the skipped final
+            # courtesy turn and continue with assembly and QA without changing them.
+            state["final_acknowledgment"] = {
+                "status": "skipped_on_resume",
+                "reason": "All twelve chunks were validated, but the saved anonymous session had no composer.",
+                "recorded_at_utc": _now(),
+            }
+            state["pending_turn"] = None
+        else:
+            ack_prompt = pending["prompt"] if pending and pending.get("kind") == "ack" else final_ack
+            _append_turn(transcript, role="user", text=ack_prompt, part="final acknowledgment")
+            state["pending_turn"] = {"kind": "ack", "prompt": ack_prompt, "started_at_utc": _now()}
             _atomic_json(state_path, state)
-            raise RuntimeError("Final part was saved, but ChatGPT did not return the exact final acknowledgment.")
-        state["pending_turn"] = None
+            started = time.monotonic()
+            ack_response, ack_metadata = _response_text(exchange(ack_prompt))
+            duration = round(time.monotonic() - started, 3)
+            _append_turn(transcript, role="assistant", text=ack_response, part="final acknowledgment",
+                         metadata={**ack_metadata, "duration_seconds": duration})
+            if re.sub(r"\s+", " ", ack_response).strip() != "ACK HTML 8/8":
+                state["status"] = "interrupted"
+                state["last_error"] = {"at_utc": _now(), "part": "final acknowledgment", "error": "Unexpected acknowledgment response."}
+                _atomic_json(state_path, state)
+                raise RuntimeError("Final part was saved, but ChatGPT did not return the exact final acknowledgment.")
+            state["pending_turn"] = None
         state["complete"] = True
         state["status"] = "chunks_complete"
         state["completed_at_utc"] = _now()
