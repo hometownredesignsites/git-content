@@ -6,7 +6,7 @@ This guide documents the private-input workflow on the public repository's `duck
 
 The private coordinator commits each batch and its row records to the private repository. For each row, it sets temporary Actions secrets and pushes `.private-queue/start/<job-id>.json` to `duckai`. The marker contains only an opaque job ID. The worker verifies that marker against the temporary job ID, validates and masks the temporary row fields, then processes one site. The local coordinator waits for that workflow to finish, removes the row secrets, and only then starts another row.
 
-The worker uses the public repository's Actions runner and sends the website and supplied context to Duck.ai. The public Actions run, its timing, and the opaque marker are visible. The target row is present temporarily in Actions secrets and runner environment. The current worker commits candidate files and row values to the private repository, not the public branch. It uses `PRIVATE_RESULTS_TOKEN` to write to `git-content-private`; access to the public workflow must remain limited to trusted maintainers. Earlier public CSV and generated run files remain accessible in Git history because that history was preserved; older Actions run records may also remain visible.
+The worker uses the public repository's Actions runner and sends the website and supplied context to Duck.ai. The public Actions run, its timing, and the opaque marker are visible. The target row is present temporarily in Actions secrets and runner environment. The worker reads authoritative job metadata from private `main`, then commits candidate files, job metadata, and results indexes to private `duckai`, not to the public branch or private `main`. It uses `PRIVATE_RESULTS_TOKEN` to write to `git-content-private`; access to the public workflow must remain limited to trusted maintainers. Earlier public CSV and generated run files remain accessible in Git history because that history was preserved; older public Actions run records may also remain visible.
 
 The standard row fields are:
 
@@ -48,7 +48,7 @@ These deterministic checks set `automated_success`; they do not call an AI model
 The worker copies all available candidate evidence to the private repo under the stable site slug assigned by its hostname-to-slug map:
 
 ```text
-git-content-private/results/<site-slug>/run-<workflow-id>-<attempt>/
+git-content-private (branch: duckai)/results/<site-slug>/run-<workflow-id>-<attempt>/
   candidates/
     run-<workflow-id>-<attempt>-site-1-candidate-<n>/
       files/
@@ -69,4 +69,4 @@ git-content-private/results/<site-slug>/run-<workflow-id>-<attempt>/
   status.json
 ```
 
-Partial or failed candidates retain whatever diagnostics were available. The private repository maintains the results index and `successful.csv`; successful rows include the pipeline completion time in UTC. The current `duckai` branch tip does not contain candidate folders. Its Actions runner uses a temporary `duckai-runs/` workspace while processing, then sends the evidence directly to the private repository.
+Partial or failed candidates retain whatever diagnostics were available. The private `duckai` branch maintains the results index and `successful.csv`; successful rows include the pipeline completion time in UTC. Private `main` contains inputs and control records, not generated run folders. The Actions runner uses a temporary `duckai-runs/` workspace while processing, then sends the evidence directly to private `duckai`. Each provider writes to its matching private branch (`duckai` or, when implemented, `chatgpt`) to keep concurrent providers from contending on the same result branch.
