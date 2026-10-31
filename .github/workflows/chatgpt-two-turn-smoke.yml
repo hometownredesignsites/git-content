@@ -1,0 +1,81 @@
+name: ChatGPT Two Turn Smoke Test
+
+on:
+  push:
+    branches: [chatgpt]
+    paths:
+      - "chatgpt_automation/two_turn_smoke.request.txt"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright/python:v1.58.0-noble
+      options: --user root --shm-size=1gb
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pinned Playwright dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r .github/workflows/requirements-playwright.txt
+
+      - name: Send two turns in one ChatGPT conversation
+        run: |
+          set -euo pipefail
+          mkdir -p tmp/two-turn-smoke
+          xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' \
+            python -u chatgpt_file_playwright_anonymous_ci.py \
+              --stage-name two_turn_smoke \
+              --input-file chatgpt_automation/two_turn_smoke.request.txt \
+              --output-file tmp/two-turn-smoke/runner_output.txt \
+              --metadata-output-file tmp/two-turn-smoke/runner_metadata.json \
+              --url https://chatgpt.com/ \
+              --user-data-dir tmp/playwright-profiles/two-turn-smoke \
+              --chunks 2 \
+              --chunk-mode legacy \
+              --start-new-chat \
+              --wait-seconds 45 \
+              --timeout-ms 180000 \
+              --post-response-wait-seconds 3 \
+              --response-settle-seconds 3 \
+              --max-settle-wait-seconds 180 \
+              --error-screenshot tmp/two-turn-smoke/chatgpt_error.png
+
+      - name: Verify second turn recalled the first turn
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          output = Path("tmp/two-turn-smoke/runner_output.txt").read_text(encoding="utf-8")
+          metadata = json.loads(Path("tmp/two-turn-smoke/runner_metadata.json").read_text(encoding="utf-8"))
+          marker = "--- CHUNK 2/2 RESPONSE ---"
+          if marker not in output:
+              raise SystemExit("Runner output is missing the captured second-turn response.")
+          second_turn = output.rsplit(marker, 1)[1].strip()
+          if second_turn != "ORBIT-731":
+              raise SystemExit(f"Second turn did not return the first-turn token. Captured: {second_turn!r}")
+          if metadata.get("chunks") != 2 or metadata.get("chunk_mode") != "legacy":
+              raise SystemExit(f"Unexpected runner mode: {metadata!r}")
+          conversation_url = metadata.get("final_url", "")
+          if not conversation_url.startswith("https://chatgpt.com/"):
+              raise SystemExit(f"No ChatGPT conversation URL was captured: {conversation_url!r}")
+          print("PASS: both turns ran through the existing runner; turn 2 recalled ORBIT-731.")
+          print(f"Conversation URL: {conversation_url}")
+          print("\nCaptured turn responses:\n" + output)
+          PY
+
+      - name: Upload smoke-test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chatgpt-two-turn-smoke-${{ github.run_id }}
+          path: tmp/two-turn-smoke/
+          if-no-files-found: warn
+          retention-days: 14

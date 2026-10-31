@@ -1,0 +1,2 @@
+Remember this test token exactly: ORBIT-731. Reply with exactly STORED.
+         What was the test token? Reply with exactly the token and nothing else.
