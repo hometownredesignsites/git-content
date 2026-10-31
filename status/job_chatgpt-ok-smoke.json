@@ -1,0 +1,9 @@
+{
+  "job_id": "job_chatgpt-ok-smoke",
+  "state": "completed",
+  "intent_type": "question",
+  "task_type": "general_question",
+  "current_stage": "complete",
+  "updated_at": "2026-10-31T12:50:58Z",
+  "created_at": "2026-10-31T12:47:17Z"
+}
