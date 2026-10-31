@@ -1,5 +1,7 @@
 # Git-backed Ollama-style API (FastAPI)
 
+> **ChatGPT website workflow (`chatgpt` branch):** This repository also contains a separate CSV-driven redesign pilot. See [`chatgpt_automation/README.md`](chatgpt_automation/README.md). On `chatgpt`, changing `chatgpt_automation/source_urls.csv` starts a one-site run that captures four CSS and eight HTML parts in one ChatGPT conversation, assembles them, inlines the CSS, and saves an HTML preview with QA evidence under `chatgpt-runs/`. Generated candidates require screenshot and image review before approval. This workflow is separate from the API request pipeline below.
+
 This is a V1 prototype for the architecture you described:
 
 1. Client calls an Ollama-like `/api/chat` endpoint.
