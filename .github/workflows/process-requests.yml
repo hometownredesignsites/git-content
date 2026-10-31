@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - git-chatgpt
+      - new-git-chagpt
       - git-inceptionlabs
       - git-grok
       - git-qwen
