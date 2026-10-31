@@ -95,6 +95,7 @@ def find_chat_composer(page, timeout_ms: int):
 def assistant_turns(page):
     selectors = [
         "[data-testid^='conversation-turn-'][data-turn='assistant'] [data-message-author-role='assistant']",
+        "div[data-assistant-markdown]",
         "[data-testid^='conversation-turn-'][data-turn='assistant']",
         "[data-message-author-role='assistant']",
     ]
@@ -124,6 +125,80 @@ def extract_response_text(assistant_messages, before_count: int, before_last_tex
     if text and text != before_last_text:
         return text
     return ""
+
+
+def extract_labeled_response(page, prompt_text: str, before_body_text: str = "") -> str:
+    """Extract the reply from ChatGPT's guest UI, which may expose text labels
+    instead of assistant-role DOM attributes.
+
+    Anchor on the submitted prompt and the following "ChatGPT said:" label so
+    earlier turns, navigation text, and unrelated page content are excluded.
+    """
+    try:
+        body = page.locator("body").inner_text()
+    except Exception:
+        return ""
+    if not body:
+        return ""
+
+    def normalize_with_offsets(value: str) -> tuple[str, list[int]]:
+        chars: list[str] = []
+        offsets: list[int] = []
+        pending_space_index: int | None = None
+        for index, char in enumerate(value or ""):
+            if char.isspace():
+                if chars and pending_space_index is None:
+                    pending_space_index = index
+                continue
+            if pending_space_index is not None:
+                chars.append(" ")
+                offsets.append(pending_space_index)
+                pending_space_index = None
+            chars.append(char)
+            offsets.append(index)
+        return "".join(chars), offsets
+
+    normalized_body, body_offsets = normalize_with_offsets(body)
+    normalized_prompt, _ = normalize_with_offsets(prompt_text)
+    start = -1
+    if normalized_prompt:
+        start = normalized_body.rfind(normalized_prompt)
+
+    # If the browser rewrites whitespace inside a prompt, use the newest
+    # guest user label, but only when it appeared after the pre-send snapshot.
+    if start < 0:
+        before_len = len(normalize_with_offsets(before_body_text)[0])
+        user_matches = list(re.finditer(r"\bYou said\s*:", normalized_body, re.IGNORECASE))
+        recent_users = [m for m in user_matches if m.start() >= before_len]
+        if recent_users:
+            start = recent_users[-1].end()
+        elif user_matches and not before_body_text:
+            start = user_matches[-1].end()
+        else:
+            return ""
+
+    reply_label = re.search(r"\bChatGPT\s+said\s*:\s*", normalized_body[start:], re.IGNORECASE)
+    if not reply_label:
+        # Some page versions shorten the label.
+        reply_label = re.search(r"\bChatGPT\s*:\s*", normalized_body[start:], re.IGNORECASE)
+    if not reply_label:
+        return ""
+
+    response_start = start + reply_label.end()
+    if response_start >= len(body_offsets):
+        return ""
+    raw_response_start = body_offsets[response_start - 1] + 1
+    response = normalized_body[response_start:]
+    footer = re.search(
+        r"\b(?:ChatGPT is AI and can make mistakes\.?|Regenerate|Copy response|Copy|Read aloud|New chat)\b",
+        response,
+        re.IGNORECASE,
+    )
+    raw_response_end = len(body)
+    if footer:
+        footer_start = response_start + footer.start()
+        raw_response_end = body_offsets[footer_start] if footer_start < len(body_offsets) else len(body)
+    return body[raw_response_start:raw_response_end].strip()
 
 
 def looks_like_non_answer_text(text: str) -> bool:
@@ -200,10 +275,14 @@ def wait_for_valid_response(
     before_count: int,
     before_last_text: str,
     wait_seconds: int,
+    prompt_text: str = "",
+    before_body_text: str = "",
 ) -> str:
     deadline = time.time() + max(1, wait_seconds)
     while time.time() < deadline:
         text = extract_response_text(assistant_messages, before_count, before_last_text)
+        if not text:
+            text = extract_labeled_response(page, prompt_text, before_body_text)
         lowered = text.lower()
         if text and "something went wrong" not in lowered and not looks_like_non_answer_text(text):
             return text
@@ -217,6 +296,10 @@ def stabilize_response(
     post_response_wait_seconds: int,
     response_settle_seconds: int,
     max_settle_wait_seconds: int,
+    prompt_text: str = "",
+    before_body_text: str = "",
+    before_count: int = 0,
+    before_last_text: str = "",
 ) -> str:
     if post_response_wait_seconds > 0:
         page.wait_for_timeout(post_response_wait_seconds * 1000)
@@ -231,10 +314,9 @@ def stabilize_response(
             ).first.is_visible()
         except Exception:
             pass
-        try:
-            current = assistant_messages.last.inner_text().strip()
-        except Exception:
-            current = ""
+        current = extract_response_text(assistant_messages, before_count, before_last_text)
+        if not current:
+            current = extract_labeled_response(page, prompt_text, before_body_text)
         if current and current == previous and not stop_visible:
             stable_for += 1
         else:

@@ -83,6 +83,10 @@ def run_stage_once(
                 before_last_text = assistant_messages.last.inner_text().strip()
             except Exception:
                 before_last_text = ""
+        try:
+            before_body_text = page.locator("body").inner_text()
+        except Exception:
+            before_body_text = ""
         send_prompt(page, composer, prompt_text)
         page.wait_for_timeout(1200)
         assistant_messages = assistant_turns(page)
@@ -92,6 +96,8 @@ def run_stage_once(
             before_count=before_count,
             before_last_text=before_last_text,
             wait_seconds=wait_seconds,
+            prompt_text=prompt_text,
+            before_body_text=before_body_text,
         )
         if not response_text:
             raise RuntimeError("Assistant response was empty for stage submission.")
@@ -101,6 +107,10 @@ def run_stage_once(
             post_response_wait_seconds=post_response_wait_seconds,
             response_settle_seconds=response_settle_seconds,
             max_settle_wait_seconds=max_settle_wait_seconds,
+            prompt_text=prompt_text,
+            before_body_text=before_body_text,
+            before_count=before_count,
+            before_last_text=before_last_text,
         )
         return refreshed or response_text
 
