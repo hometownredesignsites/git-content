@@ -1,10 +1,12 @@
 # Duck.ai website generation
 
-This branch runs a multi-turn Duck.ai website-generation workflow from GitHub Actions. Each candidate uses a fresh logged-out Duck.ai chat. Each CSV row supplies a website URL, business name, and industry category. Duck.ai receives the name and category as identification and design context, then assesses the live site in that same chat and uses the audit as its factual source.
+This directory contains the shared Duck.ai prompts, CSV, runner, browser checks, and documentation. On `main` it is setup only; the `duckai` branch adds the GitHub Actions workflows and saves their outputs. Each candidate uses a fresh logged-out Duck.ai chat. The CSV supplies a website URL, business name, category, and optional location. Duck.ai receives the metadata as unverified context, assesses the live site in that same chat, and uses the audit as its factual source.
 
 ## Run it
 
-On branch `duckai`, add or edit rows in [`source_urls.csv`](source_urls.csv) and push the change. The CSV requires `business`, `category`, and `website` columns; `location` is optional. Every valid row is a separate target; a change to the CSV processes all rows. Changes to the reusable request or design brief do not start a generation run. To redesign one site manually, use **Actions → Duck.ai Website Automation → Run workflow**. Choose `full_batch` for the CSV or a manual URL override. Choose `smoke_test` to run exactly one candidate against one CSV row; enter a `smoke_website` value to select a row, or leave it blank to use the first row.
+On branch `duckai`, a push that changes [`source_urls.csv`](source_urls.csv) starts a batch for every valid row in the file. The CSV requires `business`, `category`, and `website` columns; `location` is optional. Changes to the reusable request or design brief alone do not start a generation run.
+
+The workflow YAML defines `workflow_dispatch` inputs for full batches, one-site overrides, and a one-candidate CSV smoke mode. However, the workflow files currently exist only on `duckai`, while `main` is the default branch. GitHub requires the workflow to be present on the default branch for manual dispatch from the Actions interface, so those inputs are not currently available there. The supported trigger in this branch layout is the CSV push. A one-row CSV push still uses full-batch behavior for that row and seeks three automated passes; it is not the one-candidate smoke mode. See [GitHub's manual workflow documentation](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow).
 
 ### CSV fields currently used
 
@@ -27,7 +29,7 @@ The workflow uses Ubuntu, a pinned Playwright Python container, and headed Chrom
 
 One workflow execution validates the CSV and creates one matrix job per website. Those jobs run one at a time. Each site job generates full candidates in a loop until it has three automated passes or has made six attempts; it does not start three separate workflow executions. Thus each site can take 3–6 candidate runs, and the current 21-row CSV can produce up to 126 attempts. Each site job has a 35-minute limit. Every attempted candidate is saved to `duckai-runs/` and committed to `duckai`, including failures, so reports can be inspected. Generated-output commits use `[skip ci]` and do not start another generation run. The separate **Duck.ai Rendered Website QA** action reruns browser and structural checks for every website in a saved batch without opening new Duck.ai chats.
 
-The manual `smoke_test` mode still runs one complete source assessment, CSS/acknowledgment/HTML capture, assembly, and browser QA. It limits the run to one selected CSV row and one candidate attempt, requiring one automated pass. This checks the CSV-to-prompt path without generating the full batch.
+The declared `smoke_test` mode runs one complete source assessment, CSS/acknowledgment/HTML capture, assembly, and browser QA for one selected CSV row and one candidate attempt. It requires one automated pass. It is currently unavailable through the Actions interface because the workflow file is not on the default branch. A CSV push test instead follows the normal three-pass target for each row in the pushed CSV.
 
 ## What the checks mean
 
@@ -43,4 +45,4 @@ The browser stays logged out. If Duck.ai requires sign-in or presents a human-ve
 
 ## Multi-turn smoke test
 
-The separate **Duck.ai Multi-turn Smoke Test** checks two related questions in one guest chat and saves the captured conversation as JSON and Markdown under `duckai-runs/`. See [`smoke_test.json`](smoke_test.json) for its prompts.
+The separate **Duck.ai Multi-turn Smoke Test** checks two related questions in one guest chat and saves the captured conversation as JSON and Markdown under `duckai-runs/`. It is wired to pushes that change `smoke_test.json`, `run_smoke_test.py`, or its workflow file. Its declared manual trigger is likewise unavailable in the Actions interface until that workflow exists on the default branch. See [`smoke_test.json`](smoke_test.json) for its prompts.
