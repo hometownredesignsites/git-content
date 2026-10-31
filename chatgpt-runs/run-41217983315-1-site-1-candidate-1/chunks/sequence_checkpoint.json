@@ -1,0 +1,35 @@
+{
+  "status": "running",
+  "chat_id": "site-1-candidate-1",
+  "conversation_url": "https://chatgpt.com/uc/6ae61285-7a48-83ea-90fb-8d4bb24b9878",
+  "run_token": "ce3adf8567c8bfb7",
+  "brief_sha256": "1120fb72667dcf158e6262b701b27f32d1947d7e998225172901a7f3f54af169",
+  "started_at_utc": "2026-10-31T16:06:37.933387+00:00",
+  "accepted_parts": [
+    "css-1",
+    "css-2",
+    "css-3",
+    "css-4",
+    "html-1",
+    "html-2",
+    "html-3",
+    "html-4",
+    "html-5",
+    "html-6",
+    "html-7",
+    "html-8"
+  ],
+  "pending_turn": {
+    "kind": "ack",
+    "prompt": "HTML PART 8 OF 8 was validated and saved. Reply exactly: ACK HTML 8/8",
+    "started_at_utc": "2026-10-31T16:12:16.487096+00:00"
+  },
+  "last_response_at_utc": "2026-10-31T16:12:16.450243+00:00",
+  "last_accepted_at_utc": "2026-10-31T16:12:16.486549+00:00",
+  "last_capture": {
+    "accepted": true,
+    "part": "html 8/8",
+    "characters": 2810,
+    "sha256": "5dc5bc61da7b80de38e51ade2ab477a0fa7a3a24c4e9088fd0f579331cd0f9c4"
+  }
+}

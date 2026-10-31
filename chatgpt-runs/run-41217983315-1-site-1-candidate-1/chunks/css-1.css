@@ -1,0 +1,595 @@
+/* CSS PART 1 OF 4 */
+
+/* =========================================
+   JOSH BROOKS CONSTRUCTION & RENOVATION
+   Original design direction:
+   Modern craftsmanship / Colorado residential
+   Palette: charcoal, warm stone, copper
+   ========================================= */
+
+/* 1. DESIGN TOKENS */
+
+:root {
+  /* Core palette */
+  --color-ink: #202a2e;
+  --color-ink-soft: #344147;
+  --color-charcoal: #172125;
+  --color-stone: #f4f2ed;
+  --color-paper: #fbfaf7;
+  --color-white: #ffffff;
+  --color-muted: #737d7e;
+  --color-line: #deded7;
+
+  /* Accent */
+  --color-accent: #bd7449;
+  --color-accent-dark: #985536;
+  --color-accent-light: #e7c4a9;
+
+  /* Semantic colors */
+  --color-success: #426b56;
+  --color-error: #a43e35;
+  --color-focus: #d68c52;
+
+  /* Typography */
+  --font-display: "Georgia", "Times New Roman", serif;
+  --font-body: "Inter", "Helvetica Neue", Arial, sans-serif;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.35rem;
+  --text-2xl: 1.75rem;
+  --text-3xl: clamp(2rem, 3.5vw, 3rem);
+  --text-4xl: clamp(2.7rem, 5.5vw, 5rem);
+  --text-hero: clamp(3rem, 7vw, 6.6rem);
+
+  --line-tight: 1.05;
+  --line-heading: 1.15;
+  --line-body: 1.7;
+
+  /* Spacing */
+  --space-1: 0.375rem;
+  --space-2: 0.625rem;
+  --space-3: 0.875rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4rem;
+  --space-9: 5rem;
+  --space-10: 7rem;
+  --space-11: 9rem;
+
+  /* Layout */
+  --container: 1240px;
+  --container-wide: 1440px;
+  --container-narrow: 800px;
+  --page-gutter: clamp(1.25rem, 5vw, 5rem);
+
+  /* Borders and corners */
+  --border-subtle: 1px solid var(--color-line);
+  --radius-sm: 3px;
+  --radius-md: 8px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+
+  /* Shadows */
+  --shadow-soft: 0 8px 28px rgba(25, 35, 38, 0.07);
+  --shadow-medium: 0 18px 48px rgba(25, 35, 38, 0.12);
+
+  /* Motion */
+  --transition-fast: 180ms ease;
+  --transition-normal: 300ms ease;
+  --transition-slow: 500ms ease;
+}
+
+
+/* 2. RESET AND GLOBAL FOUNDATIONS */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 6rem;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: var(--line-body);
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body,
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-body);
+}
+
+img,
+picture,
+video,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+img {
+  height: auto;
+}
+
+button,
+input,
+select,
+textarea {
+  font-size: inherit;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  cursor: pointer;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+ul,
+ol {
+  padding: 0;
+  margin: 0;
+}
+
+li {
+  list-style: none;
+}
+
+p {
+  margin: 0 0 1.25rem;
+}
+
+figure {
+  margin: 0;
+}
+
+fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+::selection {
+  background: var(--color-accent);
+  color: var(--color-white);
+}
+
+
+/* 3. ACCESSIBILITY FOUNDATIONS */
+
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 4px;
+}
+
+.skip-link {
+  position: absolute;
+  z-index: 9999;
+  top: -100px;
+  left: 1rem;
+  padding: 0.85rem 1.25rem;
+  background: var(--color-ink);
+  color: var(--color-white);
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+}
+
+.skip-link:focus {
+  top: 1rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+
+/* 4. TYPOGRAPHY SYSTEM */
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 0;
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-weight: 400;
+  line-height: var(--line-heading);
+  letter-spacing: -0.035em;
+}
+
+h1 {
+  font-size: var(--text-hero);
+  line-height: var(--line-tight);
+  letter-spacing: -0.055em;
+}
+
+h2 {
+  font-size: var(--text-4xl);
+}
+
+h3 {
+  font-size: var(--text-2xl);
+}
+
+h4 {
+  font-size: var(--text-xl);
+}
+
+h5,
+h6 {
+  font-size: var(--text-lg);
+}
+
+p {
+  color: inherit;
+}
+
+.text-lead {
+  max-width: 660px;
+  font-size: clamp(1.05rem, 1.6vw, 1.25rem);
+  line-height: 1.75;
+  color: var(--color-muted);
+}
+
+.text-small {
+  font-size: var(--text-sm);
+  line-height: 1.65;
+}
+
+.text-uppercase {
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+  color: var(--color-accent-dark);
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.17em;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
+.eyebrow::before {
+  content: "";
+  display: block;
+  width: 30px;
+  height: 2px;
+  background: var(--color-accent);
+}
+
+.heading-accent {
+  color: var(--color-accent-dark);
+}
+
+.section-intro {
+  max-width: 650px;
+}
+
+.section-intro p {
+  margin-top: 1.25rem;
+  color: var(--color-muted);
+  font-size: var(--text-lg);
+  line-height: 1.8;
+}
+
+
+/* 5. PAGE GRID AND CONTAINERS */
+
+.container {
+  width: min(
+    var(--container),
+    calc(100% - (var(--page-gutter) * 2))
+  );
+  margin-inline: auto;
+}
+
+.container-wide {
+  width: min(
+    var(--container-wide),
+    calc(100% - (var(--page-gutter) * 2))
+  );
+  margin-inline: auto;
+}
+
+.container-narrow {
+  width: min(
+    var(--container-narrow),
+    calc(100% - (var(--page-gutter) * 2))
+  );
+  margin-inline: auto;
+}
+
+.page-wrapper {
+  width: 100%;
+  overflow: clip;
+}
+
+.section {
+  position: relative;
+  padding-block: clamp(4rem, 8vw, 8rem);
+}
+
+.section-tight {
+  padding-block: clamp(3rem, 5vw, 5rem);
+}
+
+.section-dark {
+  background: var(--color-charcoal);
+  color: var(--color-white);
+}
+
+.section-dark h2,
+.section-dark h3,
+.section-dark h4 {
+  color: var(--color-white);
+}
+
+.section-dark .section-intro p {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.section-stone {
+  background: var(--color-stone);
+}
+
+.section-paper {
+  background: var(--color-paper);
+}
+
+
+/* 6. SHARED GRID FOUNDATIONS */
+
+.grid {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.grid-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.grid-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.split-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(2.5rem, 6vw, 6rem);
+}
+
+.split-layout-wide {
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+}
+
+.split-layout-reverse {
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+}
+
+.flex {
+  display: flex;
+}
+
+.flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flex-wrap {
+  flex-wrap: wrap;
+}
+
+.align-start {
+  align-items: flex-start;
+}
+
+.align-center {
+  align-items: center;
+}
+
+.gap-sm {
+  gap: var(--space-3);
+}
+
+.gap-md {
+  gap: var(--space-5);
+}
+
+.gap-lg {
+  gap: var(--space-7);
+}
+
+
+/* 7. SHARED SPACING AND WIDTH UTILITIES */
+
+.mx-auto {
+  margin-inline: auto;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.text-left {
+  text-align: left;
+}
+
+.max-width-sm {
+  max-width: 480px;
+}
+
+.max-width-md {
+  max-width: 650px;
+}
+
+.max-width-lg {
+  max-width: 850px;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.relative {
+  position: relative;
+}
+
+.overflow-hidden {
+  overflow: hidden;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+
+/* 8. RESPONSIVE GRID FOUNDATIONS */
+
+@media (max-width: 1000px) {
+  :root {
+    --space-10: 5rem;
+    --space-11: 6rem;
+  }
+
+  .grid-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .split-layout,
+  .split-layout-wide,
+  .split-layout-reverse {
+    gap: 2.5rem;
+  }
+}
+
+@media (max-width: 700px) {
+  :root {
+    --page-gutter: 1.25rem;
+    --space-7: 2.5rem;
+    --space-8: 3rem;
+    --space-9: 3.75rem;
+    --space-10: 4rem;
+    --space-11: 4.5rem;
+  }
+
+  html {
+    scroll-padding-top: 5rem;
+  }
+
+  .section {
+    padding-block: 4rem;
+  }
+
+  .section-tight {
+    padding-block: 3rem;
+  }
+
+  .grid-2,
+  .grid-3,
+  .grid-4,
+  .split-layout,
+  .split-layout-wide,
+  .split-layout-reverse {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .split-layout {
+    gap: 2rem;
+  }
+
+  .flex-between {
+    flex-wrap: wrap;
+  }
+
+  .text-center-mobile {
+    text-align: center;
+  }
+}
+
+@media (max-width: 420px) {
+  :root {
+    --page-gutter: 1rem;
+  }
+
+  h1 {
+    font-size: clamp(2.7rem, 13vw, 3.8rem);
+  }
+
+  h2 {
+    font-size: clamp(2rem, 10vw, 2.7rem);
+  }
+
+  .text-lead {
+    font-size: 1rem;
+  }
+}
