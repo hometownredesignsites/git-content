@@ -1,118 +1,72 @@
 # Duck.ai workflow and candidate evidence
 
-This guide describes the current GitHub Actions flow for the `duckai` branch. It covers generation, source assessment, the CSS/acknowledgment/HTML sequence, automated checks, and the evidence saved for each attempt.
+This guide documents the private-input workflow on the public repository's `duckai` branch. The default `main` branch contains shared code and documentation only. The local coordinator and CSV live in `git-content-private`; the `duckai` branch contains the GitHub Actions worker and receives opaque job-start markers.
 
-## Run inputs
+## Run inputs and privacy boundary
 
-The **Duck.ai Website Automation** workflow starts on a push to `duckai` when `duckai_automation/source_urls.csv` changes. Changes to `website_request.txt` and `design_brief.txt` alone do not start a run. The workflow YAML also defines `workflow_dispatch`, but the workflow currently exists only on `duckai` while `main` is the default branch. GitHub requires the workflow file on the default branch for manual dispatch through the Actions interface, so the dispatch inputs described below are not currently available there. The CSV requires one row per site with `business`, `category`, and `website` columns; `location` is optional. A changed CSV processes every valid row.
+The private coordinator commits each batch and its row records to the private repository. For each row, it sets temporary Actions secrets and pushes `.private-queue/start/<job-id>.json` to `duckai`. The marker contains only an opaque job ID. The worker verifies that marker against the temporary job ID, validates and masks the temporary row fields, then processes one site. The local coordinator waits for that workflow to finish, removes the row secrets, and only then starts another row.
 
-The target loader reads only these CSV columns:
+The worker uses the public repository's Actions runner and sends the website and supplied context to Duck.ai. The public Actions run, its timing, and the opaque marker are visible. The target row is present temporarily in Actions secrets and runner environment. Candidate files and row values are committed to the private repository, not this public repository. The workflow uses `PRIVATE_RESULTS_TOKEN` to write to `git-content-private`; access to the public workflow must remain limited to trusted maintainers.
 
-| Column | Required | Meaning |
+The standard row fields are:
+
+| Field | Required | Meaning |
 | --- | --- | --- |
-| `website` | Yes | Source website to inspect and redesign. |
-| `business` | Yes | Intended business name, sent as unverified identification context. |
-| `category` | Yes | Primary industry category, sent as unverified design context. |
-| `location` | No | Location clue sent as unverified context; use as a fact only if the website confirms it. |
+| `website` | Yes | Website to inspect and source for factual claims. |
+| `business` | Yes | Unverified identification context. |
+| `category` | Yes | Unverified industry and design context. |
+| `location` | No | Unverified clue; the site must confirm it before it is stated as fact. |
 
-Any other CSV columns are ignored by the current loader. The CSV on the `duckai` branch has 21 rows. The business name, category, and optional location help identify the target and guide design; Duck.ai must verify metadata against the site and use the source assessment as the authority for factual claims.
+Additional CSV columns are passed through as `CSV_FIELD_<HEADER>` environment variables, but the prompts must be updated to use them. Metadata is data, not instruction; the source site remains the authority for factual claims.
 
-The workflow's `smoke_test` input is intended to exercise the CSV path with one candidate from one row; `smoke_website` selects the row and blank uses the first CSV row. That mode cannot currently be started through the Actions interface because the workflow is absent from the default branch. A push-triggered test uses normal batch behavior for all rows present in the changed CSV; when testing one target this way, use a one-row CSV, which still seeks three automated passes for that target. A failed run commits available evidence for inspection.
+## Candidate flow
 
-The checked-in website request and design brief are reusable instructions, not site-specific copy. The target CSV is tracked only on `duckai`. Keep them separate: the request defines scope, factual sourcing, content, assets, and output requirements; the design brief guides visual decisions. The business, category, and location values are treated as data, not instructions. The preparation job validates the CSV and creates one matrix job per website. Those jobs run serially. Each site job loops through full candidate runs until it gets three automated passes or reaches six attempts. This is one workflow execution, not three workflow executions per site. With the current 21-row CSV, the workflow can make up to 126 candidate attempts.
+Each site run seeks three automated passes from at most ten complete candidate attempts. Each candidate uses a fresh, logged-out Duck.ai chat. With Web Search enabled, the runner asks for a source assessment, then requests CSS parts 1–3, sends `acknowledged` as a separate user turn, and requests HTML parts 1–3 in that same chat. It validates each response before assembly, creates the inlined HTML, renders desktop and mobile views with Playwright, and runs structural checks. Candidate progress notices report the attempt count and automated passes so far.
 
-## End-to-end flow
+A successful automated check does not establish visual polish, image relevance, or factual accuracy. Human review remains necessary. If the guest chat is blocked by sign-in, usage, or human verification, stop the candidate and retain available failure evidence; do not bypass the gate.
 
-```mermaid
-flowchart TD
-    A[CSV changed and pushed to duckai] --> B[Validate CSV and create one job per target row]
-    B --> C[GitHub Actions: Ubuntu and pinned Playwright Python container, one website at a time]
-    C --> C1[Read business, industry category, optional location, and source URL from row]
-    C1 --> C2[Start headed Chromium under Xvfb; create fresh logged-out Duck.ai chat]
-    C2 --> D[Send business/category/location as unverified context]
-    D --> E[Enable Web Search and request source assessment for the website]
-    E --> F[Capture audit; validate source domain and any selected design reference]
-    F --> G{Audit validation passes?}
-    G -- Yes --> I[Use the audit, metadata, and design brief in the same chat]
-    G -- No --> R[Save failure evidence for candidate]
-    I --> J[Request CSS parts 1, 2, and 3]
-    J --> K[Automation sends acknowledged as its own user turn]
-    K --> L[Request HTML parts 1, 2, and 3 in the same chat]
-    L --> M[Validate chunks; assemble HTML and CSS; create inlined index.html]
-    M --> N[Playwright renders desktop and mobile; save screenshots and browser report]
-    N --> O[Structural checker evaluates generated markup and browser report]
-    O --> P{automated_success?}
-    P -- Yes --> Q[Record automated pass; human image and visual review remain pending]
-    P -- No --> R
-    Q --> S{Three automated passes for this site or six attempts?}
-    R --> S
-    S -- No --> C2
-    S -- Yes --> T[Commit this site's candidate evidence to duckai]
-    T --> U{At least three automated passes for every site?}
-    U -- Yes --> V[Workflow succeeds; visual approval is still a separate review]
-    U -- No --> W[Workflow fails; inspect saved candidate reports]
-```
+## Source assessment
 
-One workflow execution creates one matrix job for each website row. Each matrix job runs up to six complete candidate attempts for that website, stopping early once it has three `automated_success` candidates. Website jobs are serialized to limit inference load and avoid competing commits to the branch. Each candidate uses a fresh Duck.ai chat. The workflow commits evidence for successful and failed attempts before the final step checks that this website achieved three automated passes. A batch succeeds only when every website meets that target. For 21 rows, that is 21 site jobs and up to 126 candidate attempts in one workflow execution.
+The runner sends the business name, category, and optional location as unverified context, then requests a source assessment. The assessment should cite pages on the requested domain, distinguish observed facts from inferences and unknowns, describe visible brand elements, and identify public logo/photo assets. The runner validates the source domain and any selected design reference before code generation. If source validation fails, that candidate stops.
 
-### Source assessment
+The source assessment is Duck.ai's cited report, not independent human verification. The generation prompt uses it as context. Location and other CSV clues must be confirmed by the website before they appear as fact. A template reference is optional; if one is used, preserve required attribution in a non-rendering HTML comment and internal run notes, not visible page content.
 
-For each CSV row, the runner sends the business name, industry category, and optional location to Duck.ai as unverified identification and design context, then enables Web Search and requests a source assessment before requesting code. It asks Duck.ai to cite pages it reviewed on the requested domain, separate observed facts from inferences and unknowns, describe visible brand colors and design elements, and identify source-site logo and photo assets. Location must be verified by the website before being stated as fact or used to imply regional identity. If metadata disagrees with the site, the site remains authoritative for facts and Duck.ai should report the discrepancy. It may recommend a named HTML5 UP design reference with its official demo and CC BY 3.0 license when one genuinely fits; a template is optional. The runner checks that source pages match the requested domain and validates a template's details if one is selected. If source validation fails, that candidate stops before code generation.
+## Multi-turn capture and assembly
 
-The later generation prompt refers to the source assessment already in that chat. The runner saves the captured assessment as `debug/source_assessment.json` and `debug/source_assessment.md`, and saves effective request inputs as `debug/inputs.json`. Template credit belongs in a non-rendering HTML comment and internal notes, not visible site content. A source audit is not independent verification by a human: it is Duck.ai's cited assessment.
+The runner captures exactly three labeled CSS parts, sends the acknowledgment as its own turn, then captures exactly three labeled HTML parts. Each response must be the newest assistant response in the same chat and have the expected label and code marker. Chunk manifests and response evidence are retained. Stale, incomplete, duplicate, or mislabeled chunks stop the candidate; missing code is not invented.
 
-### Multi-turn capture
-
-The runner requests exactly three labeled CSS parts. After the third CSS response, it sends the literal `acknowledged` as a separate user turn and waits for Duck.ai's response before requesting the three HTML parts. The source audit, CSS, acknowledgment, and HTML all remain in the same chat for that candidate. It validates each newest response and code marker before assembly; a stale, incomplete, mislabeled, or duplicate chunk cannot silently become an accepted part.
-
-The workflow preserves captured conversation turns and chunk evidence in the candidate folder. CSS and HTML are saved separately as `files/styles.css` and `files/index.html`; the assembled CSS is also embedded into `files/inlined/index.html`. The inlined file still needs network access for remote images and fonts.
+The assembled files are `files/styles.css` and `files/index.html`. The runner embeds the CSS into `files/inlined/index.html` before browser QA. The inlined page still needs network access for externally hosted images and fonts.
 
 ## Automated QA and human review
 
-Playwright loads the inlined file in a browser at desktop and mobile viewports. The browser report covers:
+Playwright checks the inlined page at desktop and mobile viewports. Browser evidence covers rendered sections, a full-width hero, first-screen CTA, mobile menu click/keyboard behavior, horizontal overflow, and browser font/image loading. The structural checker also evaluates the generated markup, including the CTA-arrow rule.
 
-- Requested page sections are present and visibly rendered.
-- The hero spans the viewport and its image media covers the hero.
-- The primary CTA appears in the first viewport.
-- The mobile navigation opens/closes and can be operated by click and keyboard.
-- The mobile layout has no horizontal overflow.
-- Browser fonts and images load.
+These deterministic checks set `automated_success`; they do not call an AI model and do not approve visual quality or factual correctness. Review candidate screenshots and source assessment in the private results repo. Treat a page as approved only after a human has reviewed the design, imagery, and factual content.
 
-The structural checker evaluates the generated document and incorporates those browser results. It also checks the CTA arrow rule: CTA buttons and button-style links must not contain arrow glyphs or arrow/chevron icons. The report exposes this as `cta_buttons_no_arrows`. The generation contract gives Duck.ai the same requirement, but the checker is the enforcement point when the model ignores it.
+## Private result layout
 
-These are deterministic browser/markup checks and do not call an AI model. Passing them sets `automated_success`; it does not establish that the images are relevant, the design is polished, or that the source-derived facts are correct. The current action does not perform the documented human image audit or screenshot-based visual design approval. Those remain pending, and `final_success` should not be interpreted as human approval.
-
-## Candidate output layout
-
-Each candidate attempt is stored under:
+The worker copies all available candidate evidence to the private repo under the stable site slug assigned by its hostname-to-slug map:
 
 ```text
-duckai-runs/run-<run-id>-<attempt>-site-<site-index>-candidate-<candidate-index>/
-  files/
-    index.html
-    styles.css
-    inlined/index.html
-  chunks/
-  debug/
-    action.log
-    browser_qa.json
-    checker_report.json
-    inputs.json
-    source_assessment.json       # when a source URL was supplied
-    source_assessment.md         # when a source URL was supplied
-    screenshots/
-  conversation_turns.json
-  run_notes.json
+git-content-private/results/<site-slug>/run-<workflow-id>-<attempt>/
+  candidates/
+    run-<workflow-id>-<attempt>-site-1-candidate-<n>/
+      files/
+        index.html
+        styles.css
+        inlined/index.html
+      chunks/
+      debug/
+        action.log
+        browser_qa.json
+        checker_report.json
+        inputs.json
+        source_assessment.json
+        source_assessment.md
+        screenshots/
+      conversation_turns.json
+      run_notes.json
+  status.json
 ```
 
-Some files are only present when the corresponding step completed; failed or partial candidates retain whatever evidence was available. `run_notes.json` summarizes the candidate's status, automated result, browser QA, source assessment, and pending human review. Read `debug/action.log` and `debug/failure.txt` first when investigating a generation failure, then inspect the chunk manifests, conversation capture, browser report, and checker report as available.
-
-## Rechecking a saved batch
-
-**Duck.ai Rendered Website QA** reruns browser QA and the structural checker on a committed batch, updates each candidate's QA evidence and run notes, and commits those evidence changes. It does not start new Duck.ai chats. The workflow declares inputs for a run ID and attempt (blank selects the newest saved candidate batch), but manual dispatch through the Actions interface is unavailable while its workflow file exists only on `duckai` and `main` remains the default branch.
-
-## Runtime and access boundaries
-
-Both workflows use `mcr.microsoft.com/playwright/python:v1.58.0-noble` with the repository's pinned Playwright Python package. The generation workflow launches headed Chromium with `xvfb-run` to interact with Duck.ai. The rendered-page QA workflow checks the saved local HTML separately and does not use Duck.ai. Both run on GitHub-hosted Ubuntu.
-
-The automation uses a fresh, logged-out chat. If Duck.ai blocks guest access or presents a sign-in, usage, or human-verification gate, stop that candidate and preserve its failure report. Do not attempt to bypass the gate. The GitHub Actions token needs repository contents write access to commit candidate output.
+Partial or failed candidates retain whatever diagnostics were available. The private repository maintains the results index and `successful.csv`; successful rows include the pipeline completion time in UTC. The public branch does not retain a copy of the candidate folders. Its Actions runner uses a temporary `duckai-runs/` workspace while processing, then sends the evidence directly to the private repository.
