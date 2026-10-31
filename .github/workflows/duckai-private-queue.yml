@@ -192,11 +192,12 @@ jobs:
               "public_workflow_run": int(os.environ["GITHUB_RUN_ID"]),
           }, indent=2) + "\n", encoding="utf-8")
           PY
+          python private-results/private_automation/scripts/build_results_index.py
           cd private-results
           git config --global --add safe.directory "$GITHUB_WORKSPACE/private-results"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- "results/${JOB_ID}"
+          git add -- "results/${JOB_ID}" results/README.md
           git commit -m "private: save Duck.ai result ${JOB_ID} [skip ci]"
           for retry in 1 2 3 4 5; do
             git fetch origin "$TARGET_BRANCH"
