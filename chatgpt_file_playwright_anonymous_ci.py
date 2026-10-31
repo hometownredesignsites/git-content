@@ -199,7 +199,11 @@ def run() -> int:
                         stage_name="website_chunk",
                         error_screenshot=error_screenshot,
                     )
-                    expected_part = re.search(r"Now produce exactly (CSS|HTML) PART (\d+) OF \d+", turn_text)
+                    expected_part = re.search(
+                        r"(?:Now produce exactly|previous response for) (CSS|HTML) PART (\d+) OF \d+",
+                        turn_text,
+                        re.IGNORECASE,
+                    )
                     if not expected_part:
                         raise RuntimeError("Website turn prompt is missing its exact part label.")
                     normalized_text, dom_metadata = restore_newest_code_block_fences(

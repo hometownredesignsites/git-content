@@ -98,7 +98,8 @@ def _repair_prompt(kind: str, number: int, token: str, error: str) -> str:
     fence = "css" if kind == "css" else "text"
     return (
         f"Your previous response for {kind.upper()} PART {number} OF {total} was rejected: {error[:240]}\n"
-        "Retry this same part only. Continue the established website design and do not repeat earlier parts. "
+        f"Now produce exactly {kind.upper()} PART {number} OF {total} as a repair. Continue the established website design "
+        "and do not repeat earlier parts. "
         f"State `RUN TOKEN: {token}` and `{kind.upper()} PART {number} OF {total}` outside the code block. "
         f"Return exactly one fenced `{fence}` code block; its first nonblank line must be `{marker}`. "
         "Do not add any other code blocks or continue to a later part."
