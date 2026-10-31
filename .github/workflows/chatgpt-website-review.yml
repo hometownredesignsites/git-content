@@ -1,0 +1,76 @@
+name: Recheck ChatGPT Website Review
+
+on:
+  push:
+    branches: [chatgpt]
+    paths:
+      - "chatgpt-runs/**/debug/image_review.json"
+      - "chatgpt-runs/**/debug/visual_review.json"
+  workflow_dispatch:
+    inputs:
+      candidate_folder:
+        description: Saved candidate folder under chatgpt-runs/
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: chatgpt-website-review-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  recheck:
+    if: github.ref_name == 'chatgpt'
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright/python:v1.58.0-noble
+      options: --user root --shm-size=1gb
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install pinned Playwright dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r .github/workflows/requirements-playwright.txt
+
+      - name: Recheck reviewed candidates
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          CANDIDATE_INPUT: ${{ inputs.candidate_folder }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            folders=("$CANDIDATE_INPUT")
+          else
+            mapfile -t review_files < <(git diff --name-only HEAD^ HEAD | grep -E '^chatgpt-runs/.*/debug/(image_review|visual_review)\.json$' || true)
+            folders=()
+            for file in "${review_files[@]}"; do
+              folders+=("$(dirname "$(dirname "$file")")")
+            done
+          fi
+          if [[ "${#folders[@]}" -eq 0 ]]; then
+            echo "No reviewed candidate folders were found."
+            exit 1
+          fi
+          for folder in "${folders[@]}"; do
+            [[ "$folder" == chatgpt-runs/* && -d "$folder" ]] || { echo "Invalid candidate folder: $folder"; exit 1; }
+            python chatgpt_automation/scripts/recheck_candidate.py "$folder"
+          done
+
+      - name: Commit updated quality reports
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- chatgpt-runs
+          if git diff --cached --quiet; then
+            echo "No review report changes to commit."
+            exit 0
+          fi
+          git commit -m "chatgpt: update website review results [skip ci]"
+          git push origin "HEAD:refs/heads/${GITHUB_REF_NAME}"

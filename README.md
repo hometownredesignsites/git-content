@@ -1,5 +1,7 @@
 # Git-backed Ollama-style API (FastAPI)
 
+The CSV-driven ChatGPT website redesign workflow, chunk protocol, checkpoints, and quality gates are documented in [`chatgpt_automation/README.md`](chatgpt_automation/README.md).
+
 This is a V1 prototype for the architecture you described:
 
 1. Client calls an Ollama-like `/api/chat` endpoint.

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -14,6 +15,7 @@ from playwright_runner.diagnostics import enable_network_logging, save_failure_d
 from playwright_runner.prompt_contracts import build_prompt_text, extract_json_payload
 from playwright_runner.recovery import refresh_chat, start_new_chat_if_available
 from playwright_runner.stage_runner import run_stage_once, write_stage_outputs
+from chatgpt_automation.scripts.website_chunks import run_website_chunks
 
 
 def ensure_package(module_name: str, pip_name: str | None = None):
@@ -59,6 +61,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--error-screenshot", default="chatgpt_playwright_error.png")
     parser.add_argument("--chunks", type=int, default=1)
     parser.add_argument("--chunk-mode", choices=["none", "map_reduce", "finalize_on_last_chunk", "legacy"], default="none")
+    parser.add_argument("--website-run-folder", help="Enable 4-CSS/8-HTML website capture in this same ChatGPT session")
+    parser.add_argument("--website-chat-id", help="Stable candidate conversation key used by the chunk manifest")
+    parser.add_argument("--website-run-token", help="Resume token from the candidate checkpoint; generated when omitted")
+    parser.add_argument("--website-quality-request", help="Short source-grounded request used to select QA sections")
     return parser.parse_args()
 
 
@@ -106,7 +112,55 @@ def run() -> int:
             if args.start_new_chat:
                 started_new_chat = start_new_chat_if_available(page, args.timeout_ms)
 
-            if args.chunk_mode != "none" and args.chunks > 1:
+            if args.website_run_folder:
+                if not args.website_chat_id:
+                    raise RuntimeError("--website-chat-id is required with --website-run-folder.")
+
+                def exchange_website_turn(turn_text: str):
+                    # Reuse the existing newest-assistant-response capture on this same page.
+                    return run_stage_once(
+                        page=page,
+                        timeout_ms=args.timeout_ms,
+                        prompt_text=turn_text,
+                        wait_seconds=args.wait_seconds,
+                        post_response_wait_seconds=args.post_response_wait_seconds,
+                        response_settle_seconds=args.response_settle_seconds,
+                        max_settle_wait_seconds=args.max_settle_wait_seconds,
+                        allow_retry=False,
+                        stage_name="website_chunk",
+                        error_screenshot=error_screenshot,
+                    )
+
+                website_brief = "\n\n".join(part for part in (instructions_text, prompt_text) if part).strip()
+                source_match = re.search(r'"requested_url"\s*:\s*"(https?://[^\"]+)"', prompt_text)
+                quality_request = args.website_quality_request or "Redesign this organization with a source-supported hero, contact section, and substantive footer. Use relevant imagery."
+                if source_match:
+                    quality_request = f"Source website: {source_match.group(1)}. {quality_request}"
+                website_state = run_website_chunks(
+                    run_folder=args.website_run_folder,
+                    chat_id=args.website_chat_id,
+                    source_facts_and_design_brief=website_brief,
+                    exchange=exchange_website_turn,
+                    conversation_url=lambda: page.url,
+                    run_token=args.website_run_token,
+                    quality_request=quality_request,
+                )
+                response_text = json.dumps({
+                    "website_chunks_complete": bool(website_state.get("complete")),
+                    "accepted_parts": len(website_state.get("accepted_parts", [])),
+                    "conversation_url": website_state.get("conversation_url"),
+                    "run_folder": str(Path(args.website_run_folder).resolve()),
+                }, ensure_ascii=False)
+                run_metadata = {
+                    "attempt": 1,
+                    "retry_count": 0,
+                    "thread_reused": True,
+                    "new_chat_started": started_new_chat,
+                    "website_chunks": True,
+                    "accepted_parts": len(website_state.get("accepted_parts", [])),
+                    "final_url": page.url,
+                }
+            elif args.chunk_mode != "none" and args.chunks > 1:
                 response_text = run_chunk_plan(
                     page=page,
                     prompt_text=prompt_text,
