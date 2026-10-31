@@ -20,6 +20,15 @@ PARTS = [("css", number) for number in range(1, 5)] + [("html", number) for numb
 TOTALS = {"css": 4, "html": 8}
 
 
+class WebsiteTurnError(RuntimeError):
+    """A categorized ChatGPT page or response failure for the current turn."""
+
+    def __init__(self, failure_class: str, message: str, observation: dict[str, Any] | None = None):
+        super().__init__(message)
+        self.failure_class = failure_class
+        self.observation = observation or {}
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -44,7 +53,14 @@ def _response_text(value: Any) -> tuple[str, dict[str, Any]]:
     return (response if isinstance(response, str) else str(response or "")), metadata
 
 
-def _part_prompt(kind: str, number: int, token: str, brief: str, previous: tuple[str, int] | None) -> str:
+def _part_prompt(
+    kind: str,
+    number: int,
+    token: str,
+    brief: str,
+    previous: tuple[str, int] | None,
+    context_mode: str = "source",
+) -> str:
     total = TOTALS[kind]
     accepted = (
         f"Accepted and saved {previous[0].upper()} PART {previous[1]} OF {TOTALS[previous[0]]}. "
@@ -73,16 +89,41 @@ def _part_prompt(kind: str, number: int, token: str, brief: str, previous: tuple
             7: "Continue with any remaining useful content and interaction markup; do not close body or html yet.",
             8: "Finish remaining markup, include any required accessible-navigation script, footer, then close body and html.",
         }[number]
-    shell = (
-        "For part 1, use the complete source assessment and design brief below. For later parts, rely on this same "
-        "conversation and continue the established design. Use only source-supported factual claims; preserve relevant "
-        "source branding and contact-form purpose/fields. Build a polished, responsive, accessible redesign with a "
-        "clear conversion path, appropriate footer, and working keyboard-accessible navigation. Do not invent facts.\n\n"
-        f"SOURCE FACTS AND DESIGN BRIEF:\n{brief}\n\n"
-        if number == 1 else
-        "Continue the same source-grounded website design established earlier in this conversation. Do not invent facts; "
-        "preserve source branding, the source contact-form purpose/fields, navigation, and conversion path.\n\n"
-    )
+    if context_mode == "minimal":
+        focus = ({
+            1: "Set design tokens, reset, typography, page grid, and shared layout foundations.",
+            2: "Style the sample header, navigation, hero, and primary action.",
+            3: "Style fictional sample sections, local imagery placeholders, contact area, and footer.",
+            4: "Add responsive behavior, accessible focus states, and final sample refinements.",
+        } if kind == "css" else {
+            1: "Start the full document shell, metadata, stylesheet link, sample header/navigation, and hero.",
+            2: "Continue with a fictional sample services or overview section.",
+            3: "Continue with generic sample offerings and explanatory content.",
+            4: "Add a generic sample process or portfolio section without real-company facts.",
+            5: "Continue with useful fictional sample content; avoid repetition.",
+            6: "Add a sample contact section and generic contact form.",
+            7: "Continue remaining sample markup and interaction elements; do not close body or html yet.",
+            8: "Finish the sample navigation behavior and footer, then close body and html.",
+        })[number]
+    if context_mode == "minimal":
+        shell = (
+            "For this diagnostic ladder, build a clearly fictional generic workshop sample. Do not research or claim "
+            "facts about the CSV business. Keep the same simple fictional concept across all parts.\n\n"
+            f"DIAGNOSTIC CONTEXT:\n{brief}\n\n"
+            if number == 1 else
+            "Continue the same clearly fictional diagnostic design. Do not introduce real-company claims or repeat prior code.\n\n"
+        )
+    else:
+        shell = (
+            "For part 1, use the complete source assessment and design brief below. For later parts, rely on this same "
+            "conversation and continue the established design. Use only source-supported factual claims; preserve relevant "
+            "source branding and contact-form purpose/fields. Build a polished, responsive, accessible redesign with a "
+            "clear conversion path, appropriate footer, and working keyboard-accessible navigation. Do not invent facts.\n\n"
+            f"SOURCE FACTS AND DESIGN BRIEF:\n{brief}\n\n"
+            if number == 1 else
+            "Continue the same source-grounded website design established earlier in this conversation. Do not invent facts; "
+            "preserve source branding, the source contact-form purpose/fields, navigation, and conversion path.\n\n"
+        )
     contract = (
         f"{accepted}Now produce exactly {kind.upper()} PART {number} OF {total}. Focus: {focus}\n"
         f"State `RUN TOKEN: {token}` and the exact visible label `{kind.upper()} PART {number} OF {total}` outside the code block. "
@@ -92,14 +133,18 @@ def _part_prompt(kind: str, number: int, token: str, brief: str, previous: tuple
     return shell + contract
 
 
-def _repair_prompt(kind: str, number: int, token: str, error: str) -> str:
+def _repair_prompt(kind: str, number: int, token: str, error: str, context_mode: str = "source") -> str:
     total = TOTALS[kind]
     marker = f"/* CSS PART {number} OF {total} */" if kind == "css" else f"<!-- HTML PART {number} OF {total} -->"
     fence = "css" if kind == "css" else "text"
+    continuation = (
+        "Continue the same clearly fictional diagnostic design and do not introduce real-company claims. "
+        if context_mode == "minimal" else
+        "Continue the established source-grounded website design and do not repeat earlier parts. "
+    )
     return (
         f"Your previous response for {kind.upper()} PART {number} OF {total} was rejected: {error[:240]}\n"
-        f"Now produce exactly {kind.upper()} PART {number} OF {total} as a repair. Continue the established website design "
-        "and do not repeat earlier parts. "
+        f"Now produce exactly {kind.upper()} PART {number} OF {total} as a repair. {continuation}"
         f"State `RUN TOKEN: {token}` and `{kind.upper()} PART {number} OF {total}` outside the code block. "
         f"Return exactly one fenced `{fence}` code block; its first nonblank line must be `{marker}`. "
         "Do not add any other code blocks or continue to a later part."
@@ -147,6 +192,8 @@ def run_website_chunks(
     conversation_url: Callable[[], str] | None = None,
     run_token: str | None = None,
     quality_request: str | None = None,
+    stop_after: str | None = None,
+    context_mode: str = "source",
 ) -> dict[str, Any]:
     """Submit the four CSS then eight HTML turns using one caller-owned chat page.
 
@@ -159,6 +206,13 @@ def run_website_chunks(
         raise ValueError("chat_id is required to bind the capture manifest to one conversation")
     if not source_facts_and_design_brief.strip():
         raise ValueError("source facts and design brief are required")
+    if context_mode not in {"source", "minimal"}:
+        raise ValueError("context_mode must be 'source' or 'minimal'")
+    stage_limits = {f"css-{number}": number for number in range(1, 5)}
+    stage_limits.update({f"html-{number}": 4 + number for number in range(1, 9)})
+    if stop_after is not None and stop_after not in stage_limits:
+        raise ValueError(f"stop_after must be one of {', '.join(stage_limits)} or None")
+    target_count = stage_limits.get(stop_after, len(PARTS))
     run.mkdir(parents=True, exist_ok=True)
     quality_request = quality_request or "Redesign this organization with a source-supported hero, contact section, and substantive footer. Preserve relevant contact form fields. Use relevant imagery."
     debug_dir = run / "debug"
@@ -174,6 +228,8 @@ def run_website_chunks(
         token = token or state.get("run_token")
         if state.get("chat_id") != chat_id or state.get("run_token") != token:
             raise RuntimeError("Resume requires the same ChatGPT conversation and candidate run token.")
+        if state.get("context_mode", "source") != context_mode:
+            raise RuntimeError("Resume context mode differs from the original candidate.")
         if state.get("brief_sha256") != hashlib.sha256(source_facts_and_design_brief.encode("utf-8")).hexdigest():
             raise RuntimeError("Resume brief differs from the original candidate brief.")
     else:
@@ -183,6 +239,7 @@ def run_website_chunks(
             "chat_id": chat_id,
             "conversation_url": conversation_url() if conversation_url else None,
             "run_token": token,
+            "context_mode": context_mode,
             "brief_sha256": hashlib.sha256(source_facts_and_design_brief.encode("utf-8")).hexdigest(),
             "started_at_utc": _now(),
             "accepted_parts": [],
@@ -193,6 +250,10 @@ def run_website_chunks(
     assert token is not None
     entries = _load_and_verify_prefix(run, chat_id, token)
     accepted = [(entry["kind"], entry["part"]) for entry in entries]
+    if len(accepted) > target_count:
+        raise RuntimeError(
+            f"Candidate already has {len(accepted)} accepted parts, beyond requested stage {stop_after}."
+        )
     if state.get("complete") and len(accepted) != len(PARTS):
         raise RuntimeError("Checkpoint claims completion but the chunk manifest is incomplete.")
     state["accepted_parts"] = [f"{kind}-{number}" for kind, number in accepted]
@@ -204,13 +265,20 @@ def run_website_chunks(
             pending = None
     _atomic_json(state_path, state)
 
-    for kind, number in PARTS[len(accepted):]:
+    for kind, number in PARTS[len(accepted):target_count]:
         label = f"{kind.upper()} PART {number} OF {TOTALS[kind]}"
         current_pending = state.get("pending_turn")
         prompt = (
             current_pending["prompt"]
             if current_pending and current_pending.get("kind") == kind and current_pending.get("part") == number
-            else _part_prompt(kind, number, token, source_facts_and_design_brief, (kind, number - 1) if number > 1 else ("css", 4) if kind == "html" else None)
+            else _part_prompt(
+                kind,
+                number,
+                token,
+                source_facts_and_design_brief,
+                (kind, number - 1) if number > 1 else ("css", 4) if kind == "html" else None,
+                context_mode=context_mode,
+            )
         )
         current_attempt = (
             int(current_pending.get("attempt", 1))
@@ -237,7 +305,14 @@ def run_website_chunks(
             except Exception as error:
                 if conversation_url:
                     state["conversation_url"] = conversation_url()
-                state["last_error"] = {"at_utc": _now(), "part": label, "attempt": current_attempt, "error": str(error)}
+                state["last_error"] = {
+                    "at_utc": _now(),
+                    "part": label,
+                    "attempt": current_attempt,
+                    "classification": getattr(error, "failure_class", "exchange_error"),
+                    "error": str(error),
+                    "page_observation": getattr(error, "observation", {}),
+                }
                 state["status"] = "interrupted"
                 _atomic_json(state_path, state)
                 raise
@@ -260,13 +335,18 @@ def run_website_chunks(
 
             rejection = result.stderr.strip() or result.stdout.strip()
             state["last_error"] = {
-                "at_utc": _now(), "part": label, "attempt": current_attempt, "error": rejection,
+                "at_utc": _now(),
+                "part": label,
+                "attempt": current_attempt,
+                "classification": "response_format_rejected",
+                "error": rejection,
+                "response_metadata": metadata,
             }
             if current_attempt >= 2:
                 state["status"] = "interrupted"
                 _atomic_json(state_path, state)
                 raise RuntimeError(f"Rejected {label} after one repair attempt; no next part was requested. {rejection}")
-            prompt = _repair_prompt(kind, number, token, rejection)
+            prompt = _repair_prompt(kind, number, token, rejection, context_mode=context_mode)
             current_attempt += 1
             state["pending_turn"] = {
                 "kind": kind,
@@ -286,6 +366,22 @@ def run_website_chunks(
         if conversation_url:
             state["conversation_url"] = conversation_url()
         _atomic_json(state_path, state)
+
+        if stop_after and len(state["accepted_parts"]) == target_count:
+            state["status"] = "stage_complete"
+            state["staged_until"] = stop_after
+            state["context_mode"] = context_mode
+            state["staged_at_utc"] = _now()
+            _atomic_json(state_path, state)
+            return state
+
+    if stop_after:
+        state["status"] = "stage_complete"
+        state["staged_until"] = stop_after
+        state["context_mode"] = context_mode
+        state["staged_at_utc"] = _now()
+        _atomic_json(state_path, state)
+        return state
 
     # Send an explicit final acknowledgment after the last accepted HTML part.
     final_ack = "HTML PART 8 OF 8 was validated and saved. Reply exactly: ACK HTML 8/8"

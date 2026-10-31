@@ -1,0 +1,12 @@
+RUN TOKEN: fixture-run-token
+HTML PART 7 OF 8
+```text
+<!-- HTML PART 7 OF 8 -->
+  </main>
+  <footer>
+    <h2>Northstar Workshop</h2>
+    <p>This sample footer gives visitors a useful path back to services or the contact section.</p>
+    <a href="#services">Services</a>
+    <a href="#contact">Contact</a>
+  </footer>
+```

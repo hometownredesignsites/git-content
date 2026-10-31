@@ -17,7 +17,7 @@ from playwright_runner.prompt_contracts import build_prompt_text, extract_json_p
 from playwright_runner.recovery import refresh_chat, start_new_chat_if_available
 from playwright_runner.stage_runner import run_stage_once, write_stage_outputs
 from playwright_runner.browser_session import assistant_turns
-from chatgpt_automation.scripts.website_chunks import run_website_chunks
+from chatgpt_automation.scripts.website_chunks import WebsiteTurnError, run_website_chunks
 
 
 def ensure_package(module_name: str, pip_name: str | None = None):
@@ -101,6 +101,82 @@ def restore_newest_code_block_fences(page, response_text: str, kind: str, part: 
     }
 
 
+def inspect_chatgpt_page_state(page) -> dict:
+    """Classify visible access/service gates without interacting with them."""
+    import re
+
+    url = page.url
+    title = page.title()
+    root = page.locator("html")
+    auth_gated = root.get_attribute("data-conversation-auth-gated") is not None
+    conversation_gated = root.get_attribute("data-conversation-gated") is not None
+    body_text = ""
+    try:
+        body_text = page.locator("body").inner_text(timeout=2500)
+    except Exception:
+        pass
+
+    captcha_selectors = (
+        'iframe[src*="captcha" i], iframe[title*="captcha" i], '
+        '[id*="captcha" i], [class*="captcha" i], [data-sitekey]'
+    )
+    captcha_visible = False
+    captcha_nodes = page.locator(captcha_selectors)
+    for index in range(min(captcha_nodes.count(), 8)):
+        try:
+            if captcha_nodes.nth(index).is_visible():
+                captcha_visible = True
+                break
+        except Exception:
+            continue
+
+    visible_dialog_text = []
+    dialogs = page.locator('[role="dialog"], dialog[open]')
+    for index in range(min(dialogs.count(), 6)):
+        dialog = dialogs.nth(index)
+        try:
+            if dialog.is_visible():
+                visible_dialog_text.append(dialog.inner_text(timeout=1000))
+        except Exception:
+            continue
+    dialog_text = "\n".join(visible_dialog_text)
+    combined_text = f"{dialog_text}\n{body_text}"
+    signals = []
+    classification = "ready"
+
+    if captcha_visible or re.search(r"verify (?:that )?you(?:'re| are) human|complete the captcha|security challenge", combined_text, re.IGNORECASE):
+        classification = "captcha_required"
+        signals.append("visible CAPTCHA or human-verification prompt")
+    elif re.search(r"you(?:'|’)ve reached (?:your )?(?:usage )?limit|too many requests|rate limit|try again later", combined_text, re.IGNORECASE):
+        classification = "rate_limited"
+        signals.append("visible rate-limit or usage-limit message")
+    elif auth_gated or re.search(r"/auth/(?:login|signin)|/login(?:/|$)", url, re.IGNORECASE):
+        classification = "login_required"
+        signals.append("ChatGPT page reports an authentication gate")
+    elif conversation_gated:
+        classification = "conversation_gated"
+        signals.append("ChatGPT page marks the conversation as gated")
+    elif re.search(r"something went wrong|error generating response|failed to load conversation", dialog_text, re.IGNORECASE):
+        classification = "service_error"
+        signals.append("visible ChatGPT error dialog")
+    elif re.search(r"log in or sign up|sign in to continue", dialog_text, re.IGNORECASE):
+        classification = "login_required"
+        signals.append("visible login dialog blocks the conversation")
+
+    observation = {
+        "classification": classification,
+        "url": url,
+        "title": title,
+        "conversation_gated": conversation_gated,
+        "authentication_gated": auth_gated,
+        "visible_dialog_count": len(visible_dialog_text),
+        "signals": signals,
+    }
+    if classification != "ready":
+        observation["visible_text_excerpt"] = re.sub(r"\s+", " ", combined_text).strip()[:900]
+    return observation
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run a named Playwright stage against ChatGPT as guest.")
     parser.add_argument("--stage-name", default="generic")
@@ -135,6 +211,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--website-chat-id", help="Stable candidate conversation key used by the chunk manifest")
     parser.add_argument("--website-run-token", help="Resume token from the candidate checkpoint; generated when omitted")
     parser.add_argument("--website-quality-request", help="Short source-grounded request used to select QA sections")
+    parser.add_argument(
+        "--website-context-mode",
+        choices=("source", "minimal"),
+        default="source",
+        help="Use compact source facts for a real candidate or a synthetic prompt for the chunk ladder",
+    )
+    parser.add_argument(
+        "--website-stop-after",
+        choices=[*(f"css-{number}" for number in range(1, 5)), *(f"html-{number}" for number in range(1, 9))],
+        help="Stop after validating this part and save the conversation checkpoint for the next ladder stage",
+    )
     return parser.parse_args()
 
 
@@ -188,18 +275,42 @@ def run() -> int:
 
                 def exchange_website_turn(turn_text: str):
                     # Reuse the existing newest-assistant-response capture on this same page.
-                    response_text, response_metadata = run_stage_once(
-                        page=page,
-                        timeout_ms=args.timeout_ms,
-                        prompt_text=turn_text,
-                        wait_seconds=args.wait_seconds,
-                        post_response_wait_seconds=args.post_response_wait_seconds,
-                        response_settle_seconds=args.response_settle_seconds,
-                        max_settle_wait_seconds=args.max_settle_wait_seconds,
-                        allow_retry=False,
-                        stage_name="website_chunk",
-                        error_screenshot=error_screenshot,
-                    )
+                    before_state = inspect_chatgpt_page_state(page)
+                    if before_state["classification"] != "ready":
+                        raise WebsiteTurnError(
+                            before_state["classification"],
+                            f"ChatGPT page is unavailable for a website turn: {before_state['classification']}",
+                            before_state,
+                        )
+                    try:
+                        response_text, response_metadata = run_stage_once(
+                            page=page,
+                            timeout_ms=args.timeout_ms,
+                            prompt_text=turn_text,
+                            wait_seconds=args.wait_seconds,
+                            post_response_wait_seconds=args.post_response_wait_seconds,
+                            response_settle_seconds=args.response_settle_seconds,
+                            max_settle_wait_seconds=args.max_settle_wait_seconds,
+                            allow_retry=False,
+                            stage_name="website_chunk",
+                            error_screenshot=error_screenshot,
+                        )
+                    except Exception as error:
+                        after_error = inspect_chatgpt_page_state(page)
+                        if after_error["classification"] != "ready":
+                            raise WebsiteTurnError(
+                                after_error["classification"],
+                                f"ChatGPT page became unavailable during the turn: {after_error['classification']}; {error}",
+                                after_error,
+                            ) from error
+                        raise
+                    after_state = inspect_chatgpt_page_state(page)
+                    if after_state["classification"] != "ready":
+                        raise WebsiteTurnError(
+                            after_state["classification"],
+                            f"ChatGPT page became unavailable after the turn: {after_state['classification']}",
+                            after_state,
+                        )
                     expected_part = re.search(
                         r"(?:Now produce exactly|previous response for) (CSS|HTML) PART (\d+) OF \d+",
                         turn_text,
@@ -211,14 +322,24 @@ def run() -> int:
                             turn_text.strip(),
                             re.IGNORECASE,
                         ):
-                            return response_text, {**response_metadata, "website_final_ack": True}
+                            return response_text, {
+                                **response_metadata,
+                                "website_final_ack": True,
+                                "page_state": after_state,
+                            }
                         raise RuntimeError("Website turn prompt is missing its exact part label.")
                     normalized_text, dom_metadata = restore_newest_code_block_fences(
                         page, response_text, expected_part.group(1).lower(), int(expected_part.group(2))
                     )
-                    return normalized_text, {**response_metadata, **dom_metadata}
+                    return normalized_text, {
+                        **response_metadata,
+                        **dom_metadata,
+                        "page_state": after_state,
+                    }
 
                 website_brief = "\n\n".join(part for part in (instructions_text, prompt_text) if part).strip()
+                if args.website_context_mode == "minimal":
+                    website_brief = prompt_text.strip()
                 source_match = re.search(r'"requested_url"\s*:\s*"(https?://[^\"]+)"', prompt_text)
                 quality_request = args.website_quality_request or "Redesign this organization with a source-supported hero, contact section, and substantive footer. Use relevant imagery."
                 if source_match:
@@ -231,10 +352,25 @@ def run() -> int:
                     conversation_url=lambda: page.url,
                     run_token=args.website_run_token,
                     quality_request=quality_request,
+                    stop_after=args.website_stop_after,
+                    context_mode=args.website_context_mode,
                 )
+                if website_state.get("status") == "stage_complete":
+                    notes_path = Path(args.website_run_folder) / "run_notes.json"
+                    notes_path.write_text(json.dumps({
+                        "status": "stage_complete",
+                        "stage": website_state.get("staged_until"),
+                        "accepted_parts": website_state.get("accepted_parts", []),
+                        "automated_success": False,
+                        "final_success": False,
+                        "human_visual_review_status": "pending",
+                        "context_mode": args.website_context_mode,
+                    }, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
                 response_text = json.dumps({
                     "website_chunks_complete": bool(website_state.get("complete")),
                     "accepted_parts": len(website_state.get("accepted_parts", [])),
+                    "website_stage": website_state.get("staged_until"),
+                    "context_mode": args.website_context_mode,
                     "conversation_url": website_state.get("conversation_url"),
                     "run_folder": str(Path(args.website_run_folder).resolve()),
                 }, ensure_ascii=False)
@@ -245,6 +381,8 @@ def run() -> int:
                     "new_chat_started": started_new_chat,
                     "website_chunks": True,
                     "accepted_parts": len(website_state.get("accepted_parts", [])),
+                    "website_stage": website_state.get("staged_until"),
+                    "context_mode": args.website_context_mode,
                     "final_url": page.url,
                 }
             elif args.chunk_mode != "none" and args.chunks > 1:

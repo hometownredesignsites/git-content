@@ -30,6 +30,31 @@ on:
         description: Optional saved ChatGPT conversation URL for resuming
         required: false
         type: string
+      website_stage:
+        description: Optional incremental capture stage; resume the same candidate for the next stage
+        required: false
+        default: full
+        type: choice
+        options:
+          - full
+          - css_1
+          - css_2
+          - css_3
+          - css_4
+          - html_1
+          - html_2
+          - html_3
+          - html_4
+          - html_5
+          - html_6
+          - html_7
+          - html_8
+      website_context_mode:
+        description: Use a fictional minimal prompt for chunk diagnostics or source-grounded context for a real candidate
+        required: false
+        default: source
+        type: choice
+        options: [source, minimal]
 
 permissions:
   contents: write
@@ -53,6 +78,9 @@ jobs:
           exit 1
 
       - uses: actions/checkout@v4
+
+      - name: Validate saved-response assembly and structural gate fixtures
+        run: python -m unittest discover -s chatgpt_automation/tests -v
 
       - name: Validate CSV targets and create matrix
         id: targets
@@ -94,6 +122,8 @@ jobs:
       SITE_INDEX: ${{ matrix.target.site_index }}
       RESUME_FOLDER: ${{ matrix.target.resume_folder }}
       RESUME_CHAT_URL: ${{ inputs.resume_chat_url }}
+      WEBSITE_STAGE: ${{ github.event_name == 'workflow_dispatch' && inputs.website_stage || 'full' }}
+      WEBSITE_CONTEXT_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.website_context_mode || 'source' }}
       PYTHONUNBUFFERED: "1"
 
     steps:
@@ -106,33 +136,53 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r .github/workflows/requirements-playwright.txt
 
-      - name: Fetch source facts and prepare design context
+      - name: Prepare source facts or diagnostic context
         id: context
         run: |
           set -euo pipefail
+          if [[ "${WEBSITE_CONTEXT_MODE:-source}" == "minimal" && "${WEBSITE_STAGE:-full}" == "full" ]]; then
+            echo "Minimal context is diagnostic-only. Choose a staged stop; use source context for the full candidate gate."
+            exit 1
+          fi
           if [[ -n "${RESUME_FOLDER:-}" ]]; then
             RUN_DIR="$RESUME_FOLDER"
             test -s "$RUN_DIR/debug/website_context.md"
             test -s "$RUN_DIR/debug/inputs.json"
+            python - "$RUN_DIR/debug/inputs.json" "${WEBSITE_CONTEXT_MODE:-source}" <<'PY'
+          import json, sys
+          from pathlib import Path
+          inputs = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          if inputs.get("context_mode", "source") != sys.argv[2]:
+              raise SystemExit("Resume context mode differs from the saved candidate; start a fresh candidate for the new mode.")
+          PY
             echo "run_dir=$RUN_DIR" >> "$GITHUB_OUTPUT"
             echo "Resuming saved candidate at $RUN_DIR"
             exit 0
           fi
           RUN_DIR="chatgpt-runs/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-site-${SITE_INDEX}-candidate-1"
           mkdir -p "$RUN_DIR/debug"
-          python chatgpt_automation/scripts/fetch_source_facts.py \
-            --source-url "$SOURCE_URL" \
-            --business "$BUSINESS_NAME" \
-            --category "$INDUSTRY_CATEGORY" \
-            --location "$LOCATION" \
-            --output "$RUN_DIR/debug/source_facts.json"
-          python chatgpt_automation/scripts/prepare_candidate_context.py \
-            --source-facts "$RUN_DIR/debug/source_facts.json" \
-            --design-brief chatgpt_automation/design_brief.txt \
-            --output "$RUN_DIR/debug/website_context.md" \
-            --inputs-output "$RUN_DIR/debug/inputs.json" \
-            --site-index "$SITE_INDEX"
-          cp chatgpt_automation/website_request.txt "$RUN_DIR/debug/website_request.txt"
+          if [[ "${WEBSITE_CONTEXT_MODE:-source}" == "minimal" ]]; then
+            python chatgpt_automation/scripts/prepare_candidate_context.py \
+              --mode minimal \
+              --output "$RUN_DIR/debug/website_context.md" \
+              --inputs-output "$RUN_DIR/debug/inputs.json" \
+              --site-index "$SITE_INDEX"
+          else
+            python chatgpt_automation/scripts/fetch_source_facts.py \
+              --source-url "$SOURCE_URL" \
+              --business "$BUSINESS_NAME" \
+              --category "$INDUSTRY_CATEGORY" \
+              --location "$LOCATION" \
+              --output "$RUN_DIR/debug/source_facts.json"
+            python chatgpt_automation/scripts/prepare_candidate_context.py \
+              --mode source \
+              --source-facts "$RUN_DIR/debug/source_facts.json" \
+              --design-brief chatgpt_automation/design_brief.txt \
+              --output "$RUN_DIR/debug/website_context.md" \
+              --inputs-output "$RUN_DIR/debug/inputs.json" \
+              --site-index "$SITE_INDEX"
+            cp chatgpt_automation/website_request.txt "$RUN_DIR/debug/website_request.txt"
+          fi
           echo "run_dir=$RUN_DIR" >> "$GITHUB_OUTPUT"
 
       - name: Generate one candidate in a single ChatGPT conversation
@@ -157,12 +207,21 @@ jobs:
             fi
           fi
           PROFILE="tmp/playwright-profiles/${GITHUB_RUN_ID}/${SITE_INDEX}/candidate-1"
+          STAGE_FLAGS=()
+          if [[ "${WEBSITE_STAGE:-full}" != "full" ]]; then
+            STAGE_FLAGS=(--website-stop-after "${WEBSITE_STAGE//_/-}")
+          fi
+          CONTEXT_FLAGS=(--website-context-mode "${WEBSITE_CONTEXT_MODE:-source}")
+          INSTRUCTION_FLAGS=()
+          if [[ "${WEBSITE_CONTEXT_MODE:-source}" == "source" ]]; then
+            INSTRUCTION_FLAGS=(--instructions-file chatgpt_automation/website_request.txt)
+          fi
           set +e
           xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' \
             python -u chatgpt_file_playwright_anonymous_ci.py \
               --stage-name website \
               --input-file "$RUN_DIR/debug/website_context.md" \
-              --instructions-file chatgpt_automation/website_request.txt \
+              "${INSTRUCTION_FLAGS[@]}" \
               --output-file "$RUN_DIR/debug/runner_output.txt" \
               --metadata-output-file "$RUN_DIR/debug/runner_metadata.json" \
               --website-run-folder "$RUN_DIR" \
@@ -176,6 +235,8 @@ jobs:
               --response-settle-seconds 3 \
               --max-settle-wait-seconds 180 \
               --error-screenshot "$RUN_DIR/debug/chatgpt_playwright_error.png" \
+              "${CONTEXT_FLAGS[@]}" \
+              "${STAGE_FLAGS[@]}" \
               "${EXTRA_FLAGS[@]}" \
               2>&1 | tee "$RUN_DIR/debug/action.log"
           RUNNER_STATUS=${PIPESTATUS[0]}
@@ -223,6 +284,28 @@ jobs:
         env:
           RUN_DIR: ${{ steps.context.outputs.run_dir }}
         run: |
+          if [[ "${WEBSITE_STAGE:-full}" != "full" ]]; then
+            STAGE_KEY="${WEBSITE_STAGE//_/-}"
+            python - "$RUN_DIR/chunks/sequence_checkpoint.json" "$STAGE_KEY" <<'PY'
+          import json, sys
+          from pathlib import Path
+          path, stage = Path(sys.argv[1]), sys.argv[2]
+          if not path.is_file():
+              raise SystemExit("Staged candidate checkpoint is missing.")
+          state = json.loads(path.read_text(encoding="utf-8"))
+          part_number = int(stage.split("-")[1])
+          expected_count = part_number + (4 if stage.startswith("html-") else 0)
+          expected = [f"css-{n}" for n in range(1, min(expected_count, 4) + 1)]
+          if expected_count > 4:
+              expected.extend(f"html-{n}" for n in range(1, expected_count - 4 + 1))
+          if state.get("status") != "stage_complete" or state.get("staged_until") != stage:
+              raise SystemExit(f"Candidate did not finish staged checkpoint {stage}.")
+          if state.get("accepted_parts") != expected:
+              raise SystemExit(f"Checkpoint parts do not match {stage}: {state.get('accepted_parts')}")
+          print(f"Incremental generation stage {stage} passed with {len(expected)} validated parts.")
+          PY
+            exit 0
+          fi
           python - "$RUN_DIR/run_notes.json" <<'PY'
           import json, sys
           from pathlib import Path
@@ -231,6 +314,13 @@ jobs:
               raise SystemExit("Candidate run notes are missing.")
           notes = json.loads(path.read_text(encoding="utf-8"))
           if not notes.get("automated_success"):
-              raise SystemExit("Smoke candidate did not pass automated QA. Evidence has been saved for review.")
+              checkpoint_path = path.parent / "chunks" / "sequence_checkpoint.json"
+              checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8")) if checkpoint_path.is_file() else {}
+              error = checkpoint.get("last_error") or {}
+              failure_class = error.get("classification", "not_recorded")
+              raise SystemExit(
+                  f"Candidate did not reach automated success (status={notes.get('status', 'unknown')}; "
+                  f"generation_failure={failure_class}). Evidence has been saved for review."
+              )
           print("Smoke candidate passed automated QA. Human visual and image review remain pending.")
           PY

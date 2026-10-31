@@ -1,0 +1,24 @@
+name: ChatGPT Website Fixture Validation
+
+on:
+  push:
+    branches: [chatgpt]
+    paths:
+      - "chatgpt_automation/scripts/**"
+      - "chatgpt_automation/tests/**"
+      - "chatgpt_automation/fixtures/**"
+      - "chatgpt_file_playwright_anonymous_ci.py"
+      - "playwright_runner/**"
+      - ".github/workflows/chatgpt-fixture-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixtures:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate access-state handling and staged chunk ladder
+        run: python -m unittest discover -s chatgpt_automation/tests -v

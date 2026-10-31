@@ -1,0 +1,12 @@
+RUN TOKEN: fixture-run-token
+CSS PART 4 OF 4
+```css
+/* CSS PART 4 OF 4 */
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+@media (max-width: 700px) {
+  .hero { grid-template-columns: 1fr; padding: 3rem 6vw; }
+  .primary-nav { flex-wrap: wrap; }
+  .service-list { grid-template-columns: 1fr; }
+  .content-section { padding: 3rem 6vw; }
+}
+```

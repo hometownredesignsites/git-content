@@ -1,0 +1,10 @@
+RUN TOKEN: fixture-run-token
+HTML PART 5 OF 8
+```text
+<!-- HTML PART 5 OF 8 -->
+    <section class="content-section process" id="process">
+      <h2>A clear next step</h2>
+      <p>Share the project details and the team can follow up using the contact information you provide.</p>
+      <a class="button" href="#contact">Contact the team</a>
+    </section>
+```

@@ -98,7 +98,9 @@ def main():
             old_response.replace(revisions / f"{args.kind}-{args.part}-{old_entry['sha256'][:12]}.txt")
     if not same_response_path:
         response_copy.write_text(response, encoding="utf-8")
-    chunk_path.write_text(code, encoding="utf-8")
+    # Hash the exact bytes written so a Windows checkout cannot translate LF
+    # to CRLF and make a just-accepted chunk fail resume verification.
+    chunk_path.write_bytes(code.encode("utf-8"))
     new_entry = {
         "kind": args.kind,
         "part": args.part,
