@@ -5,6 +5,10 @@ on:
     branches: [chatgpt]
     paths:
       - "chatgpt_automation/source_urls.csv"
+      - "chatgpt_automation/scripts/**"
+      - "chatgpt_automation/design_brief.txt"
+      - "chatgpt_automation/website_request.txt"
+      - "chatgpt_file_playwright_anonymous_ci.py"
   workflow_dispatch:
     inputs:
       run_mode:
@@ -167,6 +171,7 @@ jobs:
               --post-response-wait-seconds 3 \
               --response-settle-seconds 3 \
               --max-settle-wait-seconds 180 \
+              --error-screenshot "$RUN_DIR/debug/chatgpt_playwright_error.png" \
               "${EXTRA_FLAGS[@]}" \
               2>&1 | tee "$RUN_DIR/debug/action.log"
           RUNNER_STATUS=${PIPESTATUS[0]}
