@@ -126,7 +126,7 @@ jobs:
           successful=0
           attempt=0
           target=3
-          max_attempts=6
+          max_attempts=10
           while [[ "$successful" -lt "$target" && "$attempt" -lt "$max_attempts" ]]; do
             attempt=$((attempt + 1))
             run_dir="duckai-runs/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-site-1-candidate-${attempt}"
