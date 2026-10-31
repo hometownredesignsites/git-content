@@ -13,7 +13,7 @@ This directory contains the Duck.ai prompts, browser runner, checks, and workflo
 
 The worker aims for three automated passes and stops after at most ten complete candidate attempts. Its progress messages contain attempt/pass counts, and the local coordinator reports the active workflow step and elapsed time. The shared secrets require serial processing.
 
-The public Actions run, timing, and opaque job marker are visible. The target row is temporarily available to the public GitHub Actions runner and is sent to Duck.ai. The `PRIVATE_RESULTS_TOKEN` secret lets the public workflow write results to the private repo. Restrict write access to trusted maintainers; workflow changes on the public branch can affect how the secret is used. Do not submit data that cannot be processed by GitHub Actions and Duck.ai.
+The public Actions run, timing, and opaque job marker are visible. The target row is temporarily available to the public GitHub Actions runner and is sent to Duck.ai. The `PRIVATE_RESULTS_TOKEN` secret lets the public workflow write results to the private repo. Restrict write access to trusted maintainers; workflow changes on the public branch can affect how the secret is used. Do not submit data that cannot be processed by GitHub Actions and Duck.ai. Earlier public CSV and generated run files remain in this repository's Git history; this workflow does not remove them from older commits.
 
 ## Fields used by the generation prompt
 
