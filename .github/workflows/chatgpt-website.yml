@@ -8,6 +8,7 @@ on:
       - "chatgpt_automation/scripts/**"
       - "chatgpt_automation/design_brief.txt"
       - "chatgpt_automation/website_request.txt"
+      - "chatgpt_automation/resume_candidate.txt"
       - "chatgpt_file_playwright_anonymous_ci.py"
   workflow_dispatch:
     inputs:
@@ -60,6 +61,9 @@ jobs:
           SMOKE_WEBSITE: ${{ inputs.smoke_website }}
           RESUME_CANDIDATE: ${{ inputs.resume_candidate }}
         run: |
+          if [[ "$GITHUB_EVENT_NAME" == "push" && -s chatgpt_automation/resume_candidate.txt ]]; then
+            RESUME_CANDIDATE="$(tr -d '\r\n' < chatgpt_automation/resume_candidate.txt)"
+          fi
           python chatgpt_automation/scripts/build_target_matrix.py
           echo "run_mode=${RUN_MODE}" >> "$GITHUB_OUTPUT"
           echo "resume_candidate=${RESUME_CANDIDATE}" >> "$GITHUB_OUTPUT"
