@@ -42,6 +42,7 @@ jobs:
           PUSH_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           if [[ ! "$PRIVATE_TARGET_JOB_ID" =~ ^[0-9a-f-]{36}$ ]]; then
             echo "The active private job ID is missing or invalid."
             exit 1
