@@ -170,7 +170,17 @@ jobs:
           ATTEMPT_COUNT: ${{ steps.generate.outputs.attempt_count }}
         run: |
           set -euo pipefail
-          result_dir="private-results/results/${JOB_ID}/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          result_slug="$(python - "$JOB_ID" <<'PY'
+          import json, pathlib, re, sys
+          job_path = pathlib.Path("private-results/private_automation/queue/jobs") / f"{sys.argv[1]}.json"
+          job = json.loads(job_path.read_text(encoding="utf-8"))
+          slug = job.get("result_slug", "")
+          if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", slug):
+              raise SystemExit("The private target has no valid result slug.")
+          print(slug)
+          PY
+          )"
+          result_dir="private-results/results/${result_slug}/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           mkdir -p "$result_dir/candidates"
           shopt -s nullglob
           run_dirs=(duckai-runs/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-site-1-candidate-*)
@@ -197,7 +207,7 @@ jobs:
           git config --global --add safe.directory "$GITHUB_WORKSPACE/private-results"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- "results/${JOB_ID}" results/README.md
+          git add -- "results/${result_slug}" results/README.md results/successful.csv
           git commit -m "private: save Duck.ai result ${JOB_ID} [skip ci]"
           for retry in 1 2 3 4 5; do
             git fetch origin "$TARGET_BRANCH"
