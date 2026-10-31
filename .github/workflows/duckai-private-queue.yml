@@ -131,17 +131,21 @@ jobs:
             attempt=$((attempt + 1))
             run_dir="duckai-runs/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-site-1-candidate-${attempt}"
             action_log="${RUNNER_TEMP}/duckai-private-${attempt}.log"
+            echo "::notice title=Candidate progress::Attempt ${attempt} of ${max_attempts} started; ${successful} of ${target} passes so far."
             set +e
             CANDIDATE_INDEX="$attempt" GITHUB_STEP_SUMMARY="" xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' python -u duckai_automation/run_duckai.py > "$action_log" 2>&1
             candidate_exit=$?
             set -e
+            attempt_outcome="did not pass"
             if [[ "$candidate_exit" -eq 0 ]] && python -c 'import json,sys; raise SystemExit(0 if json.load(open(sys.argv[1], encoding="utf-8")).get("automated_success") else 1)' "$run_dir/run_notes.json" >/dev/null 2>&1; then
               successful=$((successful + 1))
+              attempt_outcome="passed"
             fi
             if [[ ! -d "$run_dir" ]]; then mkdir -p "$run_dir/debug"; fi
             if [[ ! -f "$run_dir/run_notes.json" ]]; then
               printf '{"site_index":1,"candidate_index":%s,"automated_success":false,"status":"generation_failed"}\n' "$attempt" > "$run_dir/run_notes.json"
             fi
+            echo "::notice title=Candidate progress::Attempt ${attempt} of ${max_attempts} ${attempt_outcome}; ${successful} of ${target} passes so far."
             mkdir -p "$run_dir/debug"
             cp "$action_log" "$run_dir/debug/action.log"
           done
