@@ -64,7 +64,12 @@ def _part_prompt(
     label = f"{kind.upper()} PART 1 OF 1"
     marker = "/* CSS PART 1 OF 1 */" if kind == "css" else "<!-- HTML PART 1 OF 1 -->"
     fence = "css" if kind == "css" else "text"
-    if kind == "css":
+    if kind == "css" and context_mode == "minimal":
+        task = (
+            "Return a compact diagnostic stylesheet, not a full website stylesheet. Include a base body rule, "
+            "one .hero rule, and one mobile @media rule. Keep the CSS short and valid."
+        )
+    elif kind == "css":
         task = "Return the complete stylesheet in one response: design tokens, typography, all page sections, desktop and mobile layouts, accessible focus states, and navigation behavior."
     else:
         task = "Return the complete HTML5 document in one response: metadata, stylesheet link, navigation, every page section, contact form, footer, accessible interactions, and closed document markup."
@@ -96,9 +101,13 @@ def _repair_prompt(kind: str, number: int, token: str, error: str, context_mode:
     marker = "/* CSS PART 1 OF 1 */" if kind == "css" else "<!-- HTML PART 1 OF 1 -->"
     fence = "css" if kind == "css" else "text"
     continuation = "Keep the fictional diagnostic website consistent. " if context_mode == "minimal" else "Keep the source-grounded website consistent and do not invent facts. "
+    diagnostic = (
+        "Return actual CSS declarations in the block; do not answer with only the token and part label. "
+        if kind == "css" and context_mode == "minimal" else ""
+    )
     return (
         f"Your previous response for {label} was rejected: {error[:240]}\n"
-        f"Repair it now. {continuation}State `RUN TOKEN: {token}` and `{label}` outside the code block. "
+        f"Repair it now. {continuation}{diagnostic}State `RUN TOKEN: {token}` and `{label}` outside the code block. "
         f"Return exactly one fenced `{fence}` code block; its first nonblank line must be `{marker}`. "
         "Do not add any other code blocks. For HTML use a `text` fence, never an HTML preview block."
     )
