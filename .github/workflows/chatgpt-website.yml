@@ -4,6 +4,7 @@ on:
   push:
     branches: [chatgpt]
     paths:
+      - ".github/workflows/chatgpt-website.yml"
       - "chatgpt_automation/source_urls.csv"
       - "chatgpt_automation/scripts/**"
       - "chatgpt_automation/design_brief.txt"
@@ -33,7 +34,7 @@ on:
       website_stage:
         description: Optional incremental capture stage; resume the same candidate for the next stage
         required: false
-        default: full
+        default: css_1
         type: choice
         options:
           - full
@@ -42,7 +43,7 @@ on:
       website_context_mode:
         description: Use a fictional minimal prompt for chunk diagnostics or source-grounded context for a real candidate
         required: false
-        default: source
+        default: minimal
         type: choice
         options: [source, minimal]
 
@@ -112,8 +113,8 @@ jobs:
       SITE_INDEX: ${{ matrix.target.site_index }}
       RESUME_FOLDER: ${{ matrix.target.resume_folder }}
       RESUME_CHAT_URL: ${{ inputs.resume_chat_url }}
-      WEBSITE_STAGE: ${{ github.event_name == 'workflow_dispatch' && inputs.website_stage || 'full' }}
-      WEBSITE_CONTEXT_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.website_context_mode || 'source' }}
+      WEBSITE_STAGE: ${{ github.event_name == 'workflow_dispatch' && inputs.website_stage || 'css_1' }}
+      WEBSITE_CONTEXT_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.website_context_mode || 'minimal' }}
       PYTHONUNBUFFERED: "1"
 
     steps:
