@@ -1,0 +1,26 @@
+{
+  "status": "interrupted",
+  "chat_id": "site-1-candidate-1",
+  "conversation_url": "https://chatgpt.com/uc/6ae68264-88ac-83ea-bd75-a58ede7db989",
+  "run_token": "d9fa1f89815f9895",
+  "context_mode": "source",
+  "brief_sha256": "361488a24f31a0a4d15c2ad3b39ac8322fc59bc1d666038771ef4c672e6cc47f",
+  "started_at_utc": "2026-11-01T00:03:54.798142+00:00",
+  "accepted_parts": [],
+  "pending_turn": {
+    "kind": "css",
+    "part": 1,
+    "attempt": 2,
+    "prompt": "Your previous response for CSS PART 1 OF 1 was rejected: capture rejected: expected exactly one fenced code block; found 0\nRepair it now. Keep the source-grounded website consistent and do not invent facts. State `RUN TOKEN: d9fa1f89815f9895` and `CSS PART 1 OF 1` outside the code block. Return exactly one fenced `css` code block; its first nonblank line must be `/* CSS PART 1 OF 1 */`. Do not add any other code blocks. For HTML use a `text` fence, never an HTML preview block.",
+    "started_at_utc": "2026-11-01T00:06:44.051656+00:00"
+  },
+  "last_response_at_utc": "2026-11-01T00:06:44.020863+00:00",
+  "last_error": {
+    "at_utc": "2026-11-01T00:08:03.464489+00:00",
+    "part": "CSS PART 1 OF 1",
+    "attempt": 2,
+    "classification": "exchange_error",
+    "error": "Assistant response was empty for stage submission.",
+    "page_observation": {}
+  }
+}
