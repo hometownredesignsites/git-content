@@ -1,0 +1,50 @@
+{
+  "status": "interrupted",
+  "chat_id": "site-1-candidate-1",
+  "conversation_url": "https://chatgpt.com/uc/6ae77902-9b54-83ea-aaba-09a0124521b0",
+  "run_token": "b17e7aef2fe12479",
+  "context_mode": "minimal",
+  "brief_sha256": "233f4db87af36b7b602f2bb4bfda44de7944055440bf8f149b70527caa223f8b",
+  "started_at_utc": "2026-11-01T17:36:11.222368+00:00",
+  "accepted_parts": [],
+  "pending_turn": {
+    "kind": "css",
+    "part": 1,
+    "attempt": 2,
+    "prompt": "Your previous response for CSS PART 1 OF 1 was rejected: capture rejected: expected exactly one fenced code block; found 0\nRepair it now. Keep the fictional diagnostic website consistent. State `RUN TOKEN: b17e7aef2fe12479` and `CSS PART 1 OF 1` outside the code block. Return exactly one fenced `css` code block; its first nonblank line must be `/* CSS PART 1 OF 1 */`. Do not add any other code blocks. For HTML use a `text` fence, never an HTML preview block.",
+    "started_at_utc": "2026-11-01T17:38:48.947088+00:00"
+  },
+  "last_response_at_utc": "2026-11-01T17:39:27.126419+00:00",
+  "last_error": {
+    "at_utc": "2026-11-01T17:39:27.151082+00:00",
+    "part": "CSS PART 1 OF 1",
+    "attempt": 2,
+    "classification": "response_format_rejected",
+    "error": "capture rejected: expected exactly one fenced code block; found 0",
+    "response_metadata": {
+      "attempt": 1,
+      "retry_count": 0,
+      "used_retry": false,
+      "page_refreshed": false,
+      "thread_reused": true,
+      "new_chat_started": false,
+      "failure_reason": null,
+      "attempt_failures": [],
+      "start_time": 1793554728.9617577,
+      "end_time": 1793554767.1067631,
+      "duration_seconds": 38.145,
+      "dom_code_block_count": 0,
+      "dom_labeled_code_block_count": 0,
+      "normalization_error": "Expected exactly one rendered assistant code block.",
+      "page_state": {
+        "classification": "ready",
+        "url": "https://chatgpt.com/uc/6ae77902-9b54-83ea-aaba-09a0124521b0",
+        "title": "ChatGPT: Chat, Work, Create & Code with AI",
+        "conversation_gated": false,
+        "authentication_gated": false,
+        "visible_dialog_count": 0,
+        "signals": []
+      }
+    }
+  }
+}
