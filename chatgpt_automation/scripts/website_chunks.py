@@ -148,7 +148,7 @@ def run_website_chunks(
     stop_after: str | None = None,
     context_mode: str = "source",
 ) -> dict[str, Any]:
-    """Submit the four CSS then eight HTML turns using one caller-owned chat page.
+    """Submit one full CSS then one full HTML response using one caller-owned chat page.
 
     `exchange` must submit one user turn in the already-open ChatGPT conversation and
     return the existing runner's newest-assistant-response capture (optionally paired

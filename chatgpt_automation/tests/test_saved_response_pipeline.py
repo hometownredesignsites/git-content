@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from chatgpt_automation.scripts.website_chunks import WebsiteTurnError, run_website_chunks
+from chatgpt_automation.scripts.website_chunks import WebsiteTurnError, _part_prompt, run_website_chunks
 from chatgpt_file_playwright_anonymous_ci import inspect_chatgpt_page_state
 
 
@@ -25,6 +25,18 @@ REQUEST = (
 
 
 class SavedResponsePipelineTest(unittest.TestCase):
+    def test_generation_contract_has_no_legacy_chunk_instructions(self):
+        css = _part_prompt("css", 1, RUN_TOKEN, "fixture design brief", None)
+        html = _part_prompt("html", 1, RUN_TOKEN, "fixture design brief", ("css", 1))
+        instructions = (ROOT / "chatgpt_automation" / "website_request.txt").read_text(encoding="utf-8")
+        for text in (css, html):
+            self.assertIn("PART 1 OF 1", text)
+            self.assertIn("exactly one", text)
+        self.assertIn("complete CSS in one labeled response", instructions)
+        self.assertNotIn("four labeled parts", instructions)
+        self.assertNotIn("eight labeled parts", instructions)
+        self.assertIn("text` fence", html)
+
     def test_html_preview_fence_is_rejected(self):
         with tempfile.TemporaryDirectory(prefix="chatgpt-html-fence-") as temporary:
             root = Path(temporary)
