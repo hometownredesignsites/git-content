@@ -38,17 +38,7 @@ on:
         options:
           - full
           - css_1
-          - css_2
-          - css_3
-          - css_4
           - html_1
-          - html_2
-          - html_3
-          - html_4
-          - html_5
-          - html_6
-          - html_7
-          - html_8
       website_context_mode:
         description: Use a fictional minimal prompt for chunk diagnostics or source-grounded context for a real candidate
         required: false
@@ -293,16 +283,12 @@ jobs:
           if not path.is_file():
               raise SystemExit("Staged candidate checkpoint is missing.")
           state = json.loads(path.read_text(encoding="utf-8"))
-          part_number = int(stage.split("-")[1])
-          expected_count = part_number + (4 if stage.startswith("html-") else 0)
-          expected = [f"css-{n}" for n in range(1, min(expected_count, 4) + 1)]
-          if expected_count > 4:
-              expected.extend(f"html-{n}" for n in range(1, expected_count - 4 + 1))
+          expected = ["css-1"] if stage == "css-1" else ["css-1", "html-1"]
           if state.get("status") != "stage_complete" or state.get("staged_until") != stage:
               raise SystemExit(f"Candidate did not finish staged checkpoint {stage}.")
           if state.get("accepted_parts") != expected:
               raise SystemExit(f"Checkpoint parts do not match {stage}: {state.get('accepted_parts')}")
-          print(f"Incremental generation stage {stage} passed with {len(expected)} validated parts.")
+          print(f"Incremental generation stage {stage} passed with {len(expected)} validated full responses.")
           PY
             exit 0
           fi

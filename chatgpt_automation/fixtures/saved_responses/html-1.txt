@@ -1,7 +1,7 @@
 RUN TOKEN: fixture-run-token
-HTML PART 1 OF 8
+HTML PART 1 OF 1
 ```text
-<!-- HTML PART 1 OF 8 -->
+<!-- HTML PART 1 OF 1 -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -21,4 +21,54 @@ HTML PART 1 OF 8
       <div><p>Sample business website</p><h1>Thoughtful work, made to last</h1><p>Explore a clear overview of services and get in touch with the team.</p><a class="button" href="#contact">Start a conversation</a></div>
       <img alt="Workshop materials arranged on a workbench" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 3'%3E%3Crect width='4' height='3' fill='%23c45e3b'/%3E%3C/svg%3E">
     </section>
+<section class="content-section services" id="services">
+      <h2>Services</h2>
+      <p>A simple sample of the ways a small workshop can help its customers.</p>
+      <ul class="service-list"><li>Project planning</li><li>Custom work</li><li>Care and repair</li></ul>
+      <img alt="Tools prepared for a project" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 3'%3E%3Crect width='4' height='3' fill='%2318343a'/%3E%3C/svg%3E">
+    </section>
+<section class="content-section about" id="about">
+      <h2>About the workshop</h2>
+      <p>This synthetic fixture provides representative page structure for testing assembly and source-code checks.</p>
+      <p>It makes no claims about a real business and uses local vector placeholders rather than remote assets.</p>
+    </section>
+<section class="content-section details" id="details">
+      <h2>Built around your project</h2>
+      <p>Use this area to explain the work process with details verified from the source website.</p>
+      <img alt="A sample finished workshop project" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 3'%3E%3Crect width='4' height='3' fill='%23d7b98e'/%3E%3C/svg%3E">
+    </section>
+<section class="content-section process" id="process">
+      <h2>A clear next step</h2>
+      <p>Share the project details and the team can follow up using the contact information you provide.</p>
+      <a class="button" href="#contact">Contact the team</a>
+    </section>
+<section class="content-section contact" id="contact">
+      <h2>Contact</h2>
+      <p>Send a note with the best way to reach you and a short description of your project.</p>
+      <form action="#contact" method="post">
+        <label for="name">Name</label><input id="name" name="name" type="text" required>
+        <label for="phone">Phone</label><input id="phone" name="phone" type="tel" required>
+        <label for="email">Email</label><input id="email" name="email" type="email">
+        <label for="message">Project details</label><textarea id="message" name="message"></textarea>
+        <button type="submit">Send message</button>
+      </form>
+    </section>
+</main>
+  <footer>
+    <h2>Northstar Workshop</h2>
+    <p>This sample footer gives visitors a useful path back to services or the contact section.</p>
+    <a href="#services">Services</a>
+    <a href="#contact">Contact</a>
+  </footer>
+<script>
+    const menuButton = document.querySelector('.nav-menu');
+    const navigation = document.getElementById('primary-nav');
+    menuButton.addEventListener('click', () => {
+      const expanded = menuButton.getAttribute('aria-expanded') === 'true';
+      menuButton.setAttribute('aria-expanded', String(!expanded));
+      navigation.hidden = expanded;
+    });
+  </script>
+</body>
+</html>
 ```

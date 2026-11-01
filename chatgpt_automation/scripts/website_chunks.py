@@ -1,4 +1,4 @@
-"""Orchestrate twelve validated website parts through one caller-owned chat."""
+"""Orchestrate full CSS and HTML responses through one caller-owned chat."""
 
 from __future__ import annotations
 
@@ -16,8 +16,8 @@ from typing import Any, Callable
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 CAPTURE_SCRIPT = SCRIPT_DIR / "capture_chunk.py"
-PARTS = [("css", number) for number in range(1, 5)] + [("html", number) for number in range(1, 9)]
-TOTALS = {"css": 4, "html": 8}
+PARTS = [("css", 1), ("html", 1)]
+TOTALS = {"css": 1, "html": 1}
 
 
 class WebsiteTurnError(RuntimeError):
@@ -61,93 +61,46 @@ def _part_prompt(
     previous: tuple[str, int] | None,
     context_mode: str = "source",
 ) -> str:
-    total = TOTALS[kind]
-    accepted = (
-        f"Accepted and saved {previous[0].upper()} PART {previous[1]} OF {TOTALS[previous[0]]}. "
-        "Continue the same website and conversation; do not repeat prior code.\n\n"
-        if previous else ""
-    )
+    label = f"{kind.upper()} PART 1 OF 1"
+    marker = "/* CSS PART 1 OF 1 */" if kind == "css" else "<!-- HTML PART 1 OF 1 -->"
+    fence = "css" if kind == "css" else "text"
     if kind == "css":
-        fence = "css"
-        marker = f"/* CSS PART {number} OF {total} */"
-        focus = {
-            1: "Set design tokens, reset, typography, page grid, and shared layout foundations.",
-            2: "Style the header, navigation, hero, and primary action.",
-            3: "Style the source-appropriate content sections, imagery, contact area, and footer.",
-            4: "Add responsive desktop-to-mobile behavior, accessible focus states, and final refinements.",
-        }[number]
+        task = "Return the complete stylesheet in one response: design tokens, typography, all page sections, desktop and mobile layouts, accessible focus states, and navigation behavior."
     else:
-        fence = "text"
-        marker = f"<!-- HTML PART {number} OF {total} -->"
-        focus = {
-            1: "Start the full document shell, metadata, stylesheet link, header/navigation, and hero.",
-            2: "Continue inside the body with the next source-supported story, overview, or offering section(s).",
-            3: "Continue with distinct source-supported offerings, proof, or audience information as appropriate.",
-            4: "Continue with any relevant process, location, hours, or gallery sections supported by the source.",
-            5: "Continue with remaining source-supported content; avoid repeating sections already supplied.",
-            6: "Continue with the source-appropriate contact/conversion section and preserve source form purpose and fields.",
-            7: "Continue with any remaining useful content and interaction markup; do not close body or html yet.",
-            8: "Finish remaining markup, include any required accessible-navigation script, footer, then close body and html.",
-        }[number]
+        task = "Return the complete HTML5 document in one response: metadata, stylesheet link, navigation, every page section, contact form, footer, accessible interactions, and closed document markup."
     if context_mode == "minimal":
-        focus = ({
-            1: "Set design tokens, reset, typography, page grid, and shared layout foundations.",
-            2: "Style the sample header, navigation, hero, and primary action.",
-            3: "Style fictional sample sections, local imagery placeholders, contact area, and footer.",
-            4: "Add responsive behavior, accessible focus states, and final sample refinements.",
-        } if kind == "css" else {
-            1: "Start the full document shell, metadata, stylesheet link, sample header/navigation, and hero.",
-            2: "Continue with a fictional sample services or overview section.",
-            3: "Continue with generic sample offerings and explanatory content.",
-            4: "Add a generic sample process or portfolio section without real-company facts.",
-            5: "Continue with useful fictional sample content; avoid repetition.",
-            6: "Add a sample contact section and generic contact form.",
-            7: "Continue remaining sample markup and interaction elements; do not close body or html yet.",
-            8: "Finish the sample navigation behavior and footer, then close body and html.",
-        })[number]
-    if context_mode == "minimal":
-        shell = (
-            "For this diagnostic ladder, build a clearly fictional generic workshop sample. Do not research or claim "
-            "facts about the CSV business. Keep the same simple fictional concept across all parts.\n\n"
-            f"DIAGNOSTIC CONTEXT:\n{brief}\n\n"
-            if number == 1 else
-            "Continue the same clearly fictional diagnostic design. Do not introduce real-company claims or repeat prior code.\n\n"
+        context = (
+            "Build a clearly fictional generic workshop sample. Do not claim facts about the CSV business. "
+            "Keep this sample consistent with the CSS response already accepted.\n\n"
+            if kind == "html" else
+            "Build a clearly fictional generic workshop sample; do not claim facts about the CSV business.\n\n"
         )
+        context += f"DIAGNOSTIC CONTEXT:\n{brief}\n\n" if kind == "css" else ""
     else:
-        shell = (
-            "For part 1, use the complete source assessment and design brief below. For later parts, rely on this same "
-            "conversation and continue the established design. Use only source-supported factual claims; preserve relevant "
-            "source branding and contact-form purpose/fields. Build a polished, responsive, accessible redesign with a "
-            "clear conversion path, appropriate footer, and working keyboard-accessible navigation. Do not invent facts.\n\n"
-            f"SOURCE FACTS AND DESIGN BRIEF:\n{brief}\n\n"
-            if number == 1 else
-            "Continue the same source-grounded website design established earlier in this conversation. Do not invent facts; "
-            "preserve source branding, the source contact-form purpose/fields, navigation, and conversion path.\n\n"
+        context = (
+            "Use only source-supported facts, preserve relevant branding and contact-form purpose/fields, and do not invent claims. "
+            "Make the redesign polished, responsive, accessible, and conversion-focused.\n\n"
         )
-    contract = (
-        f"{accepted}Now produce exactly {kind.upper()} PART {number} OF {total}. Focus: {focus}\n"
-        f"State `RUN TOKEN: {token}` and the exact visible label `{kind.upper()} PART {number} OF {total}` outside the code block. "
+        context += f"SOURCE FACTS AND DESIGN BRIEF:\n{brief}\n\n" if kind == "css" else ""
+    prior = "The complete CSS response was accepted and saved. Continue the same design and use the conversation context.\n\n" if previous else ""
+    return (
+        context + prior + f"Now produce exactly {label}. {task}\n"
+        f"State `RUN TOKEN: {token}` and the exact visible label `{label}` outside the code block. "
         f"Return exactly one fenced code block labeled `{fence}`. Its first nonblank line must be exactly `{marker}`. "
-        "Do not add any other code blocks."
+        "Do not add any other code blocks. For HTML use a `text` fence, never an HTML preview block."
     )
-    return shell + contract
 
 
 def _repair_prompt(kind: str, number: int, token: str, error: str, context_mode: str = "source") -> str:
-    total = TOTALS[kind]
-    marker = f"/* CSS PART {number} OF {total} */" if kind == "css" else f"<!-- HTML PART {number} OF {total} -->"
+    label = f"{kind.upper()} PART 1 OF 1"
+    marker = "/* CSS PART 1 OF 1 */" if kind == "css" else "<!-- HTML PART 1 OF 1 -->"
     fence = "css" if kind == "css" else "text"
-    continuation = (
-        "Continue the same clearly fictional diagnostic design and do not introduce real-company claims. "
-        if context_mode == "minimal" else
-        "Continue the established source-grounded website design and do not repeat earlier parts. "
-    )
+    continuation = "Keep the fictional diagnostic website consistent. " if context_mode == "minimal" else "Keep the source-grounded website consistent and do not invent facts. "
     return (
-        f"Your previous response for {kind.upper()} PART {number} OF {total} was rejected: {error[:240]}\n"
-        f"Now produce exactly {kind.upper()} PART {number} OF {total} as a repair. {continuation}"
-        f"State `RUN TOKEN: {token}` and `{kind.upper()} PART {number} OF {total}` outside the code block. "
+        f"Your previous response for {label} was rejected: {error[:240]}\n"
+        f"Repair it now. {continuation}State `RUN TOKEN: {token}` and `{label}` outside the code block. "
         f"Return exactly one fenced `{fence}` code block; its first nonblank line must be `{marker}`. "
-        "Do not add any other code blocks or continue to a later part."
+        "Do not add any other code blocks. For HTML use a `text` fence, never an HTML preview block."
     )
 
 
@@ -208,8 +161,7 @@ def run_website_chunks(
         raise ValueError("source facts and design brief are required")
     if context_mode not in {"source", "minimal"}:
         raise ValueError("context_mode must be 'source' or 'minimal'")
-    stage_limits = {f"css-{number}": number for number in range(1, 5)}
-    stage_limits.update({f"html-{number}": 4 + number for number in range(1, 9)})
+    stage_limits = {"css-1": 1, "html-1": 2}
     if stop_after is not None and stop_after not in stage_limits:
         raise ValueError(f"stop_after must be one of {', '.join(stage_limits)} or None")
     target_count = stage_limits.get(stop_after, len(PARTS))
@@ -383,18 +335,18 @@ def run_website_chunks(
         _atomic_json(state_path, state)
         return state
 
-    # Send an explicit final acknowledgment after the last accepted HTML part.
-    final_ack = "HTML PART 8 OF 8 was validated and saved. Reply exactly: ACK HTML 8/8"
+    # Verify completion with a short acknowledgment after the accepted HTML response.
+    final_ack = "HTML PART 1 OF 1 was validated and saved. Reply exactly: ACK HTML 1/1"
     pending = state.get("pending_turn")
     if not state.get("complete"):
         all_parts_saved = [(entry["kind"], entry["part"]) for entry in entries] == PARTS
         if pending and pending.get("kind") == "ack" and all_parts_saved:
             # A resumed anonymous ChatGPT session may no longer expose a composer.
-            # All twelve parts are already validated, so record the skipped final
+            # Both full responses are already validated, so record the skipped final
             # courtesy turn and continue with assembly and QA without changing them.
             state["final_acknowledgment"] = {
                 "status": "skipped_on_resume",
-                "reason": "All twelve chunks were validated, but the saved anonymous session had no composer.",
+                "reason": "Both full responses were validated, but the saved anonymous session had no composer.",
                 "recorded_at_utc": _now(),
             }
             state["pending_turn"] = None
@@ -408,11 +360,11 @@ def run_website_chunks(
             duration = round(time.monotonic() - started, 3)
             _append_turn(transcript, role="assistant", text=ack_response, part="final acknowledgment",
                          metadata={**ack_metadata, "duration_seconds": duration})
-            if re.sub(r"\s+", " ", ack_response).strip() != "ACK HTML 8/8":
+            if re.sub(r"\s+", " ", ack_response).strip() != "ACK HTML 1/1":
                 state["status"] = "interrupted"
                 state["last_error"] = {"at_utc": _now(), "part": "final acknowledgment", "error": "Unexpected acknowledgment response."}
                 _atomic_json(state_path, state)
-                raise RuntimeError("Final part was saved, but ChatGPT did not return the exact final acknowledgment.")
+                raise RuntimeError("HTML response was saved, but ChatGPT did not return the exact final acknowledgment.")
             state["pending_turn"] = None
         state["complete"] = True
         state["status"] = "chunks_complete"

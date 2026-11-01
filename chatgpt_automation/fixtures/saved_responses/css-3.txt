@@ -1,9 +1,0 @@
-RUN TOKEN: fixture-run-token
-CSS PART 3 OF 4
-```css
-/* CSS PART 3 OF 4 */
-.content-section { padding: 4rem 8vw; }
-.service-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
-.contact form { display: grid; gap: 1rem; max-width: 40rem; }
-footer { padding: 3rem 8vw; color: white; background: var(--ink); }
-```

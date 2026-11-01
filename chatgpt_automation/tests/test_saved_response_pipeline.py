@@ -25,6 +25,26 @@ REQUEST = (
 
 
 class SavedResponsePipelineTest(unittest.TestCase):
+    def test_html_preview_fence_is_rejected(self):
+        with tempfile.TemporaryDirectory(prefix="chatgpt-html-fence-") as temporary:
+            root = Path(temporary)
+            run = root / "candidate"
+            run.mkdir()
+            response = root / "response.txt"
+            response.write_text(
+                "RUN TOKEN: fixture-run-token\nHTML PART 1 OF 1\n"
+                "```html\n<!-- HTML PART 1 OF 1 -->\n<p>complete document</p>\n```\n",
+                encoding="utf-8",
+            )
+            result = subprocess.run([
+                sys.executable,
+                str(SCRIPTS / "capture_chunk.py"),
+                str(run), str(response), "--kind", "html", "--part", "1",
+                "--chat-id", CHAT_ID, "--run-token", RUN_TOKEN,
+            ], capture_output=True, text=True, encoding="utf-8")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("expected a text fence", result.stderr)
+
     def test_saved_responses_assemble_inline_and_pass_structural_gate(self):
         with tempfile.TemporaryDirectory(prefix="chatgpt-fixture-") as temporary:
             run = Path(temporary) / "candidate"
@@ -43,7 +63,7 @@ class SavedResponsePipelineTest(unittest.TestCase):
                 }],
             }, indent=2), encoding="utf-8")
 
-            parts = [("css", number) for number in range(1, 5)] + [("html", number) for number in range(1, 9)]
+            parts = [("css", 1), ("html", 1)]
             for kind, number in parts:
                 response = FIXTURES / f"{kind}-{number}.txt"
                 self.assertTrue(response.is_file(), f"missing saved fixture {response.name}")
@@ -76,7 +96,7 @@ class SavedResponsePipelineTest(unittest.TestCase):
             ], check=True, capture_output=True, text=True, encoding="utf-8")
             report = json.loads(result.stdout)
             self.assertTrue(report["automated_success"], report["blocking_failures"])
-            self.assertEqual(len(json.loads((run / "chunks" / "capture_manifest.json").read_text(encoding="utf-8"))["parts"]), 12)
+            self.assertEqual(len(json.loads((run / "chunks" / "capture_manifest.json").read_text(encoding="utf-8"))["parts"]), 2)
             self.assertTrue(inlined_file.is_file())
             self.assertIn("<style>", inlined_file.read_text(encoding="utf-8"))
             self.assertNotIn('href="styles.css"', inlined_file.read_text(encoding="utf-8"))
@@ -94,7 +114,7 @@ class SavedResponsePipelineTest(unittest.TestCase):
                 self.assertIsNotNone(match, prompt)
                 kind, number = match.group(1).lower(), int(match.group(2))
                 calls.append((kind, number))
-                return (FIXTURES / f"{kind}-{number}.txt").read_text(encoding="utf-8")
+                return (FIXTURES / f"{kind}-1.txt").read_text(encoding="utf-8")
 
             common = {
                 "run_folder": run,
@@ -109,24 +129,16 @@ class SavedResponsePipelineTest(unittest.TestCase):
             self.assertEqual(first["accepted_parts"], ["css-1"])
             self.assertEqual(first["staged_until"], "css-1")
 
-            css_done = run_website_chunks(**common, stop_after="css-4")
-            self.assertEqual(css_done["accepted_parts"], [f"css-{n}" for n in range(1, 5)])
-
-            first_html = run_website_chunks(**common, stop_after="html-1")
-            self.assertEqual(len(first_html["accepted_parts"]), 5)
-            self.assertEqual(first_html["accepted_parts"][-1], "html-1")
-
-            html_done = run_website_chunks(**common, stop_after="html-8")
-            self.assertEqual(len(html_done["accepted_parts"]), 12)
-            self.assertEqual(html_done["accepted_parts"][-1], "html-8")
-            self.assertEqual(calls, [("css", 1), *(('css', n) for n in range(2, 5)), ("html", 1), *(('html', n) for n in range(2, 9))])
+            html_done = run_website_chunks(**common, stop_after="html-1")
+            self.assertEqual(html_done["accepted_parts"], ["css-1", "html-1"])
+            self.assertEqual(calls, [("css", 1), ("html", 1)])
             self.assertEqual(html_done["conversation_url"], "https://chatgpt.com/uc/fixture-conversation")
             self.assertFalse(html_done.get("complete", False))
             transcript = [json.loads(line) for line in (run / "conversation_transcript.jsonl").read_text(encoding="utf-8").splitlines()]
             self.assertIn("DIAGNOSTIC CONTEXT", transcript[0]["text"])
 
             with self.assertRaisesRegex(RuntimeError, "context mode differs"):
-                run_website_chunks(**{**common, "context_mode": "source"}, stop_after="html-8")
+                run_website_chunks(**{**common, "context_mode": "source"}, stop_after="html-1")
 
     def test_minimal_context_does_not_require_or_include_csv_business_facts(self):
         with tempfile.TemporaryDirectory(prefix="chatgpt-minimal-context-") as temporary:

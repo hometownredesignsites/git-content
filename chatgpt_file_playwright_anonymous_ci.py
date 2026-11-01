@@ -65,10 +65,7 @@ def restore_newest_code_block_fences(page, response_text: str, kind: str, part: 
             "normalization_error": f"Expected a rendered {expected_language} code block.",
         }
     code = code_block.inner_text().strip("\r\n")
-    expected_marker = (
-        f"/* CSS PART {part} OF 4 */" if kind == "css"
-        else f"<!-- HTML PART {part} OF 8 -->"
-    )
+    expected_marker = "/* CSS PART 1 OF 1 */" if kind == "css" else "<!-- HTML PART 1 OF 1 -->"
     marker = re.search(rf"(?m)^[ \t]*{re.escape(expected_marker)}[ \t]*$", code)
     if not marker:
         return response_text, {
@@ -214,7 +211,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--error-screenshot", default="chatgpt_playwright_error.png")
     parser.add_argument("--chunks", type=int, default=1)
     parser.add_argument("--chunk-mode", choices=["none", "map_reduce", "finalize_on_last_chunk", "legacy"], default="none")
-    parser.add_argument("--website-run-folder", help="Enable 4-CSS/8-HTML website capture in this same ChatGPT session")
+    parser.add_argument("--website-run-folder", help="Enable full CSS/HTML website capture in this same ChatGPT session")
     parser.add_argument("--website-chat-id", help="Stable candidate conversation key used by the chunk manifest")
     parser.add_argument("--website-run-token", help="Resume token from the candidate checkpoint; generated when omitted")
     parser.add_argument("--website-quality-request", help="Short source-grounded request used to select QA sections")
@@ -226,7 +223,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--website-stop-after",
-        choices=[*(f"css-{number}" for number in range(1, 5)), *(f"html-{number}" for number in range(1, 9))],
+        choices=["css-1", "html-1"],
         help="Stop after validating this part and save the conversation checkpoint for the next ladder stage",
     )
     return parser.parse_args()
@@ -325,7 +322,7 @@ def run() -> int:
                     )
                     if not expected_part:
                         if re.fullmatch(
-                            r"HTML PART 8 OF 8 was validated and saved\. Reply exactly: ACK HTML 8/8",
+                            r"HTML PART 1 OF 1 was validated and saved\. Reply exactly: ACK HTML 1/1",
                             turn_text.strip(),
                             re.IGNORECASE,
                         ):
