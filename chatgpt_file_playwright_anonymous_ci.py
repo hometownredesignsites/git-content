@@ -15,7 +15,7 @@ from playwright_runner.chunk_orchestrator import run_chunk_plan
 from playwright_runner.diagnostics import enable_network_logging, save_failure_diagnostics
 from playwright_runner.prompt_contracts import build_prompt_text, extract_json_payload
 from playwright_runner.recovery import refresh_chat, start_new_chat_if_available
-from playwright_runner.stage_runner import run_stage_once, write_stage_outputs
+from playwright_runner.stage_runner import EmptyAssistantResponseError, run_stage_once, write_stage_outputs
 from playwright_runner.browser_session import assistant_turns, find_chat_composer
 from chatgpt_automation.scripts.website_chunks import CSS_PART_COUNT, HTML_PART_COUNT, WebsiteTurnError, run_website_chunks
 
@@ -306,6 +306,12 @@ def run() -> int:
                             raise WebsiteTurnError(
                                 after_error["classification"],
                                 f"ChatGPT page became unavailable during the turn: {after_error['classification']}; {error}",
+                                after_error,
+                            ) from error
+                        if isinstance(error, EmptyAssistantResponseError):
+                            raise WebsiteTurnError(
+                                "empty_response",
+                                "The assistant response was empty while the ChatGPT page remained available.",
                                 after_error,
                             ) from error
                         raise

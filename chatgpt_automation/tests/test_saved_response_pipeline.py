@@ -121,6 +121,41 @@ class SavedResponsePipelineTest(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("expected a text fence", result.stderr)
 
+    def test_empty_response_retries_same_chunk_once(self):
+        with tempfile.TemporaryDirectory(prefix="chatgpt-empty-retry-") as temporary:
+            run = Path(temporary) / "candidate"
+            prompts = []
+
+            def exchange(prompt):
+                prompts.append(prompt)
+                if len(prompts) == 1:
+                    raise WebsiteTurnError(
+                        "empty_response",
+                        "No assistant response was captured.",
+                        {"classification": "ready"},
+                    )
+                return (FIXTURES / "css-1.txt").read_text(encoding="utf-8")
+
+            result = run_website_chunks(
+                run_folder=run,
+                chat_id=CHAT_ID,
+                source_facts_and_design_brief="Synthetic retry brief.",
+                exchange=exchange,
+                run_token=RUN_TOKEN,
+                context_mode="minimal",
+                stop_after="css-1",
+            )
+
+            self.assertEqual(result["accepted_parts"], ["css-1"])
+            self.assertEqual(len(prompts), 2)
+            self.assertIn("Now produce exactly CSS PART 1 OF 3", prompts[0])
+            self.assertIn("produced no capturable response", prompts[1])
+            transcript = [
+                json.loads(line)
+                for line in (run / "conversation_transcript.jsonl").read_text(encoding="utf-8").splitlines()
+            ]
+            self.assertEqual([turn["metadata"]["attempt"] for turn in transcript if turn["role"] == "user"], [1, 2])
+
     def test_saved_responses_assemble_inline_and_pass_structural_gate(self):
         with tempfile.TemporaryDirectory(prefix="chatgpt-fixture-") as temporary:
             run = Path(temporary) / "candidate"

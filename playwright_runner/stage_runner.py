@@ -16,6 +16,10 @@ from .prompt_contracts import extract_json_payload
 from .recovery import click_retry_if_visible, refresh_chat
 
 
+class EmptyAssistantResponseError(RuntimeError):
+    """The submitted turn produced no capturable assistant response."""
+
+
 def run_stage_once(
     page,
     timeout_ms: int,
@@ -100,7 +104,7 @@ def run_stage_once(
             before_body_text=before_body_text,
         )
         if not response_text:
-            raise RuntimeError("Assistant response was empty for stage submission.")
+            raise EmptyAssistantResponseError("Assistant response was empty for stage submission.")
         refreshed = stabilize_response(
             page,
             assistant_messages,

@@ -170,6 +170,15 @@ def _repair_prompt(kind: str, number: int, token: str, error: str, context_mode:
     )
 
 
+def _empty_response_retry_prompt(original_prompt: str, label: str) -> str:
+    return (
+        f"The previous turn for {label} produced no capturable response. Please resend the complete requested part now. "
+        "Follow the original requirements exactly, including its run token, visible part label, single code fence, "
+        "and first-line marker. Do not add an acknowledgment or explanation.\n\n"
+        f"Original request:\n{original_prompt}"
+    )
+
+
 def _append_turn(transcript: Path, *, role: str, text: str, part: str, metadata: dict[str, Any] | None = None) -> None:
     transcript.parent.mkdir(parents=True, exist_ok=True)
     item = {"at_utc": _now(), "role": role, "part": part, "text": text}
@@ -324,6 +333,16 @@ def run_website_chunks(
             if current_pending and current_pending.get("kind") == kind and current_pending.get("part") == number
             else 1
         )
+        format_repair_used = bool(
+            current_pending.get("format_repair_used", current_attempt > 1)
+            if current_pending and current_pending.get("kind") == kind and current_pending.get("part") == number
+            else False
+        )
+        empty_response_retry_used = bool(
+            current_pending.get("empty_response_retry_used", False)
+            if current_pending and current_pending.get("kind") == kind and current_pending.get("part") == number
+            else False
+        )
         while True:
             _append_turn(transcript, role="user", text=prompt, part=label,
                          metadata={"attempt": current_attempt, "repair": current_attempt > 1})
@@ -342,6 +361,33 @@ def run_website_chunks(
             try:
                 raw_response, metadata = _response_text(exchange(prompt))
             except Exception as error:
+                if (
+                    getattr(error, "failure_class", None) == "empty_response"
+                    and not empty_response_retry_used
+                ):
+                    empty_response_retry_used = True
+                    current_attempt += 1
+                    prompt = _empty_response_retry_prompt(prompt, label)
+                    state["last_error"] = {
+                        "at_utc": _now(),
+                        "part": label,
+                        "attempt": current_attempt - 1,
+                        "classification": "empty_response_retry",
+                        "error": str(error),
+                        "page_observation": getattr(error, "observation", {}),
+                    }
+                    state["pending_turn"] = {
+                        "kind": kind,
+                        "part": number,
+                        "attempt": current_attempt,
+                        "prompt": prompt,
+                        "format_repair_used": format_repair_used,
+                        "empty_response_retry_used": empty_response_retry_used,
+                        "started_at_utc": _now(),
+                    }
+                    state["status"] = "retrying_empty_response"
+                    _atomic_json(state_path, state)
+                    continue
                 if conversation_url:
                     state["conversation_url"] = conversation_url()
                 state["last_error"] = {
@@ -381,17 +427,20 @@ def run_website_chunks(
                 "error": rejection,
                 "response_metadata": metadata,
             }
-            if current_attempt >= 2:
+            if format_repair_used:
                 state["status"] = "interrupted"
                 _atomic_json(state_path, state)
                 raise RuntimeError(f"Rejected {label} after one repair attempt; no next part was requested. {rejection}")
             prompt = _repair_prompt(kind, number, token, rejection, context_mode=context_mode)
+            format_repair_used = True
             current_attempt += 1
             state["pending_turn"] = {
                 "kind": kind,
                 "part": number,
                 "attempt": current_attempt,
                 "prompt": prompt,
+                "format_repair_used": format_repair_used,
+                "empty_response_retry_used": empty_response_retry_used,
                 "started_at_utc": _now(),
             }
             state["status"] = "repairing_part"
