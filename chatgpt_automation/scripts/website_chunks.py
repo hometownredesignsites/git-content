@@ -76,7 +76,8 @@ def _part_prompt(
             "one coherent desktop composition, responsive mobile rules, visible keyboard focus, and reduced-motion support. "
             "Establish clear reusable class names that the following HTML response can follow. "
             "Do not add styles for sections or interactions the page does not contain. Prefer reusable selectors over "
-            "repeating near-identical rules; avoid ornamental effects that do not improve hierarchy or usability."
+            "repeating near-identical rules; avoid ornamental effects that do not improve hierarchy or usability. "
+            "The code block must contain actual CSS selectors and declarations; a token or part label alone is invalid."
         )
     else:
         task = (
@@ -114,13 +115,17 @@ def _repair_prompt(kind: str, number: int, token: str, error: str, context_mode:
     marker = "/* CSS PART 1 OF 1 */" if kind == "css" else "<!-- HTML PART 1 OF 1 -->"
     fence = "css" if kind == "css" else "text"
     continuation = "Keep the fictional diagnostic website consistent. " if context_mode == "minimal" else "Keep the source-grounded website consistent and do not invent facts. "
+    css_content = (
+        "Include actual CSS selectors and declarations in the code block; a token or part label alone is invalid. "
+        if kind == "css" else ""
+    )
     diagnostic = (
-        "Return actual CSS declarations in the block; do not answer with only the token and part label. "
+        "Keep the CSS compact while including actual declarations. "
         if kind == "css" and context_mode == "minimal" else ""
     )
     return (
         f"Your previous response for {label} was rejected: {error[:240]}\n"
-        f"Repair it now. {continuation}{diagnostic}State `RUN TOKEN: {token}` and `{label}` outside the code block. "
+        f"Repair it now. {continuation}{css_content}{diagnostic}State `RUN TOKEN: {token}` and `{label}` outside the code block. "
         f"Return exactly one fenced `{fence}` code block; its first nonblank line must be `{marker}`. "
         "Do not add any other code blocks. For HTML use a `text` fence, never an HTML preview block."
     )
