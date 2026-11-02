@@ -250,7 +250,7 @@ jobs:
                 --metadata-output-file "$RUN_DIR/debug/runner_metadata.json" \
                 --website-run-folder "$RUN_DIR" \
                 --website-chat-id "$CHAT_ID" \
-                --website-quality-request "Include only sections supported by the source pages. Preserve the source contact form's purpose and fields when present. Use relevant imagery." \
+                --website-quality-request "Include only sections supported by the source pages. Preserve the source contact form's purpose and fields when present. Use relevant imagery. The hero must use a full-bleed image spanning the full viewport width, not a half-width split column. Place the headline and calls to action over the image with a contrast treatment that keeps text readable, and use a deliberate crop. Keep this full-width image treatment on mobile." \
                 --url "$CHAT_URL" \
                 --user-data-dir "$PROFILE" \
                 --wait-seconds 60 \
