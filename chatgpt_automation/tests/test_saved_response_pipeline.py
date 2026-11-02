@@ -58,7 +58,7 @@ class SavedResponsePipelineTest(unittest.TestCase):
             self.assertIn("exactly one fenced code block", text)
         self.assertIn("four ordered CSS parts", instructions)
         self.assertIn("Define the reusable class names", css)
-        self.assertIn("actual CSS selectors and declarations", css)
+        self.assertIn("actual selectors and declarations", css)
         self.assertIn("reduced-motion support", css4)
         self.assertNotIn("SOURCE FACTS AND DESIGN BRIEF", css4)
         self.assertIn("Do not produce a source audit", css)
