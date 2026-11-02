@@ -432,6 +432,8 @@ def _browser_qa_result(session_dir):
         "hero_spans_viewport_desktop_and_mobile",
         "cta_visible_first_screen_desktop_and_mobile",
         "mobile_menu_clicks_work",
+        "mobile_menu_control_visible",
+        "mobile_menu_focus_indicator_visible",
         "mobile_menu_keyboard_works",
         "mobile_has_no_horizontal_overflow",
         "fonts_load_in_browser",
@@ -1078,6 +1080,8 @@ def assess_website(prompt, session_dir):
         "hero_spans_viewport_desktop_and_mobile",
         "cta_visible_first_screen_desktop_and_mobile",
         "mobile_menu_clicks_work",
+        "mobile_menu_control_visible",
+        "mobile_menu_focus_indicator_visible",
         "mobile_menu_keyboard_works",
         "mobile_has_no_horizontal_overflow",
         "fonts_load_in_browser",
@@ -1185,12 +1189,18 @@ def assess_website(prompt, session_dir):
 
     passed = sum(checks.values())
     total = len(checks)
-    # The source-code gate is deterministic. Browser execution and external
-    # image fetching remain advisory evidence until those checks are reliable
-    # enough to block a candidate.
+    # Browser-rendered geometry and remote asset results remain advisory. The
+    # mobile-menu visibility and keyboard checks are deterministic user-facing
+    # requirements, so keep them in the blocking automated gate.
+    blocking_browser_checks = {
+        "browser_mobile_menu_clicks_work",
+        "browser_mobile_menu_control_visible",
+        "browser_mobile_menu_focus_indicator_visible",
+        "browser_mobile_menu_keyboard_works",
+    }
     advisory_check_names = {
         name for name in checks
-        if name.startswith("browser_") or name in {
+        if (name.startswith("browser_") and name not in blocking_browser_checks) or name in {
             "hero_images_load_ok", "all_images_load_ok", "source_site_photos_load_ok"
         }
     }
@@ -1218,6 +1228,8 @@ def assess_website(prompt, session_dir):
         missing_sections.append("CTA buttons without arrow glyphs or arrow icons")
     if not checks["accessible_mobile_hamburger"]:
         missing_sections.append("accessible three-bar mobile navigation button")
+    if not all(checks[name] for name in blocking_browser_checks):
+        missing_sections.append("mobile menu visible, clickable, and keyboard accessible")
     if visual_design_review_status != "pass":
         missing_sections.append("screenshot-backed desktop/mobile visual design review")
     if source_image_urls and not checks.get("source_site_hero_photo_used"):

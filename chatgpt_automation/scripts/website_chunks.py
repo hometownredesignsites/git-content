@@ -90,7 +90,9 @@ def _part_prompt(
                 "then responsive overrides for all page sections, visible keyboard focus, and reduced-motion support. "
                 "Use the same tokens and naming system established in part 1. Include only source-supported components; "
                 "do not repeat earlier desktop rules. At mobile widths, hide the desktop link row and show the matching "
-                "accessible menu button; do not let navigation links clip or overflow. Make navigation and content usable "
+                "accessible menu button. Give its three direct aria-hidden bar spans explicit visible styling: each must "
+                "be a 20px by 2px block with background-color: currentColor, with the button arranging them vertically "
+                "and adding a small gap. Do not leave the bars dependent on default span styles. Do not let navigation links clip or overflow. Make navigation and content usable "
                 "on narrow screens."
             ),
         }

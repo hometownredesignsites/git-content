@@ -20,8 +20,9 @@ footer a { color: inherit; }
 :where(a, button, input, textarea):focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 @media (max-width: 760px) {
   .site-header { flex-wrap: wrap; gap: 1rem; }
-  .nav-menu { display: inline-flex; }
-  .primary-nav { flex-wrap: wrap; gap: .75rem 1rem; }
+  .menu-toggle { display: inline-flex; }
+  .primary-nav { display: none; flex-wrap: wrap; gap: .75rem 1rem; }
+  .primary-nav.is-open { display: flex; }
   .hero { grid-template-columns: 1fr; padding: 3rem 6vw; }
   .content-section { padding: 3rem 6vw; }
   .service-list, .project-grid { grid-template-columns: 1fr; }

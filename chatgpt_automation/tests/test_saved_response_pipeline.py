@@ -202,6 +202,24 @@ class SavedResponsePipelineTest(unittest.TestCase):
             subprocess.run([sys.executable, str(SCRIPTS / "inline_css.py"), str(html_file), str(css_file), str(inlined_file)],
                            check=True, capture_output=True, text=True, encoding="utf-8")
 
+            self.assertIn('.menu-toggle > span[aria-hidden="true"]', css_file.read_text(encoding="utf-8"))
+            browser_checks = {
+                "rendered_sections_visible_desktop_and_mobile": True,
+                "hero_spans_viewport_desktop_and_mobile": True,
+                "cta_visible_first_screen_desktop_and_mobile": True,
+                "mobile_menu_clicks_work": True,
+                "mobile_menu_control_visible": True,
+                "mobile_menu_focus_indicator_visible": True,
+                "mobile_menu_keyboard_works": True,
+                "mobile_has_no_horizontal_overflow": True,
+                "fonts_load_in_browser": True,
+                "images_load_in_browser": True,
+            }
+            (run / "debug" / "browser_qa.json").write_text(json.dumps({
+                "status": "pass", "checks": browser_checks,
+                "mobile_menu": {"escape_closes": True},
+            }), encoding="utf-8")
+
             result = subprocess.run([
                 sys.executable,
                 str(SCRIPTS / "check_website.py"),
@@ -210,6 +228,20 @@ class SavedResponsePipelineTest(unittest.TestCase):
             ], check=True, capture_output=True, text=True, encoding="utf-8")
             report = json.loads(result.stdout)
             self.assertTrue(report["automated_success"], report["blocking_failures"])
+            browser_checks["mobile_menu_control_visible"] = False
+            (run / "debug" / "browser_qa.json").write_text(json.dumps({
+                "status": "fail", "checks": browser_checks,
+                "mobile_menu": {"escape_closes": True},
+            }), encoding="utf-8")
+            failed_gate = subprocess.run([
+                sys.executable,
+                str(SCRIPTS / "check_website.py"),
+                str(run),
+                REQUEST,
+            ], capture_output=True, text=True, encoding="utf-8")
+            self.assertEqual(failed_gate.returncode, 2)
+            failed_report = json.loads(failed_gate.stdout)
+            self.assertIn("browser_mobile_menu_control_visible", failed_report["blocking_failures"])
             self.assertEqual(len(json.loads((run / "chunks" / "capture_manifest.json").read_text(encoding="utf-8"))["parts"]), 4)
             self.assertEqual(css_file.read_text(encoding="utf-8").count("CSS PART "), 2)
             self.assertTrue(inlined_file.is_file())

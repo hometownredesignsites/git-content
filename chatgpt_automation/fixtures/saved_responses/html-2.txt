@@ -42,13 +42,26 @@ HTML PART 2 OF 2
     <a href="#contact">Contact</a>
   </footer>
   <script>
-    const menuButton = document.querySelector('.nav-menu');
-    const navigation = document.getElementById('primary-nav');
+    const menuButton = document.querySelector('.menu-toggle');
+    const navigation = document.getElementById('primary-navigation');
     if (menuButton && navigation) {
+      const closeMenu = () => {
+        navigation.classList.remove('is-open');
+        menuButton.setAttribute('aria-expanded', 'false');
+        menuButton.setAttribute('aria-label', 'Open navigation menu');
+      };
       menuButton.addEventListener('click', () => {
         const expanded = menuButton.getAttribute('aria-expanded') === 'true';
         menuButton.setAttribute('aria-expanded', String(!expanded));
-        navigation.hidden = expanded;
+        navigation.classList.toggle('is-open', !expanded);
+        menuButton.setAttribute('aria-label', expanded ? 'Open navigation menu' : 'Close navigation menu');
+      });
+      navigation.addEventListener('click', event => { if (event.target.closest('a')) closeMenu(); });
+      document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && menuButton.getAttribute('aria-expanded') === 'true') {
+          closeMenu();
+          menuButton.focus();
+        }
       });
     }
   </script>

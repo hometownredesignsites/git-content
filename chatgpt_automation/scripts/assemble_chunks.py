@@ -12,6 +12,23 @@ HTML_PART_COUNT = 2
 EXPECTED = [("css", number) for number in range(1, CSS_PART_COUNT + 1)] + [("html", number) for number in range(1, HTML_PART_COUNT + 1)]
 
 
+MENU_TOGGLE_FALLBACK_CSS = """/* Keep the generated mobile menu icon visibly rendered. */
+.menu-toggle {
+  flex-direction: column;
+  gap: 4px;
+}
+
+.menu-toggle > span[aria-hidden=\"true\"] {
+  display: block;
+  width: 20px;
+  height: 2px;
+  flex: 0 0 2px;
+  border-radius: 2px;
+  background-color: currentColor;
+}
+"""
+
+
 def fail(message):
     raise SystemExit(f"assembly rejected: {message}")
 
@@ -58,7 +75,8 @@ def main():
         fail("assembled HTML does not end with </body></html>")
     files = run / "files"
     files.mkdir(parents=True, exist_ok=True)
-    (files / "styles.css").write_text("\n".join(css), encoding="utf-8")
+    assembled_css = "\n".join(css).rstrip() + "\n\n" + MENU_TOGGLE_FALLBACK_CSS
+    (files / "styles.css").write_text(assembled_css, encoding="utf-8")
     (files / "index.html").write_text(html_text, encoding="utf-8")
     print(json.dumps({"assembled": True, "chat_id": manifest.get("chat_id"), "css_parts": CSS_PART_COUNT, "html_parts": HTML_PART_COUNT,
                       "index_html_bytes": (files / "index.html").stat().st_size,

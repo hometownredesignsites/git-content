@@ -13,8 +13,8 @@ HTML PART 1 OF 2
 <body>
   <header class="site-header">
     <a href="#hero">Northstar Workshop</a>
-    <button class="nav-menu" type="button" aria-label="Open navigation menu" aria-controls="primary-nav" aria-expanded="false"><span class="nav-bar"></span><span class="nav-bar"></span><span class="nav-bar"></span></button>
-    <nav class="primary-nav" id="primary-nav" aria-label="Primary navigation"><a href="#services">Services</a><a href="#contact">Contact</a></nav>
+    <button class="menu-toggle" type="button" aria-label="Open navigation menu" aria-controls="primary-navigation" aria-expanded="false"><span aria-hidden="true"></span><span aria-hidden="true"></span><span aria-hidden="true"></span></button>
+    <nav class="primary-nav" id="primary-navigation" aria-label="Primary navigation"><a href="#services">Services</a><a href="#contact">Contact</a></nav>
   </header>
   <main>
     <section class="hero" id="hero">
