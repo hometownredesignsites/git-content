@@ -1,0 +1,387 @@
+RUN TOKEN: b6d357c06fb558a7
+
+HTML PART 1 OF 2
+```text
+<!-- HTML PART 1 OF 2 -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#192f2c">
+  <meta name="description" content="Josh Brooks Construction and Renovation Inc. Licensed general contractor serving Longmont, Colorado. Roofing, remodeling and hail restoration.">
+  <title>Josh Brooks Construction & Renovation | Longmont, Colorado</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container header-inner">
+
+      <a class="brand" href="#home" aria-label="Josh Brooks Construction and Renovation home">
+        <img
+          src="https://joshbrooksconstructionllc.com/wp-content/uploads/2026/04/IMG_20251112_220214_251.webp?w=400&ssl=1"
+          alt="Josh Brooks Construction and Renovation Inc. logo"
+          width="74"
+          height="66"
+        >
+        <span class="brand-copy">
+          <span class="brand-name">Josh Brooks Construction</span>
+          <span class="brand-description">Construction &amp; Renovation Inc.</span>
+        </span>
+      </a>
+
+      <button
+        class="menu-toggle"
+        type="button"
+        aria-label="Open navigation menu"
+        aria-controls="primary-navigation"
+        aria-expanded="false"
+      >
+        <span aria-hidden="true"></span>
+        <span aria-hidden="true"></span>
+        <span aria-hidden="true"></span>
+      </button>
+
+      <nav class="main-nav" id="primary-navigation" aria-label="Main navigation">
+        <a href="#about">About</a>
+        <a href="#roofing">Roofing</a>
+        <a href="#process">The Process</a>
+        <a href="#projects">Our Work</a>
+        <a class="button button--primary" href="#contact">
+          Request an Estimate <span class="button-arrow" aria-hidden="true">→</span>
+        </a>
+      </nav>
+
+    </div>
+  </header>
+
+  <main id="home">
+
+    <!-- HERO -->
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="container hero-inner">
+        <div class="hero-content">
+
+          <span class="eyebrow">Longmont, Colorado · Licensed General Contractor</span>
+
+          <h1 id="hero-title">
+            Your home deserves
+            <span>work done right.</span>
+          </h1>
+
+          <p class="hero-description">
+            From roofing and hail restoration to home remodeling,
+            Josh Brooks Construction brings your project together
+            under one experienced general contractor.
+          </p>
+
+          <div class="hero-actions">
+            <a class="button button--primary" href="#contact">
+              Get a Free Estimate
+              <span class="button-arrow" aria-hidden="true">→</span>
+            </a>
+            <a class="button button--outline" href="tel:7208287997">
+              Call (720) 828-7997
+            </a>
+          </div>
+
+          <p class="hero-note">
+            One general contractor. Your project, start to finish.
+          </p>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- EXPERIENCE AND COMPANY FACTS -->
+    <section class="trust-strip" aria-label="Company experience">
+      <div class="container trust-inner">
+
+        <div class="trust-item">
+          <span class="trust-number">2014</span>
+          <span class="trust-label">Company founded</span>
+        </div>
+
+        <div class="trust-item">
+          <span class="trust-number">30 Years</span>
+          <span class="trust-label">Owner's construction experience</span>
+        </div>
+
+        <div class="trust-item">
+          <span class="trust-number">One GC</span>
+          <span class="trust-label">Project management start to finish</span>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ABOUT / WHY CHOOSE JOSH BROOKS -->
+    <section class="section why-section" id="about" aria-labelledby="why-title">
+      <div class="container why-layout">
+
+        <div class="why-image-wrap">
+          <img
+            class="why-image"
+            src="https://joshbrooksconstructionllc.com/wp-content/uploads/2026/10/longmont-bathroom-remodel-soaking-tub-lit-niches-brass-trim-1024x768.jpg"
+            alt="Completed Longmont bathroom renovation with tiled soaking tub, illuminated niches and brass trim"
+            loading="lazy"
+          >
+          <span class="why-image-accent" aria-hidden="true"></span>
+        </div>
+
+        <div class="why-content">
+          <span class="eyebrow">A more coordinated approach</span>
+
+          <h2 id="why-title">
+            One contractor. From the first step to the finish.
+          </h2>
+
+          <div class="section-rule" aria-hidden="true"></div>
+
+          <p>
+            Josh Brooks Construction and Renovation Inc. is a licensed
+            general contractor based in Longmont, Colorado. Founded in
+            2014, the company brings together decades of construction
+            experience and hands-on project oversight.
+          </p>
+
+          <p>
+            Josh Brooks has 30 years of experience in construction.
+            Every project is managed from start to finish as your
+            general contractor.
+          </p>
+
+          <div class="why-points">
+
+            <article class="why-point">
+              <h3>Experienced leadership</h3>
+              <p>
+                Your project benefits from the owner's 30 years
+                of construction experience.
+              </p>
+            </article>
+
+            <article class="why-point">
+              <h3>One project lead</h3>
+              <p>
+                We manage the job from beginning to completion
+                as your general contractor.
+              </p>
+            </article>
+
+            <article class="why-point">
+              <h3>Residential projects</h3>
+              <p>
+                Roofing, remodeling and hail restoration
+                are part of our work.
+              </p>
+            </article>
+
+            <article class="why-point">
+              <h3>Direct project relationships</h3>
+              <p>
+                We work directly with property owners, not
+                as subcontractors for other GCs or self-GC jobs.
+              </p>
+            </article>
+
+          </div>
+
+          <div class="why-cta">
+            <a class="button button--dark" href="#contact">
+              Talk About Your Project
+              <span class="button-arrow" aria-hidden="true">→</span>
+            </a>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ROOFING AND HAIL RESTORATION -->
+    <section class="section roof-section" id="roofing" aria-labelledby="roof-title">
+      <div class="container roof-layout">
+
+        <div class="roof-content">
+          <span class="eyebrow">Roofing &amp; hail restoration</span>
+
+          <h2 id="roof-title">
+            Does your roof need attention?
+          </h2>
+
+          <p>
+            Colorado weather can leave homeowners with questions
+            about the condition of their roofs. Whether you're
+            assessing storm damage or considering a roof replacement,
+            start with a conversation about your property.
+          </p>
+
+          <div class="roof-signs" aria-label="Roofing concerns">
+            <div class="roof-sign">Visible roof damage</div>
+            <div class="roof-sign">Hail or storm concerns</div>
+            <div class="roof-sign">Roof replacement planning</div>
+            <div class="roof-sign">Questions about next steps</div>
+          </div>
+
+          <div class="why-cta">
+            <a class="button button--primary" href="sms:7204535095">
+              Text Photos of Damage
+              <span class="button-arrow" aria-hidden="true">→</span>
+            </a>
+          </div>
+        </div>
+
+        <figure class="roof-image-wrap">
+          <img
+            class="roof-image"
+            src="https://joshbrooksconstructionllc.com/wp-content/uploads/2026/09/finished-roof-ridge-thornton-co-768x1024.jpg"
+            alt="Completed Owens Corning Estate Gray roof in a Thornton, Colorado neighborhood"
+            loading="lazy"
+          >
+          <figcaption class="roof-image-caption">
+            Completed Estate Gray roofing project · Thornton, Colorado
+          </figcaption>
+        </figure>
+
+      </div>
+    </section>
+
+    <!-- ROOFING PROCESS -->
+    <section class="section guide-section" id="process" aria-labelledby="guide-title">
+      <div class="container guide-layout">
+
+        <div class="guide-heading">
+          <span class="eyebrow">A homeowner's guide</span>
+
+          <h2 id="guide-title">
+            How do you get a new roof in Colorado?
+          </h2>
+
+          <div class="section-rule" aria-hidden="true"></div>
+
+          <p>
+            Starting a roofing project begins with understanding
+            your property and what work it needs.
+          </p>
+
+          <a class="button button--outline-dark" href="#contact">
+            Discuss Your Roof
+            <span class="button-arrow" aria-hidden="true">→</span>
+          </a>
+        </div>
+
+        <div class="guide-steps">
+
+          <article class="guide-step">
+            <span class="guide-step-number" aria-hidden="true">01</span>
+            <div>
+              <h3>Start with your roof</h3>
+              <p>
+                Share what you've noticed, whether it's visible
+                damage, a recent storm or a roof that's ready
+                for replacement.
+              </p>
+            </div>
+          </article>
+
+          <article class="guide-step">
+            <span class="guide-step-number" aria-hidden="true">02</span>
+            <div>
+              <h3>Discuss the project</h3>
+              <p>
+                Talk through your property's needs and the roofing
+                work you're considering with your general contractor.
+              </p>
+            </div>
+          </article>
+
+          <article class="guide-step">
+            <span class="guide-step-number" aria-hidden="true">03</span>
+            <div>
+              <h3>Understand the scope</h3>
+              <p>
+                Establish what the project involves and the work
+                needed to move forward.
+              </p>
+            </div>
+          </article>
+
+          <article class="guide-step">
+            <span class="guide-step-number" aria-hidden="true">04</span>
+            <div>
+              <h3>Manage the project through completion</h3>
+              <p>
+                Josh Brooks Construction runs every job from
+                start to finish as your general contractor.
+              </p>
+            </div>
+          </article>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- RECENT PROJECTS -->
+    <section class="section projects-section" id="projects" aria-labelledby="projects-title">
+      <div class="container">
+
+        <div class="projects-heading">
+          <div class="section-heading">
+            <span class="eyebrow">Recent work</span>
+            <h2 id="projects-title">
+              Which project looks like your home?
+            </h2>
+          </div>
+
+          <p>
+            A look at roofing and renovation work completed
+            by Josh Brooks Construction and Renovation Inc.
+          </p>
+        </div>
+
+        <div class="projects-grid">
+
+          <article class="project-card">
+            <img
+              src="https://joshbrooksconstructionllc.com/wp-content/uploads/2026/09/finished-roof-ridge-thornton-co-768x1024.jpg"
+              alt="Completed Owens Corning Estate Gray residential roof in Thornton, Colorado"
+              loading="lazy"
+            >
+            <div class="project-overlay">
+              <span class="project-category">Roofing</span>
+              <h3 class="project-title">Estate Gray Roof</h3>
+              <span class="project-location">Thornton, Colorado</span>
+            </div>
+          </article>
+
+          <article class="project-card">
+            <img
+              src="https://joshbrooksconstructionllc.com/wp-content/uploads/2026/10/longmont-bathroom-remodel-soaking-tub-lit-niches-brass-trim-1024x768.jpg"
+              alt="Finished bathroom remodel with soaking tub, tiled deck and illuminated niches"
+              loading="lazy"
+            >
+            <div class="project-overlay">
+              <span class="project-category">Bathroom remodeling</span>
+              <h3 class="project-title">Bathroom Renovation</h3>
+              <span class="project-location">Longmont, Colorado</span>
+            </div>
+          </article>
+
+          <article class="project-card">
+            <img
+              src="https://joshbrooksconstructionllc.com/wp-content/uploads/2026/08/kitchen-island-granite-before-erie-co-sm.jpg"
+              alt="Kitchen island with granite countertop before remodeling"
+              loading="lazy"
+            >
+            <div class="project-overlay">
+              <span class="project-category">Kitchen remodeling</span>
+              <h3 class="project-title">Kitchen Island</h3>
+              <span class="project-location">Erie, Colorado · Before remodel</span>
+            </div>
+          </article>
+
+        </div>
+      </div>
+    </section>
+```

@@ -1,0 +1,173 @@
+{
+  "status": "fail",
+  "tested_file": "files/inlined/index.html",
+  "required_sections": [
+    "contact",
+    "footer",
+    "hero"
+  ],
+  "viewports": {
+    "desktop": {
+      "width": 1440,
+      "height": 900,
+      "sections": {
+        "contact": {
+          "visible": true,
+          "selector_hint": "span.contact-method-label",
+          "width": 109,
+          "height": 17
+        },
+        "footer": {
+          "visible": true,
+          "selector_hint": "footer.site-footer",
+          "width": 1440,
+          "height": 396
+        },
+        "hero": {
+          "visible": true,
+          "selector_hint": "section.hero",
+          "width": 1440,
+          "height": 734
+        }
+      },
+      "all_required_sections_visible": true,
+      "hero": {
+        "present": true,
+        "left": 0,
+        "right": 1440,
+        "width": 1440,
+        "height": 734,
+        "viewport_width": 1440,
+        "spans_viewport": true,
+        "media_covers_hero": true
+      },
+      "hero_spans_viewport": true,
+      "cta": {
+        "visible_first_screen": true,
+        "text": "Request an Estimate",
+        "bottom": 73
+      },
+      "cta_visible_first_screen": true,
+      "horizontal_overflow": {
+        "scroll_width": 1440,
+        "viewport_width": 1440,
+        "overflow": false
+      },
+      "no_horizontal_overflow": true,
+      "images": {
+        "image_count": 7,
+        "loaded_images": 7,
+        "failed_images": [],
+        "font_status": "loaded",
+        "loaded_faces": 0,
+        "failed_faces": 0
+      },
+      "images_loaded": true,
+      "fonts": {
+        "image_count": 7,
+        "loaded_images": 7,
+        "failed_images": [],
+        "font_status": "loaded",
+        "loaded_faces": 0,
+        "failed_faces": 0
+      },
+      "fonts_loaded": true,
+      "resource_errors": [],
+      "screenshot": "screenshots/desktop.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "sections": {
+        "contact": {
+          "visible": true,
+          "selector_hint": "span.contact-method-label",
+          "width": 109,
+          "height": 17
+        },
+        "footer": {
+          "visible": true,
+          "selector_hint": "footer.site-footer",
+          "width": 390,
+          "height": 526
+        },
+        "hero": {
+          "visible": true,
+          "selector_hint": "section.hero",
+          "width": 390,
+          "height": 679
+        }
+      },
+      "all_required_sections_visible": true,
+      "hero": {
+        "present": true,
+        "left": 0,
+        "right": 390,
+        "width": 390,
+        "height": 679,
+        "viewport_width": 390,
+        "spans_viewport": true,
+        "media_covers_hero": true
+      },
+      "hero_spans_viewport": true,
+      "cta": {
+        "visible_first_screen": true,
+        "text": "Get a Free Estimate",
+        "bottom": 531
+      },
+      "cta_visible_first_screen": true,
+      "horizontal_overflow": {
+        "scroll_width": 390,
+        "viewport_width": 390,
+        "overflow": false
+      },
+      "no_horizontal_overflow": true,
+      "images": {
+        "image_count": 7,
+        "loaded_images": 7,
+        "failed_images": [],
+        "font_status": "loaded",
+        "loaded_faces": 0,
+        "failed_faces": 0
+      },
+      "images_loaded": true,
+      "fonts": {
+        "image_count": 7,
+        "loaded_images": 7,
+        "failed_images": [],
+        "font_status": "loaded",
+        "loaded_faces": 0,
+        "failed_faces": 0
+      },
+      "fonts_loaded": true,
+      "resource_errors": [],
+      "screenshot": "screenshots/mobile.png"
+    }
+  },
+  "mobile_menu": {
+    "found": true,
+    "error": "Page.evaluate: TypeError: Cannot read properties of undefined (reading 'querySelectorAll')\n    at eval (eval at evaluate (:290:30), <anonymous>:12:34)\n    at UtilityScript.evaluate (<anonymous>:297:18)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+    "click_opens": false,
+    "click_closes": false,
+    "control_visible": false,
+    "tab_reachable": false,
+    "enter_opens": false,
+    "space_toggles": false,
+    "escape_closes": false,
+    "focus_indicator_visible": false,
+    "pass": false
+  },
+  "checks": {
+    "rendered_sections_visible_desktop_and_mobile": true,
+    "hero_spans_viewport_desktop_and_mobile": true,
+    "cta_visible_first_screen_desktop_and_mobile": true,
+    "mobile_menu_clicks_work": false,
+    "mobile_menu_control_visible": false,
+    "mobile_menu_focus_indicator_visible": false,
+    "mobile_menu_keyboard_works": false,
+    "mobile_has_no_horizontal_overflow": true,
+    "fonts_load_in_browser": true,
+    "images_load_in_browser": true
+  },
+  "resource_errors": []
+}
