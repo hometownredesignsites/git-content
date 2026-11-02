@@ -39,42 +39,37 @@ def build_prompts(token: str) -> list[tuple[str, str, int, str]]:
     for part, focus in enumerate([
         "Define a small neutral palette and readable base typography.",
         "Style a compact site header and one primary button.",
-        "Style a simple content section with a two-column desktop layout.",
-        "Add a mobile breakpoint and a visible keyboard focus style.",
+        "Style the content layout, mobile breakpoint, and visible keyboard focus state.",
     ], start=1):
         accepted = (
-            f"CSS PART {part - 1} OF 4 was validated and saved. Continue the same page; do not repeat it.\n"
+            f"CSS PART {part - 1} OF 3 was validated and saved. Continue the same page; do not repeat it.\n"
             if part > 1 else ""
         )
         prompt = (
             f"{accepted}Continue this tiny synthetic test page. {focus} Keep this response under 12 CSS rules.\n"
-            f"State `RUN TOKEN: {token}` and `CSS PART {part} OF 4` outside the code block. "
+            f"State `RUN TOKEN: {token}` and `CSS PART {part} OF 3` outside the code block. "
             f"Return exactly one fenced code block labeled `css`; its first nonblank line must be exactly "
-            f"`/* CSS PART {part} OF 4 */`. Do not add another code block."
+            f"`/* CSS PART {part} OF 3 */`. Do not add another code block."
         )
         prompts.append(("css", "css", part, prompt))
 
     html_sections = [
-        "Create the document shell, metadata, linked stylesheet, header, and hero. Do not close body or html yet.",
-        "Add a short organization overview section inside main.",
-        "Add a services section with a heading and two concise list items.",
-        "Add a proof section with one short quotation clearly labeled as sample content.",
-        "Add a process section with a heading and three ordered steps.",
-        "Add a contact section with a simple name and email form; do not claim it submits.",
-        "Add a secondary information section and navigation landmark; do not close body or html yet.",
-        "Add a footer, a short keyboard-accessible navigation script if needed, and close body and html.",
+        "Create the document shell, metadata, linked stylesheet, header, hero, and a short overview. Do not close body or html yet.",
+        "Add a services section with two concise list items and one clearly labeled sample quotation.",
+        "Add a process section and a simple name/email form; do not claim the form submits.",
+        "Add a secondary information section, navigation landmark, footer, and close body and html.",
     ]
     for part, focus in enumerate(html_sections, start=1):
         accepted = (
-            f"CSS PART 4 OF 4 was validated and saved. Continue the same page.\n"
+            f"CSS PART 3 OF 3 was validated and saved. Continue the same page.\n"
             if part == 1 else
-            f"HTML PART {part - 1} OF 8 was validated and saved. Continue the same page; do not repeat it.\n"
+            f"HTML PART {part - 1} OF 4 was validated and saved. Continue the same page; do not repeat it.\n"
         )
         prompt = (
             f"{accepted}Continue the same tiny synthetic test page and markup. {focus}\n"
-            f"State `RUN TOKEN: {token}` and `HTML PART {part} OF 8` outside the code block. "
+            f"State `RUN TOKEN: {token}` and `HTML PART {part} OF 4` outside the code block. "
             f"Return exactly one fenced code block labeled `text`; its first nonblank line must be exactly "
-            f"`<!-- HTML PART {part} OF 8 -->`. Do not add another code block."
+            f"`<!-- HTML PART {part} OF 4 -->`. Do not add another code block."
         )
         prompts.append(("html", "text", part, prompt))
     return prompts
@@ -170,7 +165,7 @@ def main() -> int:
                 raise RuntimeError(f"Chunk assembly validation failed: {(assemble.stderr or assemble.stdout).strip()}")
             milestones.append({"stage": "assembly-contract", "status": "passed", "result": json.loads(assemble.stdout)})
             write_json(run / "milestones.json", milestones)
-            print("PASS: setup, 4 CSS parts, 8 HTML parts, and assembly contract.", flush=True)
+            print("PASS: setup, 3 CSS parts, 4 HTML parts, and assembly contract.", flush=True)
             return 0
         except Exception as error:
             milestones.append({"stage": "first-failure", "status": "failed", "error": str(error), "at_utc": now()})

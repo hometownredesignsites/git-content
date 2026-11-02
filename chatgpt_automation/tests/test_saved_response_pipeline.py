@@ -27,6 +27,17 @@ REQUEST = (
 
 
 class SavedResponsePipelineTest(unittest.TestCase):
+    def test_css_four_is_not_a_supported_generation_stage(self):
+        with tempfile.TemporaryDirectory(prefix="chatgpt-css-stage-") as temporary:
+            with self.assertRaisesRegex(ValueError, "stop_after must be one of css-1, css-2, css-3"):
+                run_website_chunks(
+                    run_folder=Path(temporary) / "candidate",
+                    chat_id=CHAT_ID,
+                    source_facts_and_design_brief="Synthetic brief.",
+                    exchange=lambda _prompt: self.fail("Unsupported stage must fail before generation."),
+                    stop_after="css-4",
+                )
+
     def test_cta_arrow_normalizer_removes_only_glyphs_inside_ctas(self):
         source = (
             '<a class="button" href="/estimate" aria-label="Estimate &rarr;">Get an Estimate →</a>'

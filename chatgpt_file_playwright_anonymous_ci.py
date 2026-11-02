@@ -224,7 +224,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--website-stop-after",
-        choices=["css-1", "css-2", "css-3", "css-4", "html-1", "html-2", "html-3", "html-4"],
+        choices=["css-1", "css-2", "css-3", "html-1", "html-2", "html-3", "html-4"],
         help="Stop after validating this part and save the conversation checkpoint for the next ladder stage",
     )
     return parser.parse_args()

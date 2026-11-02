@@ -229,8 +229,6 @@ def run_website_chunks(
     if context_mode not in {"source", "minimal"}:
         raise ValueError("context_mode must be 'source' or 'minimal'")
     stage_limits = {f"css-{number}": number for number in range(1, CSS_PART_COUNT + 1)}
-    # Keep the existing workflow_dispatch stop option working without changing its Xvfb workflow.
-    stage_limits["css-4"] = CSS_PART_COUNT
     stage_limits.update({f"html-{number}": CSS_PART_COUNT + number for number in range(1, HTML_PART_COUNT + 1)})
     if stop_after is not None and stop_after not in stage_limits:
         raise ValueError(f"stop_after must be one of {', '.join(stage_limits)} or None")

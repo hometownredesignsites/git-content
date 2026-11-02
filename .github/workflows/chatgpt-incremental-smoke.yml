@@ -63,7 +63,7 @@ jobs:
           print("PASS: repeated two-turn baseline recalled ORBIT-731.")
           PY
 
-      - name: Test short setup, then CSS 1-4 and HTML 1-8 in one conversation
+      - name: Test short setup, then CSS 1-3 and HTML 1-4 in one conversation
         run: |
           set -euo pipefail
           mkdir -p tmp/playwright-profiles/incremental-ladder
