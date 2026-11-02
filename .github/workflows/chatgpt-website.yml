@@ -81,7 +81,7 @@ jobs:
           RUN_MODE: ${{ github.event_name == 'push' && 'smoke_test' || inputs.run_mode || 'smoke_test' }}
           SMOKE_WEBSITE: ${{ inputs.smoke_website }}
           RESUME_CANDIDATE: ${{ inputs.resume_candidate }}
-          WEBSITE_CONTEXT_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.website_context_mode || 'minimal' }}
+          WEBSITE_CONTEXT_MODE: ${{ github.event_name == 'push' && 'source' || inputs.website_context_mode || 'minimal' }}
         run: |
           if [[ "$GITHUB_EVENT_NAME" == "push" && -s chatgpt_automation/resume_candidate.txt ]]; then
             RESUME_CANDIDATE="$(tr -d '\r\n' < chatgpt_automation/resume_candidate.txt)"
@@ -116,8 +116,8 @@ jobs:
       SITE_INDEX: ${{ matrix.target.site_index }}
       RESUME_FOLDER: ${{ matrix.target.resume_folder }}
       RESUME_CHAT_URL: ${{ inputs.resume_chat_url }}
-      WEBSITE_STAGE: ${{ github.event_name == 'workflow_dispatch' && inputs.website_stage || 'css_1' }}
-      WEBSITE_CONTEXT_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.website_context_mode || 'minimal' }}
+      WEBSITE_STAGE: ${{ github.event_name == 'push' && 'full' || inputs.website_stage || 'css_1' }}
+      WEBSITE_CONTEXT_MODE: ${{ github.event_name == 'push' && 'source' || inputs.website_context_mode || 'minimal' }}
       PYTHONUNBUFFERED: "1"
 
     steps:

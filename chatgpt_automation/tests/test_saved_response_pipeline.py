@@ -221,6 +221,7 @@ class SavedResponsePipelineTest(unittest.TestCase):
             browser_checks = {
                 "rendered_sections_visible_desktop_and_mobile": True,
                 "hero_spans_viewport_desktop_and_mobile": True,
+                "hero_media_covers_hero_desktop_and_mobile": True,
                 "cta_visible_first_screen_desktop_and_mobile": True,
                 "mobile_menu_clicks_work": True,
                 "mobile_menu_control_visible": True,

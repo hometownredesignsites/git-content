@@ -369,6 +369,7 @@ def main() -> int:
                             "all_required_sections_visible": required_present,
                             "hero": visual["hero"],
                             "hero_spans_viewport": bool(visual["hero"].get("spans_viewport")),
+                            "hero_media_covers_hero": bool(visual["hero"].get("media_covers_hero")),
                             "cta": visual["cta"],
                             "cta_visible_first_screen": visual["cta"]["visible_first_screen"],
                             "horizontal_overflow": visual["horizontal_overflow"],
@@ -398,6 +399,7 @@ def main() -> int:
                             "error": str(error),
                             "all_required_sections_visible": False,
                             "hero_spans_viewport": False,
+                            "hero_media_covers_hero": False,
                             "cta_visible_first_screen": False,
                             "no_horizontal_overflow": False,
                             "images_loaded": False,
@@ -415,6 +417,7 @@ def main() -> int:
         report["checks"] = {
             "rendered_sections_visible_desktop_and_mobile": bool(desktop.get("all_required_sections_visible") and mobile.get("all_required_sections_visible")),
             "hero_spans_viewport_desktop_and_mobile": bool(desktop.get("hero_spans_viewport") and mobile.get("hero_spans_viewport")),
+            "hero_media_covers_hero_desktop_and_mobile": bool(desktop.get("hero_media_covers_hero") and mobile.get("hero_media_covers_hero")),
             "cta_visible_first_screen_desktop_and_mobile": bool(desktop.get("cta_visible_first_screen") and mobile.get("cta_visible_first_screen")),
             "mobile_menu_clicks_work": bool(mobile_menu.get("click_opens") and mobile_menu.get("click_closes")),
             "mobile_menu_control_visible": bool(mobile_menu.get("control_visible")),

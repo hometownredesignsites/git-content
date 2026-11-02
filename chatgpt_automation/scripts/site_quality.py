@@ -430,6 +430,7 @@ def _browser_qa_result(session_dir):
     expected = (
         "rendered_sections_visible_desktop_and_mobile",
         "hero_spans_viewport_desktop_and_mobile",
+        "hero_media_covers_hero_desktop_and_mobile",
         "cta_visible_first_screen_desktop_and_mobile",
         "mobile_menu_clicks_work",
         "mobile_menu_control_visible",
@@ -1078,6 +1079,7 @@ def assess_website(prompt, session_dir):
     browser_check_names = (
         "rendered_sections_visible_desktop_and_mobile",
         "hero_spans_viewport_desktop_and_mobile",
+        "hero_media_covers_hero_desktop_and_mobile",
         "cta_visible_first_screen_desktop_and_mobile",
         "mobile_menu_clicks_work",
         "mobile_menu_control_visible",
@@ -1195,6 +1197,7 @@ def assess_website(prompt, session_dir):
     blocking_browser_checks = {
         "browser_rendered_sections_visible_desktop_and_mobile",
         "browser_hero_spans_viewport_desktop_and_mobile",
+        "browser_hero_media_covers_hero_desktop_and_mobile",
         "browser_cta_visible_first_screen_desktop_and_mobile",
         "browser_mobile_menu_clicks_work",
         "browser_mobile_menu_control_visible",
@@ -1232,7 +1235,9 @@ def assess_website(prompt, session_dir):
         missing_sections.append("CTA buttons without arrow glyphs or arrow icons")
     if not checks["accessible_mobile_hamburger"]:
         missing_sections.append("accessible three-bar mobile navigation button")
-    if not all(checks[name] for name in blocking_browser_checks):
+    if not checks["browser_hero_media_covers_hero_desktop_and_mobile"]:
+        missing_sections.append("hero image or background covering the full hero on desktop and mobile")
+    if not all(checks[name] for name in blocking_browser_checks - {"browser_hero_media_covers_hero_desktop_and_mobile"}):
         missing_sections.append("mobile menu visible, clickable, and keyboard accessible")
     if visual_design_review_status != "pass":
         missing_sections.append("screenshot-backed desktop/mobile visual design review")
