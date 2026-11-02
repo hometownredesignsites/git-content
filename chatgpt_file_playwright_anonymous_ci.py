@@ -224,7 +224,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--website-stop-after",
-        choices=["css-1", "css-2", "css-3", "html-1", "html-2", "html-3", "html-4"],
+        choices=["css-1", "css-2", "css-3", "html-1", "html-2", "html-3"],
         help="Stop after validating this part and save the conversation checkpoint for the next ladder stage",
     )
     return parser.parse_args()
@@ -338,17 +338,6 @@ def run() -> int:
                         "page_state": after_state,
                     }
 
-                def start_fresh_html_chat():
-                    # Guest UI shortcuts can leave the existing conversation active.
-                    # Navigate to the guest landing page, then verify a usable empty chat.
-                    try:
-                        page.goto("https://chatgpt.com/", wait_until="domcontentloaded", timeout=args.timeout_ms)
-                        composer = find_chat_composer(page, timeout_ms=args.timeout_ms)
-                        page_state = inspect_chatgpt_page_state(page)
-                        return bool(composer is not None and assistant_turns(page).count() == 0 and page_state["classification"] == "ready")
-                    except Exception:
-                        return False
-
                 website_brief = "\n\n".join(part for part in (instructions_text, prompt_text) if part).strip()
                 if args.website_context_mode == "minimal":
                     website_brief = prompt_text.strip()
@@ -362,7 +351,6 @@ def run() -> int:
                     source_facts_and_design_brief=website_brief,
                     exchange=exchange_website_turn,
                     conversation_url=lambda: page.url,
-                    start_html_conversation=start_fresh_html_chat,
                     run_token=args.website_run_token,
                     quality_request=quality_request,
                     stop_after=args.website_stop_after,

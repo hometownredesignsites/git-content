@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 CSS_PART_COUNT = 3
-HTML_PART_COUNT = 4
+HTML_PART_COUNT = 3
 EXPECTED = [("css", number) for number in range(1, CSS_PART_COUNT + 1)] + [("html", number) for number in range(1, HTML_PART_COUNT + 1)]
 
 
@@ -33,7 +33,7 @@ def main():
     parts = manifest.get("parts", [])
     actual = [(item.get("kind"), item.get("part")) for item in parts]
     if actual != EXPECTED:
-        fail(f"expected three ordered CSS responses followed by four HTML responses; found {actual}")
+        fail(f"expected three ordered CSS responses followed by three HTML responses; found {actual}")
     css, html = [], []
     seen_hashes = set()
     for entry in parts:

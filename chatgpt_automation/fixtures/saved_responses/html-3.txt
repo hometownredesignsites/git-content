@@ -1,7 +1,7 @@
 RUN TOKEN: fixture-run-token
-HTML PART 3 OF 4
+HTML PART 3 OF 3
 ```text
-<!-- HTML PART 3 OF 4 -->
+<!-- HTML PART 3 OF 3 -->
 <section class="content-section contact" id="contact">
       <h2>Contact</h2>
       <p>Send a note with the best way to reach you and a short description of your project.</p>
@@ -13,4 +13,24 @@ HTML PART 3 OF 4
         <button type="submit">Send message</button>
       </form>
     </section>
+  </main>
+  <footer>
+    <h2>Northstar Workshop</h2>
+    <p>This sample footer gives visitors a useful path back to services or the contact section.</p>
+    <a href="#services">Services</a>
+    <a href="#contact">Contact</a>
+  </footer>
+  <script>
+    const menuButton = document.querySelector('.nav-menu');
+    const navigation = document.getElementById('primary-nav');
+    if (menuButton && navigation) {
+      menuButton.addEventListener('click', () => {
+        const expanded = menuButton.getAttribute('aria-expanded') === 'true';
+        menuButton.setAttribute('aria-expanded', String(!expanded));
+        navigation.hidden = expanded;
+      });
+    }
+  </script>
+</body>
+</html>
 ```

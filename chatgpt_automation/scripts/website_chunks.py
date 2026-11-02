@@ -17,7 +17,8 @@ from typing import Any, Callable
 SCRIPT_DIR = Path(__file__).resolve().parent
 CAPTURE_SCRIPT = SCRIPT_DIR / "capture_chunk.py"
 CSS_PART_COUNT = 3
-HTML_PART_COUNT = 4
+HTML_PART_COUNT = 3
+SEQUENCE_PLAN = "css-3-html-3-single-chat-v1"
 PARTS = [("css", number) for number in range(1, CSS_PART_COUNT + 1)] + [("html", number) for number in range(1, HTML_PART_COUNT + 1)]
 TOTALS = {"css": CSS_PART_COUNT, "html": HTML_PART_COUNT}
 
@@ -104,9 +105,8 @@ def _part_prompt(
     else:
         html_tasks = {
             1: "Start the HTML5 document with doctype, metadata, title, stylesheet link, body, semantic header/navigation, main, and complete hero. Do not close main/body/html yet.",
-            2: "Continue inside main with source-supported primary content sections. Do not repeat document setup, header, or hero, and do not close main/body/html.",
-            3: "Continue inside main with remaining supported content and the complete contact section/form, preserving source contact fields. Do not repeat earlier sections or close main/body/html.",
-            4: "Finish the document: close main, add a substantive source-grounded footer and any small accessible inline interaction script if needed, then close body and html. Do not repeat prior content.",
+            2: "Continue inside main with source-supported primary content sections. Do not repeat document setup, header, or hero, and do not add the contact form or close main/body/html.",
+            3: "Continue inside main with any remaining supported content and the complete contact section/form, preserving source contact fields. Then close main, add a substantive source-grounded footer, and close body and html. Do not repeat earlier sections or invent a form handler.",
         }
         task = html_tasks[number] + " Follow the accepted CSS class names. Do not invent a form handler or unsupported content. Keep markup semantic, concise, accessible, and syntactically closed within this section."
     if context_mode == "minimal":
@@ -218,13 +218,12 @@ def run_website_chunks(
     source_facts_and_design_brief: str,
     exchange: Callable[[str], Any],
     conversation_url: Callable[[], str] | None = None,
-    start_html_conversation: Callable[[], bool] | None = None,
     run_token: str | None = None,
     quality_request: str | None = None,
     stop_after: str | None = None,
     context_mode: str = "source",
 ) -> dict[str, Any]:
-    """Submit three CSS parts, then four HTML parts through the caller-owned chat page.
+    """Submit three CSS parts, then three HTML parts in one caller-owned chat.
 
     `exchange` must submit one user turn in the already-open ChatGPT conversation and
     return the existing runner's newest-assistant-response capture (optionally paired
@@ -257,6 +256,8 @@ def run_website_chunks(
         token = token or state.get("run_token")
         if state.get("chat_id") != chat_id or state.get("run_token") != token:
             raise RuntimeError("Resume requires the same ChatGPT conversation and candidate run token.")
+        if state.get("sequence_plan") != SEQUENCE_PLAN:
+            raise RuntimeError("Saved checkpoint uses a different chunk/conversation plan; start a new candidate.")
         if state.get("context_mode", "source") != context_mode:
             raise RuntimeError("Resume context mode differs from the original candidate.")
         if state.get("brief_sha256") != hashlib.sha256(source_facts_and_design_brief.encode("utf-8")).hexdigest():
@@ -265,6 +266,7 @@ def run_website_chunks(
         token = token or secrets.token_hex(8)
         state = {
             "status": "running",
+            "sequence_plan": SEQUENCE_PLAN,
             "chat_id": chat_id,
             "conversation_url": conversation_url() if conversation_url else None,
             "run_token": token,
@@ -296,22 +298,11 @@ def run_website_chunks(
 
     css_reference = "\n".join((run / "chunks" / f"css-{number}.css").read_text(encoding="utf-8") for number in range(1, CSS_PART_COUNT + 1) if (run / "chunks" / f"css-{number}.css").is_file())
     for kind, number in PARTS[len(accepted):target_count]:
-        if kind == "html" and not state.get("html_conversation_started"):
-            if start_html_conversation is not None:
-                state["css_conversation_url"] = conversation_url() if conversation_url else None
-                if not start_html_conversation():
-                    state["status"] = "interrupted"
-                    state["last_error"] = {
-                        "at_utc": _now(),
-                        "classification": "new_guest_conversation_unavailable",
-                        "error": "Could not establish a fresh guest conversation for the HTML sequence.",
-                    }
-                    _atomic_json(state_path, state)
-                    raise RuntimeError("Could not start a fresh guest conversation for the HTML sequence.")
-            state["html_conversation_started"] = True
-            state["html_conversation_url"] = conversation_url() if conversation_url else None
+        if kind == "html" and not state.get("html_sequence_started"):
+            state["css_conversation_url"] = state.get("conversation_url") or (conversation_url() if conversation_url else None)
+            state["html_sequence_started"] = True
+            state["html_conversation_url"] = conversation_url() if conversation_url else state.get("conversation_url")
             state["conversation_url"] = state["html_conversation_url"]
-            state.pop("last_error", None)
             _atomic_json(state_path, state)
         label = f"{kind.upper()} PART {number} OF {TOTALS[kind]}"
         current_pending = state.get("pending_turn")

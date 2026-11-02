@@ -42,6 +42,8 @@ on:
           - css_2
           - css_3
           - html_1
+          - html_2
+          - html_3
       website_context_mode:
         description: Use a fictional minimal prompt for chunk diagnostics or source-grounded context for a real candidate
         required: false

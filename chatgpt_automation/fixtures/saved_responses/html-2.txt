@@ -1,7 +1,7 @@
 RUN TOKEN: fixture-run-token
-HTML PART 2 OF 4
+HTML PART 2 OF 3
 ```text
-<!-- HTML PART 2 OF 4 -->
+<!-- HTML PART 2 OF 3 -->
 <section class="content-section services" id="services">
       <h2>Services</h2>
       <p>A simple sample of the ways a small workshop can help its customers.</p>
