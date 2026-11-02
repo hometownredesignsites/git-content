@@ -1,0 +1,180 @@
+RUN TOKEN: bf460c81a77c19c6
+
+HTML PART 2 OF 2
+```text
+<!-- HTML PART 2 OF 2 -->
+
+  <section class="section contact-section" id="contact" aria-labelledby="contact-title">
+    <div class="container contact-layout">
+
+      <div class="contact-copy">
+        <span class="eyebrow">Get in touch</span>
+        <h2 id="contact-title">Tell Josh about your project.</h2>
+        <div class="accent-line"></div>
+        <p class="lead">
+          Have a roofing or renovation project in mind? Get in touch to
+          discuss what you need and the next steps.
+        </p>
+
+        <div class="contact-methods">
+          <div class="contact-method">
+            <span class="contact-method-icon" aria-hidden="true">☎</span>
+            <div>
+              <span class="contact-method-label">Call Josh</span>
+              <a href="tel:7208287997">(720) 828-7997</a>
+            </div>
+          </div>
+
+          <div class="contact-method">
+            <span class="contact-method-icon" aria-hidden="true">✉</span>
+            <div>
+              <span class="contact-method-label">Text photos of damage</span>
+              <a href="sms:7204535095">Send project photos by text</a>
+            </div>
+          </div>
+
+          <div class="contact-method">
+            <span class="contact-method-icon" aria-hidden="true">⌖</span>
+            <div>
+              <span class="contact-method-label">Based in</span>
+              <span>Longmont, Colorado</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="contact-form">
+        <h3>Start a conversation</h3>
+        <p class="form-intro">
+          Share a few details about your project.
+        </p>
+
+        <form action="#" method="post">
+          <div class="form-grid">
+
+            <div class="form-field">
+              <label for="contact-name">Name <span aria-hidden="true">*</span></label>
+              <input
+                type="text"
+                id="contact-name"
+                name="Name"
+                placeholder="Your name"
+                autocomplete="name"
+                required>
+            </div>
+
+            <div class="form-field">
+              <label for="contact-phone">Phone <span aria-hidden="true">*</span></label>
+              <input
+                type="tel"
+                id="contact-phone"
+                name="Phone"
+                placeholder="Your phone number"
+                autocomplete="tel"
+                required>
+            </div>
+
+            <div class="form-field form-field-full">
+              <label for="contact-email">Email</label>
+              <input
+                type="email"
+                id="contact-email"
+                name="Email"
+                placeholder="Your email address"
+                autocomplete="email">
+            </div>
+
+            <div class="form-field form-field-full">
+              <label for="contact-address">Property Address or City</label>
+              <input
+                type="text"
+                id="contact-address"
+                name="Property Address or City"
+                placeholder="Project address or city"
+                autocomplete="street-address">
+            </div>
+
+            <div class="form-field form-field-full">
+              <label for="contact-need">What do you need?</label>
+              <input
+                type="text"
+                id="contact-need"
+                name="What do you need?"
+                placeholder="Roofing, renovation, or something else">
+            </div>
+
+            <div class="form-field form-field-full">
+              <label for="contact-project">Tell Josh about the project</label>
+              <textarea
+                id="contact-project"
+                name="Tell Josh about the project"
+                placeholder="Describe your project, what you have in mind, or any questions you have."
+                rows="5"></textarea>
+            </div>
+
+          </div>
+
+          <div class="form-submit">
+            <button class="button" type="submit">
+              Send Project Details <span class="button-arrow" aria-hidden="true">→</span>
+            </button>
+            <p>
+              Prefer to speak directly? Call (720) 828-7997.
+            </p>
+          </div>
+        </form>
+      </div>
+
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-main">
+
+      <div class="footer-brand">
+        <a class="brand" href="#home" aria-label="Josh Brooks Construction home">
+          <span class="brand-mark" aria-hidden="true">
+            <span style="font-family:Georgia,serif;font-size:25px;">J</span>
+          </span>
+          <span class="brand-copy">
+            <span class="brand-name">Josh Brooks</span>
+            <span class="brand-description">Construction & Renovation Inc.</span>
+          </span>
+        </a>
+
+        <p class="footer-brand-copy">
+          Licensed general contractor in Longmont, Colorado.
+          Roofing and renovation projects managed start to finish.
+          Founded in 2014.
+        </p>
+      </div>
+
+      <nav class="footer-links" aria-label="Footer navigation">
+        <a href="#about">About</a>
+        <a href="#projects">Our Work</a>
+        <a href="#approach">How We Work</a>
+        <a href="#contact">Contact</a>
+        <a href="/renovation-cost-calculator/">Estimate Calculator</a>
+        <a href="tel:7208287997">(720) 828-7997</a>
+      </nav>
+
+    </div>
+
+    <div class="footer-bottom">
+      <span>© <span id="copyright-year">2026</span> Josh Brooks Construction and Renovation Inc.</span>
+      <span>Longmont, Colorado</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  document.getElementById("copyright-year").textContent =
+    new Date().getFullYear();
+</script>
+
+</body>
+</html>
+```
