@@ -46,24 +46,25 @@ class SavedResponsePipelineTest(unittest.TestCase):
 
         self.assertTrue(response_generation_active(Page()))
 
-    def test_generation_contract_has_four_css_parts_then_one_html_document(self):
+    def test_generation_contract_has_three_css_parts_then_one_html_document(self):
         css = _part_prompt("css", 1, RUN_TOKEN, "fixture design brief", None)
-        css4 = _part_prompt("css", 4, RUN_TOKEN, "fixture design brief", ("css", 3))
-        html = _part_prompt("html", 1, RUN_TOKEN, "fixture design brief", ("css", 4))
+        css3 = _part_prompt("css", 3, RUN_TOKEN, "fixture design brief", ("css", 2))
+        html = _part_prompt("html", 1, RUN_TOKEN, "fixture design brief", ("css", 3))
         instructions = (ROOT / "chatgpt_automation" / "website_request.txt").read_text(encoding="utf-8")
-        self.assertIn("CSS PART 1 OF 4", css)
-        self.assertIn("CSS PART 4 OF 4", css4)
+        self.assertIn("CSS PART 1 OF 3", css)
+        self.assertIn("CSS PART 3 OF 3", css3)
         self.assertIn("HTML PART 1 OF 1", html)
-        for text in (css, css4, html):
+        for text in (css, css3, html):
             self.assertIn("exactly one fenced code block", text)
-        self.assertIn("four ordered CSS parts", instructions)
+        self.assertIn("three ordered CSS parts", instructions)
         self.assertIn("Define the reusable class names", css)
         self.assertIn("actual selectors and declarations", css)
-        self.assertIn("reduced-motion support", css4)
-        self.assertNotIn("SOURCE FACTS AND DESIGN BRIEF", css4)
+        self.assertIn("reduced-motion support", css3)
+        self.assertNotIn("SOURCE FACTS AND DESIGN BRIEF", css3)
         self.assertIn("Do not produce a source audit", css)
         self.assertIn("do not include research notes, a source audit", instructions)
-        self.assertIn("All four CSS parts were accepted", html)
+        self.assertIn("All three CSS parts were accepted", html)
+        self.assertNotIn("final acknowledgment", html.lower())
         self.assertNotIn("eight labeled parts", instructions)
         self.assertIn("text` fence", html)
 
@@ -105,7 +106,7 @@ class SavedResponsePipelineTest(unittest.TestCase):
                 }],
             }, indent=2), encoding="utf-8")
 
-            parts = [("css", number) for number in range(1, 5)] + [("html", 1)]
+            parts = [("css", number) for number in range(1, 4)] + [("html", 1)]
             for kind, number in parts:
                 response = FIXTURES / f"{kind}-{number}.txt"
                 self.assertTrue(response.is_file(), f"missing saved fixture {response.name}")
@@ -138,8 +139,8 @@ class SavedResponsePipelineTest(unittest.TestCase):
             ], check=True, capture_output=True, text=True, encoding="utf-8")
             report = json.loads(result.stdout)
             self.assertTrue(report["automated_success"], report["blocking_failures"])
-            self.assertEqual(len(json.loads((run / "chunks" / "capture_manifest.json").read_text(encoding="utf-8"))["parts"]), 5)
-            self.assertEqual(css_file.read_text(encoding="utf-8").count("CSS PART "), 4)
+            self.assertEqual(len(json.loads((run / "chunks" / "capture_manifest.json").read_text(encoding="utf-8"))["parts"]), 4)
+            self.assertEqual(css_file.read_text(encoding="utf-8").count("CSS PART "), 3)
             self.assertTrue(inlined_file.is_file())
             self.assertIn("<style>", inlined_file.read_text(encoding="utf-8"))
             self.assertNotIn('href="styles.css"', inlined_file.read_text(encoding="utf-8"))
@@ -172,13 +173,13 @@ class SavedResponsePipelineTest(unittest.TestCase):
             self.assertEqual(first["accepted_parts"], ["css-1"])
             self.assertEqual(first["staged_until"], "css-1")
 
-            css_done = run_website_chunks(**common, stop_after="css-4")
-            self.assertEqual(css_done["accepted_parts"], ["css-1", "css-2", "css-3", "css-4"])
-            self.assertEqual(css_done["staged_until"], "css-4")
+            css_done = run_website_chunks(**common, stop_after="css-3")
+            self.assertEqual(css_done["accepted_parts"], ["css-1", "css-2", "css-3"])
+            self.assertEqual(css_done["staged_until"], "css-3")
 
             html_done = run_website_chunks(**common, stop_after="html-1")
-            self.assertEqual(html_done["accepted_parts"], ["css-1", "css-2", "css-3", "css-4", "html-1"])
-            self.assertEqual(calls, [("css", 1), ("css", 2), ("css", 3), ("css", 4), ("html", 1)])
+            self.assertEqual(html_done["accepted_parts"], ["css-1", "css-2", "css-3", "html-1"])
+            self.assertEqual(calls, [("css", 1), ("css", 2), ("css", 3), ("html", 1)])
             self.assertEqual(html_done["conversation_url"], "https://chatgpt.com/uc/fixture-conversation")
             self.assertFalse(html_done.get("complete", False))
             transcript = [json.loads(line) for line in (run / "conversation_transcript.jsonl").read_text(encoding="utf-8").splitlines()]

@@ -16,7 +16,7 @@ from typing import Any, Callable
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 CAPTURE_SCRIPT = SCRIPT_DIR / "capture_chunk.py"
-CSS_PART_COUNT = 4
+CSS_PART_COUNT = 3
 PARTS = [("css", number) for number in range(1, CSS_PART_COUNT + 1)] + [("html", 1)]
 TOTALS = {"css": CSS_PART_COUNT, "html": 1}
 
@@ -70,32 +70,27 @@ def _part_prompt(
         diagnostic_tasks = {
             1: "Add only compact design tokens, a body rule, a .site-header rule, and a .hero rule.",
             2: "Add only compact .content-section and .service-list rules for the same fictional workshop.",
-            3: "Add only compact .contact form and footer rules for the same fictional workshop.",
-            4: "Add only compact mobile layout, :focus-visible, and reduced-motion rules for earlier selectors.",
+            3: "Add compact .contact form, footer, mobile layout, :focus-visible, and reduced-motion rules.",
         }
         task = "Return a short, valid diagnostic stylesheet part, not a full website stylesheet. " + diagnostic_tasks[number]
     elif kind == "css":
         css_tasks = {
             1: (
-                "Return CSS part 1 of 4 only: design tokens, reset, body and shared typography, page/container layout, "
+                "Return CSS part 1 of 3 only: design tokens, reset, body and shared typography, page/container layout, "
                 "header/navigation, reusable buttons, and hero. Define the reusable class names and variables the later "
                 "parts and HTML can use. Do not style later page sections or add responsive overrides yet."
             ),
             2: (
-                "Return CSS part 2 of 4 only: desktop styles for the source-supported main content sections between "
+                "Return CSS part 2 of 3 only: desktop styles for the source-supported main content sections between "
                 "the hero and contact area, such as services, process, project/gallery, or about content when present. "
                 "Use the same tokens and naming system established in part 1. Do not repeat resets, typography, header, "
                 "hero, contact, footer, or responsive rules."
             ),
             3: (
-                "Return CSS part 3 of 4 only: desktop styles for the primary contact/conversion area, its fields and "
-                "controls, and the footer. Include only components the source-grounded page will contain. Reuse the "
-                "tokens and class naming established earlier; do not repeat global, hero, or main-content rules."
-            ),
-            4: (
-                "Return CSS part 4 of 4 only: responsive overrides for the layouts and components defined in parts 1–3, "
-                "clear keyboard focus, and reduced-motion support. Make navigation and content usable on narrow screens. "
-                "Use the existing tokens and selectors; do not repeat desktop rules or introduce unsupported sections."
+                "Return CSS part 3 of 3 only: desktop styles for the primary contact/conversion area, form fields, and "
+                "footer, followed by responsive overrides for all three parts, visible keyboard focus, and reduced-motion "
+                "support. Include only source-supported components; reuse existing tokens and selectors without repeating "
+                "earlier desktop rules. Make navigation and content usable on narrow screens."
             ),
         }
         task = (
@@ -133,7 +128,7 @@ def _part_prompt(
             "Keep names and custom properties consistent; do not repeat earlier rules.\n\n"
         )
     elif kind == "html":
-        prior = "All four CSS parts were accepted and saved. Follow their class names and design in the HTML.\n\n"
+        prior = "All three CSS parts were accepted and saved. Follow their class names and design in the HTML.\n\n"
     else:
         prior = ""
     return (
@@ -210,7 +205,7 @@ def run_website_chunks(
     stop_after: str | None = None,
     context_mode: str = "source",
 ) -> dict[str, Any]:
-    """Submit four ordered CSS parts then one full HTML response in one caller-owned chat page.
+    """Submit three ordered CSS parts then one full HTML response in one caller-owned chat page.
 
     `exchange` must submit one user turn in the already-open ChatGPT conversation and
     return the existing runner's newest-assistant-response capture (optionally paired
@@ -224,6 +219,8 @@ def run_website_chunks(
     if context_mode not in {"source", "minimal"}:
         raise ValueError("context_mode must be 'source' or 'minimal'")
     stage_limits = {f"css-{number}": number for number in range(1, CSS_PART_COUNT + 1)}
+    # Keep the existing workflow_dispatch stop option working without changing its Xvfb workflow.
+    stage_limits["css-4"] = CSS_PART_COUNT
     stage_limits["html-1"] = len(PARTS)
     if stop_after is not None and stop_after not in stage_limits:
         raise ValueError(f"stop_after must be one of {', '.join(stage_limits)} or None")
@@ -398,37 +395,19 @@ def run_website_chunks(
         _atomic_json(state_path, state)
         return state
 
-    # Verify completion with a short acknowledgment after the accepted HTML response.
-    final_ack = "HTML PART 1 OF 1 was validated and saved after CSS PARTS 1 OF 4 through 4 OF 4. Reply exactly: ACK HTML 1/1"
     pending = state.get("pending_turn")
     if not state.get("complete"):
-        all_parts_saved = [(entry["kind"], entry["part"]) for entry in entries] == PARTS
-        if pending and pending.get("kind") == "ack" and all_parts_saved:
-            # A resumed anonymous ChatGPT session may no longer expose a composer.
-            # Both full responses are already validated, so record the skipped final
-            # courtesy turn and continue with assembly and QA without changing them.
+        expected_accepted = [f"{kind}-{number}" for kind, number in PARTS]
+        all_parts_saved = state.get("accepted_parts") == expected_accepted
+        if not all_parts_saved:
+            raise RuntimeError("Cannot complete a candidate before every CSS and HTML response is validated and saved.")
+        if pending and pending.get("kind") == "ack":
             state["final_acknowledgment"] = {
-                "status": "skipped_on_resume",
-                "reason": "Both full responses were validated, but the saved anonymous session had no composer.",
+                "status": "skipped",
+                "reason": "No extra guest-session turn is needed after validated HTML is saved.",
                 "recorded_at_utc": _now(),
             }
-            state["pending_turn"] = None
-        else:
-            ack_prompt = pending["prompt"] if pending and pending.get("kind") == "ack" else final_ack
-            _append_turn(transcript, role="user", text=ack_prompt, part="final acknowledgment")
-            state["pending_turn"] = {"kind": "ack", "prompt": ack_prompt, "started_at_utc": _now()}
-            _atomic_json(state_path, state)
-            started = time.monotonic()
-            ack_response, ack_metadata = _response_text(exchange(ack_prompt))
-            duration = round(time.monotonic() - started, 3)
-            _append_turn(transcript, role="assistant", text=ack_response, part="final acknowledgment",
-                         metadata={**ack_metadata, "duration_seconds": duration})
-            if re.sub(r"\s+", " ", ack_response).strip() != "ACK HTML 1/1":
-                state["status"] = "interrupted"
-                state["last_error"] = {"at_utc": _now(), "part": "final acknowledgment", "error": "Unexpected acknowledgment response."}
-                _atomic_json(state_path, state)
-                raise RuntimeError("HTML response was saved, but ChatGPT did not return the exact final acknowledgment.")
-            state["pending_turn"] = None
+        state["pending_turn"] = None
         state["complete"] = True
         state["status"] = "chunks_complete"
         state["completed_at_utc"] = _now()

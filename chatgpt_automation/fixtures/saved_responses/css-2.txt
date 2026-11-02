@@ -1,7 +1,7 @@
 RUN TOKEN: fixture-run-token
-CSS PART 2 OF 4
+CSS PART 2 OF 3
 ```css
-/* CSS PART 2 OF 4 */
+/* CSS PART 2 OF 3 */
 .content-section { max-width: var(--content); margin-inline: auto; padding: 4rem 5vw; }
 .content-section h2 { max-width: 18ch; font-size: clamp(1.8rem, 3vw, 2.8rem); line-height: 1.1; }
 .service-list, .project-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.5rem; padding: 0; list-style: none; }

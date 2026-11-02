@@ -17,7 +17,7 @@ from playwright_runner.prompt_contracts import build_prompt_text, extract_json_p
 from playwright_runner.recovery import refresh_chat, start_new_chat_if_available
 from playwright_runner.stage_runner import run_stage_once, write_stage_outputs
 from playwright_runner.browser_session import assistant_turns
-from chatgpt_automation.scripts.website_chunks import WebsiteTurnError, run_website_chunks
+from chatgpt_automation.scripts.website_chunks import CSS_PART_COUNT, WebsiteTurnError, run_website_chunks
 
 
 def ensure_package(module_name: str, pip_name: str | None = None):
@@ -65,7 +65,7 @@ def restore_newest_code_block_fences(page, response_text: str, kind: str, part: 
             "normalization_error": f"Expected a rendered {expected_language} code block.",
         }
     code = code_block.inner_text().strip("\r\n")
-    expected_total = 4 if kind == "css" else 1
+    expected_total = CSS_PART_COUNT if kind == "css" else 1
     expected_marker = f"/* CSS PART {part} OF {expected_total} */" if kind == "css" else "<!-- HTML PART 1 OF 1 -->"
     marker = re.search(rf"(?m)^[ \t]*{re.escape(expected_marker)}[ \t]*$", code)
     if not marker:
@@ -322,16 +322,6 @@ def run() -> int:
                         re.IGNORECASE,
                     )
                     if not expected_part:
-                        if re.fullmatch(
-                            r"HTML PART 1 OF 1 was validated and saved\. Reply exactly: ACK HTML 1/1",
-                            turn_text.strip(),
-                            re.IGNORECASE,
-                        ):
-                            return response_text, {
-                                **response_metadata,
-                                "website_final_ack": True,
-                                "page_state": after_state,
-                            }
                         raise RuntimeError("Website turn prompt is missing its exact part label.")
                     normalized_text, dom_metadata = restore_newest_code_block_fences(
                         page, response_text, expected_part.group(1).lower(), int(expected_part.group(2))
