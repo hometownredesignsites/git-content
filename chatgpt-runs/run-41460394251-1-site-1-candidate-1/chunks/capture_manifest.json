@@ -1,0 +1,16 @@
+{
+  "chat_id": "site-1-candidate-1",
+  "parts": [
+    {
+      "kind": "css",
+      "part": 1,
+      "response_file": "chunks/responses/css-1.txt",
+      "chunk_file": "chunks/css-1.css",
+      "captured_at_utc": "2026-11-02T14:20:05.638788+00:00",
+      "characters": 628,
+      "sha256": "06633f3be24176f3080fb07f306580cd2920dc9f8fba426df1208006f1b62291",
+      "run_token": "ac308d991082c8d0"
+    }
+  ],
+  "run_token": "ac308d991082c8d0"
+}
