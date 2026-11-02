@@ -1,0 +1,363 @@
+RUN TOKEN: 787d3b7f0d2bd97a
+
+CSS PART 2 OF 3
+```css
+/* CSS PART 2 OF 3 */
+
+/* ==================================================
+   SERVICES
+================================================== */
+.services-section {
+  background: var(--color-paper);
+}
+
+.services-layout {
+  display: grid;
+  grid-template-columns: 0.8fr 1.2fr;
+  gap: 70px;
+  align-items: start;
+}
+
+.services-intro {
+  position: sticky;
+  top: 35px;
+}
+
+.services-intro p {
+  max-width: 420px;
+  color: var(--color-ink-soft);
+}
+
+.services-list {
+  border-top: 1px solid var(--color-line);
+}
+
+.service-item {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 22px;
+  padding: 30px 0;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.service-number {
+  color: var(--color-accent);
+  font-family: var(--font-heading);
+  font-size: 1.7rem;
+}
+
+.service-item h3 {
+  margin-bottom: 9px;
+}
+
+.service-item p {
+  max-width: 550px;
+  margin-bottom: 0;
+  color: var(--color-ink-soft);
+}
+
+/* ==================================================
+   WHY CHOOSE JOSH BROOKS
+================================================== */
+.about-section {
+  position: relative;
+  overflow: hidden;
+  background: var(--color-green);
+  color: var(--color-white);
+}
+
+.about-layout {
+  display: grid;
+  grid-template-columns: 1fr 0.85fr;
+  align-items: center;
+  gap: 85px;
+}
+
+.about-copy .eyebrow {
+  color: #e3a185;
+}
+
+.about-copy h2 {
+  color: var(--color-white);
+}
+
+.about-copy > p {
+  max-width: 590px;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.about-image {
+  position: relative;
+  min-height: 470px;
+  overflow: hidden;
+  border-radius: var(--radius-small);
+  background: #53675d;
+}
+
+.about-image img {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  inset: 0;
+}
+
+.about-facts {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 25px;
+  margin-top: 42px;
+  padding-top: 28px;
+  border-top: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.about-fact strong {
+  display: block;
+  margin-bottom: 5px;
+  color: #e3a185;
+  font-family: var(--font-heading);
+  font-size: 2.4rem;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.about-fact span {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.82rem;
+}
+
+/* ==================================================
+   ROOF ATTENTION / HAIL RESTORATION
+================================================== */
+.roof-section {
+  background: var(--color-white);
+}
+
+.roof-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  gap: 75px;
+}
+
+.roof-image {
+  position: relative;
+  min-height: 520px;
+  overflow: hidden;
+  background: var(--color-muted);
+}
+
+.roof-image img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.roof-copy p {
+  color: var(--color-ink-soft);
+}
+
+.roof-signs {
+  margin: 30px 0;
+  padding: 0;
+  border-top: 1px solid var(--color-line);
+  list-style: none;
+}
+
+.roof-signs li {
+  position: relative;
+  padding: 15px 0 15px 27px;
+  border-bottom: 1px solid var(--color-line);
+  color: var(--color-ink);
+  font-size: 0.94rem;
+}
+
+.roof-signs li::before {
+  position: absolute;
+  top: 24px;
+  left: 2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  content: "";
+}
+
+/* ==================================================
+   ROOFING PROCESS
+================================================== */
+.process-section {
+  background: var(--color-muted);
+}
+
+.process-intro {
+  display: grid;
+  grid-template-columns: 1fr 0.75fr;
+  align-items: end;
+  gap: 65px;
+  margin-bottom: 55px;
+}
+
+.process-intro p {
+  max-width: 490px;
+  margin-bottom: 25px;
+  color: var(--color-ink-soft);
+}
+
+.process-steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-top: 1px solid #c9c9bf;
+  border-bottom: 1px solid #c9c9bf;
+}
+
+.process-step {
+  position: relative;
+  padding: 35px 30px 40px 0;
+}
+
+.process-step + .process-step {
+  padding-left: 30px;
+  border-left: 1px solid #c9c9bf;
+}
+
+.process-step-number {
+  display: block;
+  margin-bottom: 28px;
+  color: var(--color-accent);
+  font-family: var(--font-heading);
+  font-size: 2.6rem;
+  line-height: 1;
+}
+
+.process-step h3 {
+  margin-bottom: 12px;
+}
+
+.process-step p {
+  max-width: 300px;
+  margin-bottom: 0;
+  color: var(--color-ink-soft);
+  font-size: 0.92rem;
+}
+
+/* ==================================================
+   RECENT PROJECTS / GALLERY
+================================================== */
+.projects-section {
+  background: var(--color-paper);
+}
+
+.projects-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 35px;
+  margin-bottom: 48px;
+}
+
+.projects-heading .section-heading {
+  margin-bottom: 0;
+}
+
+.project-gallery {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  grid-template-rows: 290px 290px;
+  gap: 18px;
+}
+
+.project-card {
+  position: relative;
+  min-height: 250px;
+  overflow: hidden;
+  background: var(--color-muted);
+}
+
+.project-card:first-child {
+  grid-row: 1 / 3;
+}
+
+.project-card img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 450ms ease;
+}
+
+.project-card:hover img {
+  transform: scale(1.035);
+}
+
+.project-card::after {
+  position: absolute;
+  inset: 35% 0 0;
+  background: linear-gradient(
+    transparent,
+    rgba(25, 34, 31, 0.82)
+  );
+  content: "";
+  pointer-events: none;
+}
+
+.project-caption {
+  position: absolute;
+  z-index: 2;
+  right: 24px;
+  bottom: 22px;
+  left: 24px;
+  color: var(--color-white);
+}
+
+.project-caption span {
+  display: block;
+  margin-bottom: 6px;
+  color: #efb398;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.project-caption h3 {
+  margin-bottom: 0;
+  color: var(--color-white);
+  font-family: var(--font-body);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+/* ==================================================
+   SECTION CTA STRIP
+================================================== */
+.project-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 30px;
+  margin-top: 45px;
+  padding: 30px 35px;
+  background: var(--color-green);
+  color: var(--color-white);
+}
+
+.project-cta p {
+  margin-bottom: 0;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.95rem;
+}
+
+.project-cta strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--color-white);
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  font-weight: 500;
+}
+```
