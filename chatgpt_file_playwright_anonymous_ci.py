@@ -65,7 +65,8 @@ def restore_newest_code_block_fences(page, response_text: str, kind: str, part: 
             "normalization_error": f"Expected a rendered {expected_language} code block.",
         }
     code = code_block.inner_text().strip("\r\n")
-    expected_marker = "/* CSS PART 1 OF 1 */" if kind == "css" else "<!-- HTML PART 1 OF 1 -->"
+    expected_total = 4 if kind == "css" else 1
+    expected_marker = f"/* CSS PART {part} OF {expected_total} */" if kind == "css" else "<!-- HTML PART 1 OF 1 -->"
     marker = re.search(rf"(?m)^[ \t]*{re.escape(expected_marker)}[ \t]*$", code)
     if not marker:
         return response_text, {
@@ -223,7 +224,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--website-stop-after",
-        choices=["css-1", "html-1"],
+        choices=["css-1", "css-2", "css-3", "css-4", "html-1"],
         help="Stop after validating this part and save the conversation checkpoint for the next ladder stage",
     )
     return parser.parse_args()

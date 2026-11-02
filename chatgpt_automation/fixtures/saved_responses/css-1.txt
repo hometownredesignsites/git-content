@@ -1,25 +1,14 @@
 RUN TOKEN: fixture-run-token
-CSS PART 1 OF 1
+CSS PART 1 OF 4
 ```css
-/* CSS PART 1 OF 1 */
-:root { --ink: #18343a; --paper: #f5f2eb; --accent: #c45e3b; }
+/* CSS PART 1 OF 4 */
+:root { --ink: #18343a; --paper: #f5f2eb; --accent: #c45e3b; --content: 72rem; }
 * { box-sizing: border-box; }
 body { margin: 0; color: var(--ink); background: var(--paper); font: 16px/1.6 system-ui, sans-serif; }
-img { display: block; max-width: 100%; }
+img { display: block; max-width: 100%; height: auto; }
 .site-header { display: flex; align-items: center; justify-content: space-between; padding: 1rem 5vw; }
-.nav-menu { display: none; }
 .primary-nav { display: flex; gap: 1.25rem; }
+.nav-menu { display: none; }
 .hero { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; align-items: center; padding: 5rem 8vw; }
 .button { display: inline-block; padding: .8rem 1.2rem; color: white; background: var(--accent); text-decoration: none; }
-.content-section { padding: 4rem 8vw; }
-.service-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
-.contact form { display: grid; gap: 1rem; max-width: 40rem; }
-footer { padding: 3rem 8vw; color: white; background: var(--ink); }
-:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
-@media (max-width: 700px) {
-  .hero { grid-template-columns: 1fr; padding: 3rem 6vw; }
-  .primary-nav { flex-wrap: wrap; }
-  .service-list { grid-template-columns: 1fr; }
-  .content-section { padding: 3rem 6vw; }
-}
 ```

@@ -1,4 +1,4 @@
-"""Verify one full CSS and one full HTML capture, then assemble website files."""
+"""Verify four ordered CSS captures and one HTML capture, then assemble website files."""
 
 import argparse
 import hashlib
@@ -7,7 +7,8 @@ import re
 from pathlib import Path
 
 
-EXPECTED = [("css", 1), ("html", 1)]
+CSS_PART_COUNT = 4
+EXPECTED = [("css", number) for number in range(1, CSS_PART_COUNT + 1)] + [("html", 1)]
 
 
 def fail(message):
@@ -31,7 +32,7 @@ def main():
     parts = manifest.get("parts", [])
     actual = [(item.get("kind"), item.get("part")) for item in parts]
     if actual != EXPECTED:
-        fail(f"expected one CSS response followed by one HTML response; found {actual}")
+        fail(f"expected four ordered CSS responses followed by one HTML response; found {actual}")
     css, html = [], []
     seen_hashes = set()
     for entry in parts:
@@ -46,7 +47,7 @@ def main():
             fail(f"repeated chunk content detected: {path.name}")
         seen_hashes.add(digest)
         kind, part = entry["kind"], entry["part"]
-        expected_marker = "/* CSS PART 1 OF 1 */" if kind == "css" else "<!-- HTML PART 1 OF 1 -->"
+        expected_marker = f"/* CSS PART {part} OF {CSS_PART_COUNT} */" if kind == "css" else "<!-- HTML PART 1 OF 1 -->"
         first_nonblank = next((line.strip() for line in code.splitlines() if line.strip()), "")
         if first_nonblank != expected_marker:
             fail(f"part marker mismatch: {path.name}")
@@ -58,7 +59,7 @@ def main():
     files.mkdir(parents=True, exist_ok=True)
     (files / "styles.css").write_text("\n".join(css), encoding="utf-8")
     (files / "index.html").write_text(html_text, encoding="utf-8")
-    print(json.dumps({"assembled": True, "chat_id": manifest.get("chat_id"), "css_parts": 1, "html_parts": 1,
+    print(json.dumps({"assembled": True, "chat_id": manifest.get("chat_id"), "css_parts": CSS_PART_COUNT, "html_parts": 1,
                       "index_html_bytes": (files / "index.html").stat().st_size,
                       "styles_css_bytes": (files / "styles.css").stat().st_size}))
 

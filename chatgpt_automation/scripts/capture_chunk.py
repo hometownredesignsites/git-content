@@ -1,4 +1,4 @@
-"""Extract one labeled full CSS or HTML response from a saved ChatGPT turn."""
+"""Extract one labeled CSS or HTML part from a saved ChatGPT turn."""
 
 import argparse
 import hashlib
@@ -8,8 +8,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-PART_TOTALS = {"css": 1, "html": 1}
-EXPECTED = [("css", 1), ("html", 1)]
+PART_TOTALS = {"css": 4, "html": 1}
+EXPECTED = [("css", number) for number in range(1, PART_TOTALS["css"] + 1)] + [("html", 1)]
 FENCE = re.compile(r"```([A-Za-z0-9_-]+)[ \t]*\r?\n(.*?)\r?\n```", re.DOTALL)
 
 
@@ -46,7 +46,7 @@ def main():
     if language.lower() != expected_language:
         fail(f"expected a {expected_language} fence, found {language!r}")
     code = code.strip("\r\n") + "\n"
-    expected_marker = ("/* CSS PART 1 OF 1 */" if args.kind == "css"
+    expected_marker = (f"/* CSS PART {args.part} OF {total} */" if args.kind == "css"
                        else "<!-- HTML PART 1 OF 1 -->")
     first_nonblank = next((line.strip() for line in code.splitlines() if line.strip()), "")
     if first_nonblank != expected_marker:

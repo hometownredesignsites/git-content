@@ -1,0 +1,13 @@
+RUN TOKEN: fixture-run-token
+CSS PART 3 OF 4
+```css
+/* CSS PART 3 OF 4 */
+.contact { background: #e8e3d9; }
+.contact form { display: grid; gap: .75rem; max-width: 42rem; }
+.contact label { font-weight: 650; }
+.contact input, .contact textarea { width: 100%; padding: .8rem; border: 1px solid #657477; border-radius: .25rem; font: inherit; }
+.contact textarea { min-height: 9rem; resize: vertical; }
+.contact button[type="submit"] { justify-self: start; padding: .8rem 1.2rem; border: 0; color: white; background: var(--ink); font: inherit; cursor: pointer; }
+footer { padding: 3rem 8vw; color: white; background: var(--ink); }
+footer a { color: inherit; }
+```

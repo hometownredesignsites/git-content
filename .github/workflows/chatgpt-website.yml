@@ -39,6 +39,9 @@ on:
         options:
           - full
           - css_1
+          - css_2
+          - css_3
+          - css_4
           - html_1
       website_context_mode:
         description: Use a fictional minimal prompt for chunk diagnostics or source-grounded context for a real candidate
@@ -284,7 +287,8 @@ jobs:
           if not path.is_file():
               raise SystemExit("Staged candidate checkpoint is missing.")
           state = json.loads(path.read_text(encoding="utf-8"))
-          expected = ["css-1"] if stage == "css-1" else ["css-1", "html-1"]
+          css_parts = [f"css-{number}" for number in range(1, 5)]
+          expected = css_parts[:int(stage.split("-")[1])] if stage.startswith("css-") else css_parts + ["html-1"]
           if state.get("status") != "stage_complete" or state.get("staged_until") != stage:
               raise SystemExit(f"Candidate did not finish staged checkpoint {stage}.")
           if state.get("accepted_parts") != expected:
