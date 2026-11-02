@@ -145,8 +145,10 @@ MENU_VISUAL_JS = r"""button => {
     if (rect.width <= 0 || rect.height <= 0) return false;
     for (let node = element; node && node !== document.documentElement; node = node.parentElement) {
       const style = getComputedStyle(node);
-      if (node.getAttribute('aria-hidden') === 'true' || style.display === 'none' ||
-          style.visibility === 'hidden' || Number(style.opacity) <= 0.01) return false;
+      // aria-hidden affects assistive technology, not visual rendering. The
+      // hamburger bars are intentionally aria-hidden, so test rendered styles.
+      if (style.display === 'none' || style.visibility === 'hidden' ||
+          Number(style.opacity) <= 0.01) return false;
     }
     return true;
   };
