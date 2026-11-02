@@ -1,0 +1,173 @@
+RUN TOKEN: d72f765b263b2f61
+
+HTML PART 2 OF 2
+```text
+<!-- HTML PART 2 OF 2 -->
+
+    <section class="contact-section" id="contact" aria-labelledby="contact-title">
+      <div class="container contact-layout">
+
+        <div class="contact-copy">
+          <span class="eyebrow">Let's talk about your project</span>
+          <h2 id="contact-title">Ready to get started?</h2>
+          <p>
+            Whether you're considering a new roof, addressing hail
+            damage or planning a home renovation, tell Josh a little
+            about your property and what you have in mind.
+          </p>
+
+          <div class="contact-details">
+            <a class="contact-link" href="tel:7208287997">
+              <span class="contact-link-icon" aria-hidden="true">☎</span>
+              <span>
+                Call Josh
+                <br>
+                (720) 828-7997
+              </span>
+            </a>
+
+            <a class="contact-link" href="sms:7204535095">
+              <span class="contact-link-icon" aria-hidden="true">✉</span>
+              <span>
+                Text Photos of Damage
+                <br>
+                (720) 453-5095
+              </span>
+            </a>
+
+            <a class="contact-link" href="/renovation-cost-calculator/">
+              <span class="contact-link-icon" aria-hidden="true">↗</span>
+              <span>
+                Get a Free Estimate
+                <br>
+                Renovation Cost Calculator
+              </span>
+            </a>
+          </div>
+        </div>
+
+        <div class="contact-form">
+          <h3>Tell Josh About Your Project</h3>
+          <p class="form-intro">
+            Share a few details so you can start a conversation
+            about your construction or renovation needs.
+          </p>
+
+          <form action="#contact" method="get">
+            <div class="form-grid">
+
+              <div class="form-field">
+                <label for="contact-name">Name <span aria-hidden="true">*</span></label>
+                <input
+                  type="text"
+                  id="contact-name"
+                  name="name"
+                  autocomplete="name"
+                  placeholder="Your name"
+                  required
+                >
+              </div>
+
+              <div class="form-field">
+                <label for="contact-phone">Phone <span aria-hidden="true">*</span></label>
+                <input
+                  type="tel"
+                  id="contact-phone"
+                  name="phone"
+                  autocomplete="tel"
+                  placeholder="Your phone number"
+                  required
+                >
+              </div>
+
+              <div class="form-field">
+                <label for="contact-email">Email</label>
+                <input
+                  type="email"
+                  id="contact-email"
+                  name="email"
+                  autocomplete="email"
+                  placeholder="you@example.com"
+                >
+              </div>
+
+              <div class="form-field">
+                <label for="contact-address">Property Address or City</label>
+                <input
+                  type="text"
+                  id="contact-address"
+                  name="property-address"
+                  autocomplete="street-address"
+                  placeholder="Property location"
+                >
+              </div>
+
+              <div class="form-field form-field--full">
+                <label for="contact-service">What do you need?</label>
+                <select id="contact-service" name="project-type">
+                  <option value="">Select a project type</option>
+                  <option value="roofing">Roofing</option>
+                  <option value="hail-restoration">Hail Restoration</option>
+                  <option value="remodeling">Home Remodeling</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              <div class="form-field form-field--full">
+                <label for="contact-message">Tell Josh about the project</label>
+                <textarea
+                  id="contact-message"
+                  name="message"
+                  placeholder="What are you planning, and how can Josh help?"
+                  rows="5"
+                ></textarea>
+              </div>
+
+            </div>
+
+            <button class="button form-submit" type="submit">
+              Send Project Details <span aria-hidden="true">→</span>
+            </button>
+
+            <p class="form-note">
+              You can also contact Josh directly by phone or text.
+            </p>
+          </form>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+
+      <div>
+        <a class="brand" href="#home" aria-label="Back to Josh Brooks Construction home">
+          <span class="brand-mark" aria-hidden="true">JB</span>
+          <span class="brand-copy">
+            <span class="brand-name" style="color: #ffffff;">Josh Brooks Construction</span>
+            <span class="brand-description">Construction & Renovation Inc.</span>
+          </span>
+        </a>
+        <p class="footer-meta">
+          Licensed General Contractor · Longmont, Colorado
+        </p>
+      </div>
+
+      <nav class="footer-links" aria-label="Footer navigation">
+        <a href="#approach">Our Approach</a>
+        <a href="#roofing">Roofing</a>
+        <a href="#process">The Process</a>
+        <a href="#projects">Recent Work</a>
+        <a href="#contact">Contact</a>
+        <a href="tel:7208287997">(720) 828-7997</a>
+      </nav>
+
+    </div>
+  </footer>
+
+</body>
+</html>
+```
