@@ -1,0 +1,36 @@
+RUN TOKEN: ef9853b986b7de64
+
+CSS PART 1 OF 2
+```css
+/* CSS PART 1 OF 2 */
+
+:root {
+  --color-primary: #315b50;
+  --color-accent: #e8b66b;
+  --color-background: #faf8f3;
+  --color-text: #29332f;
+  --font-body: Arial, sans-serif;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  background: var(--color-background);
+  color: var(--color-text);
+}
+
+.site-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 6%;
+  background: var(--color-background);
+}
+
+.hero {
+  padding: 80px 6%;
+  background: var(--color-primary);
+  color: #ffffff;
+  text-align: center;
+}
+```
