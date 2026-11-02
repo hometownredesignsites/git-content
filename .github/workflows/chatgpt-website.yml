@@ -130,7 +130,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r .github/workflows/requirements-playwright.txt
 
-      - name: Prepare source facts or diagnostic context
+      - name: Prepare shared source facts or resume context
         id: context
         run: |
           set -euo pipefail
@@ -153,54 +153,37 @@ jobs:
             echo "Resuming saved candidate at $RUN_DIR"
             exit 0
           fi
-          RUN_DIR="chatgpt-runs/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-site-${SITE_INDEX}-candidate-1"
-          mkdir -p "$RUN_DIR/debug"
-          if [[ "${WEBSITE_CONTEXT_MODE:-source}" == "minimal" ]]; then
-            python chatgpt_automation/scripts/prepare_candidate_context.py \
-              --mode minimal \
-              --output "$RUN_DIR/debug/website_context.md" \
-              --inputs-output "$RUN_DIR/debug/inputs.json" \
-              --site-index "$SITE_INDEX"
-          else
+          if [[ "${WEBSITE_CONTEXT_MODE:-source}" == "source" ]]; then
+            SOURCE_FACTS="tmp/chatgpt-source-facts/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-site-${SITE_INDEX}.json"
+            mkdir -p "$(dirname "$SOURCE_FACTS")"
             python chatgpt_automation/scripts/fetch_source_facts.py \
               --source-url "$SOURCE_URL" \
               --business "$BUSINESS_NAME" \
               --category "$INDUSTRY_CATEGORY" \
               --location "$LOCATION" \
-              --output "$RUN_DIR/debug/source_facts.json"
-            python chatgpt_automation/scripts/prepare_candidate_context.py \
-              --mode source \
-              --source-facts "$RUN_DIR/debug/source_facts.json" \
-              --design-brief chatgpt_automation/design_brief.txt \
-              --output "$RUN_DIR/debug/website_context.md" \
-              --inputs-output "$RUN_DIR/debug/inputs.json" \
-              --site-index "$SITE_INDEX"
-            cp chatgpt_automation/website_request.txt "$RUN_DIR/debug/website_request.txt"
+              --output "$SOURCE_FACTS"
+            echo "source_facts=$SOURCE_FACTS" >> "$GITHUB_OUTPUT"
           fi
-          echo "run_dir=$RUN_DIR" >> "$GITHUB_OUTPUT"
 
-      - name: Generate one candidate in a single ChatGPT conversation
+      - name: Generate complete candidates until three pass
         id: generate
         env:
-          RUN_DIR: ${{ steps.context.outputs.run_dir }}
+          RESUME_RUN_DIR: ${{ steps.context.outputs.run_dir }}
+          SOURCE_FACTS: ${{ steps.context.outputs.source_facts }}
         run: |
-          set -uo pipefail
-          mkdir -p "$RUN_DIR/debug" tmp/playwright-profiles
-          CHAT_ID="$(python -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["chat_id"])' "$RUN_DIR/debug/inputs.json")"
-          CHAT_URL="https://chatgpt.com/"
-          EXTRA_FLAGS=(--start-new-chat)
-          if [[ -n "${RESUME_FOLDER:-}" ]]; then
-            EXTRA_FLAGS=()
-            CHAT_URL="${RESUME_CHAT_URL:-}"
-            if [[ -z "$CHAT_URL" ]]; then
-              CHAT_URL="$(python -c 'import json,sys; p=json.load(open(sys.argv[1], encoding="utf-8")); print(p.get("conversation_url") or "")' "$RUN_DIR/chunks/sequence_checkpoint.json")"
-            fi
-            if [[ -z "$CHAT_URL" ]]; then
-              echo "No saved conversation URL is available; cannot resume this candidate."
-              exit 1
-            fi
+          set -euo pipefail
+          mkdir -p tmp/playwright-profiles
+          target_passes=3
+          max_attempts=10
+          if [[ -n "${RESUME_RUN_DIR:-}" || "${WEBSITE_STAGE:-full}" != "full" ]]; then
+            target_passes=1
+            max_attempts=1
           fi
-          PROFILE="tmp/playwright-profiles/${GITHUB_RUN_ID}/${SITE_INDEX}/candidate-1"
+          successful=0
+          attempt=0
+          passed_dirs=()
+          passed_html=()
+          candidate_dirs=()
           STAGE_FLAGS=()
           if [[ "${WEBSITE_STAGE:-full}" != "full" ]]; then
             STAGE_FLAGS=(--website-stop-after "${WEBSITE_STAGE//_/-}")
@@ -210,53 +193,167 @@ jobs:
           if [[ "${WEBSITE_CONTEXT_MODE:-source}" == "source" ]]; then
             INSTRUCTION_FLAGS=(--instructions-file chatgpt_automation/website_request.txt)
           fi
-          set +e
-          xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' \
-            python -u chatgpt_file_playwright_anonymous_ci.py \
-              --stage-name website \
-              --input-file "$RUN_DIR/debug/website_context.md" \
-              "${INSTRUCTION_FLAGS[@]}" \
-              --output-file "$RUN_DIR/debug/runner_output.txt" \
-              --metadata-output-file "$RUN_DIR/debug/runner_metadata.json" \
-              --website-run-folder "$RUN_DIR" \
-              --website-chat-id "$CHAT_ID" \
-              --website-quality-request "Include only sections supported by the source pages. Preserve the source contact form's purpose and fields when present. Use relevant imagery." \
-              --url "$CHAT_URL" \
-              --user-data-dir "$PROFILE" \
-              --wait-seconds 60 \
-              --timeout-ms 180000 \
-              --post-response-wait-seconds 3 \
-              --response-settle-seconds 3 \
-              --max-settle-wait-seconds 180 \
-              --error-screenshot "$RUN_DIR/debug/chatgpt_playwright_error.png" \
-              "${CONTEXT_FLAGS[@]}" \
-              "${STAGE_FLAGS[@]}" \
-              "${EXTRA_FLAGS[@]}" \
-              2>&1 | tee "$RUN_DIR/debug/action.log"
-          RUNNER_STATUS=${PIPESTATUS[0]}
-          set -e
-          echo "runner_status=$RUNNER_STATUS" >> "$GITHUB_OUTPUT"
-          if [[ ! -f "$RUN_DIR/run_notes.json" ]]; then
-            printf '{"status":"generation_failed","automated_success":false,"final_success":false,"human_visual_review_status":"pending"}\n' > "$RUN_DIR/run_notes.json"
+          while [[ "$successful" -lt "$target_passes" && "$attempt" -lt "$max_attempts" ]]; do
+            attempt=$((attempt + 1))
+            if [[ -n "${RESUME_RUN_DIR:-}" ]]; then
+              RUN_DIR="$RESUME_RUN_DIR"
+              CANDIDATE_INDEX="$(python -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("candidate_index", 1))' "$RUN_DIR/debug/inputs.json")"
+            else
+              CANDIDATE_INDEX="$attempt"
+              RUN_DIR="chatgpt-runs/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-site-${SITE_INDEX}-candidate-${CANDIDATE_INDEX}"
+              mkdir -p "$RUN_DIR/debug"
+              if [[ "${WEBSITE_CONTEXT_MODE:-source}" == "minimal" ]]; then
+                python chatgpt_automation/scripts/prepare_candidate_context.py \
+                  --mode minimal \
+                  --output "$RUN_DIR/debug/website_context.md" \
+                  --inputs-output "$RUN_DIR/debug/inputs.json" \
+                  --site-index "$SITE_INDEX" \
+                  --candidate-index "$CANDIDATE_INDEX"
+              else
+                python chatgpt_automation/scripts/prepare_candidate_context.py \
+                  --mode source \
+                  --source-facts "$SOURCE_FACTS" \
+                  --design-brief chatgpt_automation/design_brief.txt \
+                  --output "$RUN_DIR/debug/website_context.md" \
+                  --inputs-output "$RUN_DIR/debug/inputs.json" \
+                  --site-index "$SITE_INDEX" \
+                  --candidate-index "$CANDIDATE_INDEX"
+                cp "$SOURCE_FACTS" "$RUN_DIR/debug/source_facts.json"
+                cp chatgpt_automation/website_request.txt "$RUN_DIR/debug/website_request.txt"
+              fi
+            fi
+            candidate_dirs+=("$RUN_DIR")
+            echo "::notice title=Candidate progress::Attempt ${attempt}/${max_attempts}; ${successful}/${target_passes} passing candidates so far."
+            mkdir -p "$RUN_DIR/debug"
+            CHAT_ID="$(python -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["chat_id"])' "$RUN_DIR/debug/inputs.json")"
+            CHAT_URL="https://chatgpt.com/"
+            EXTRA_FLAGS=(--start-new-chat)
+            if [[ -n "${RESUME_RUN_DIR:-}" ]]; then
+              EXTRA_FLAGS=()
+              CHAT_URL="${RESUME_CHAT_URL:-}"
+              if [[ -z "$CHAT_URL" ]]; then
+                CHAT_URL="$(python -c 'import json,sys; p=json.load(open(sys.argv[1], encoding="utf-8")); print(p.get("conversation_url") or "")' "$RUN_DIR/chunks/sequence_checkpoint.json")"
+              fi
+              if [[ -z "$CHAT_URL" ]]; then
+                echo "No saved conversation URL is available; cannot resume this candidate."
+                exit 1
+              fi
+            fi
+            PROFILE="tmp/playwright-profiles/${GITHUB_RUN_ID}/${SITE_INDEX}/candidate-${CANDIDATE_INDEX}"
+            set +e
+            xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' \
+              python -u chatgpt_file_playwright_anonymous_ci.py \
+                --stage-name website \
+                --input-file "$RUN_DIR/debug/website_context.md" \
+                "${INSTRUCTION_FLAGS[@]}" \
+                --output-file "$RUN_DIR/debug/runner_output.txt" \
+                --metadata-output-file "$RUN_DIR/debug/runner_metadata.json" \
+                --website-run-folder "$RUN_DIR" \
+                --website-chat-id "$CHAT_ID" \
+                --website-quality-request "Include only sections supported by the source pages. Preserve the source contact form's purpose and fields when present. Use relevant imagery." \
+                --url "$CHAT_URL" \
+                --user-data-dir "$PROFILE" \
+                --wait-seconds 60 \
+                --timeout-ms 180000 \
+                --post-response-wait-seconds 3 \
+                --response-settle-seconds 3 \
+                --max-settle-wait-seconds 180 \
+                --error-screenshot "$RUN_DIR/debug/chatgpt_playwright_error.png" \
+                "${CONTEXT_FLAGS[@]}" \
+                "${STAGE_FLAGS[@]}" \
+                "${EXTRA_FLAGS[@]}" \
+                2>&1 | tee "$RUN_DIR/debug/action.log"
+            RUNNER_STATUS=${PIPESTATUS[0]}
+            set -e
+            if [[ ! -f "$RUN_DIR/run_notes.json" ]]; then
+              printf '{"status":"generation_failed","automated_success":false,"final_success":false,"human_visual_review_status":"pending"}\n' > "$RUN_DIR/run_notes.json"
+            fi
+            if [[ "$RUNNER_STATUS" -eq 0 ]] && python -c 'import json,sys; raise SystemExit(0 if json.load(open(sys.argv[1], encoding="utf-8")).get("automated_success") else 1)' "$RUN_DIR/run_notes.json" >/dev/null 2>&1; then
+              successful=$((successful + 1))
+              passed_dirs+=("$RUN_DIR")
+              passed_html+=("$RUN_DIR/files/inlined/index.html")
+              outcome="passed"
+            else
+              outcome="did not pass"
+            fi
+            echo "::notice title=Candidate progress::Attempt ${attempt}/${max_attempts} ${outcome}; ${successful}/${target_passes} passing candidates so far."
+            if [[ -n "${RESUME_RUN_DIR:-}" || "${WEBSITE_STAGE:-full}" != "full" ]]; then
+              break
+            fi
+            if [[ "$RUNNER_STATUS" -ne 0 && -s "$RUN_DIR/chunks/sequence_checkpoint.json" ]]; then
+              FAILURE_CLASS="$(python - "$RUN_DIR/chunks/sequence_checkpoint.json" <<'PY'
+          import json, sys
+          try:
+              checkpoint = json.load(open(sys.argv[1], encoding="utf-8"))
+          except (OSError, json.JSONDecodeError):
+              checkpoint = {}
+          print((checkpoint.get("last_error") or {}).get("classification", ""))
+          PY
+              )"
+              case "$FAILURE_CLASS" in
+                login_required|captcha_required|rate_limited|conversation_gated|service_error)
+                  echo "Stopping candidate retries because ChatGPT reported ${FAILURE_CLASS}."
+                  break
+                  ;;
+              esac
+            fi
+          done
+          if [[ -z "${RESUME_RUN_DIR:-}" && "${WEBSITE_STAGE:-full}" == "full" ]]; then
+            SUMMARY_PATH="chatgpt-runs/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-site-${SITE_INDEX}-batch-summary.json"
+            python - "$SUMMARY_PATH" "$successful" "$attempt" "${passed_dirs[@]}" -- "${passed_html[@]}" <<'PY'
+          import json, pathlib, sys
+          path = pathlib.Path(sys.argv[1])
+          separator = sys.argv.index("--")
+          passed_folders = sys.argv[4:separator]
+          passed_html = sys.argv[separator + 1:]
+          path.parent.mkdir(parents=True, exist_ok=True)
+          path.write_text(json.dumps({
+              "site_index": int(path.stem.split("-site-")[1].split("-")[0]),
+              "target_passing_candidates": 3,
+              "successful_candidates": int(sys.argv[2]),
+              "attempts": int(sys.argv[3]),
+              "passed_candidate_folders": passed_folders,
+              "passed_inlined_html": passed_html,
+              "automated_success": int(sys.argv[2]) >= 3,
+          }, indent=2) + "\n", encoding="utf-8")
+          PY
+            echo "batch_summary=$SUMMARY_PATH" >> "$GITHUB_OUTPUT"
           fi
-          if [[ "$RUNNER_STATUS" -ne 0 ]]; then
-            echo "Website generation or QA exited with status $RUNNER_STATUS; candidate evidence will be committed."
+          echo "successful_count=$successful" >> "$GITHUB_OUTPUT"
+          echo "attempt_count=$attempt" >> "$GITHUB_OUTPUT"
+          echo "target_count=$target_passes" >> "$GITHUB_OUTPUT"
+          if [[ ${#candidate_dirs[@]} -gt 0 ]]; then
+            echo "run_dir=${candidate_dirs[0]}" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Generation finished: ${successful}/${target_passes} automated passes after ${attempt} attempt(s)."
+          if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+            printf '## ChatGPT candidate batch for site %s\n\n- Automated passes: **%s/%s**\n- Attempts: **%s/%s**\n- Each candidate has its own conversation and inlined HTML at `files/inlined/index.html`.\n' \
+              "$SITE_INDEX" "$successful" "$target_passes" "$attempt" "$max_attempts" >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Commit candidate and checkpoint evidence
         if: always()
         env:
-          RUN_DIR: ${{ steps.context.outputs.run_dir }}
+          RESUME_RUN_DIR: ${{ steps.context.outputs.run_dir }}
         run: |
           set -euo pipefail
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if [[ -z "$RUN_DIR" || ! -d "$RUN_DIR" ]]; then
+          shopt -s nullglob
+          if [[ -n "${RESUME_RUN_DIR:-}" ]]; then
+            candidate_dirs=("$RESUME_RUN_DIR")
+          else
+            candidate_dirs=(chatgpt-runs/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-site-${SITE_INDEX}-candidate-*)
+          fi
+          if [[ ${#candidate_dirs[@]} -eq 0 ]]; then
             echo "No candidate folder was created."
             exit 0
           fi
-          git add -- "$RUN_DIR"
+          git add -- "${candidate_dirs[@]}"
+          if [[ -n "${{ steps.generate.outputs.batch_summary }}" ]]; then
+            git add -- "${{ steps.generate.outputs.batch_summary }}"
+          fi
           if git diff --cached --quiet; then
             echo "No new candidate evidence to commit."
             exit 0
@@ -276,7 +373,10 @@ jobs:
       - name: Require the candidate automated gate
         if: always()
         env:
-          RUN_DIR: ${{ steps.context.outputs.run_dir }}
+          RUN_DIR: ${{ steps.generate.outputs.run_dir }}
+          SUCCESSFUL_COUNT: ${{ steps.generate.outputs.successful_count }}
+          ATTEMPT_COUNT: ${{ steps.generate.outputs.attempt_count }}
+          TARGET_COUNT: ${{ steps.generate.outputs.target_count }}
         run: |
           if [[ "${WEBSITE_STAGE:-full}" != "full" ]]; then
             STAGE_KEY="${WEBSITE_STAGE//_/-}"
@@ -295,6 +395,14 @@ jobs:
               raise SystemExit(f"Checkpoint parts do not match {stage}: {state.get('accepted_parts')}")
           print(f"Incremental generation stage {stage} passed with {len(expected)} validated full responses.")
           PY
+            exit 0
+          fi
+          if [[ -z "${RESUME_FOLDER:-}" ]]; then
+            if [[ "${SUCCESSFUL_COUNT:-0}" -lt "${TARGET_COUNT:-3}" ]]; then
+              echo "Only ${SUCCESSFUL_COUNT:-0}/${TARGET_COUNT:-3} complete candidates passed after ${ATTEMPT_COUNT:-0} attempts. All candidate evidence was saved."
+              exit 1
+            fi
+            echo "Three complete candidates passed the automated gate. Human visual and image review remain pending."
             exit 0
           fi
           python - "$RUN_DIR/run_notes.json" <<'PY'
