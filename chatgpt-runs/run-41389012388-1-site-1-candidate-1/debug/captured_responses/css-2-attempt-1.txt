@@ -1,0 +1,405 @@
+RUN TOKEN: e93733ea86dae315
+
+CSS PART 2 OF 3
+```css
+/* CSS PART 2 OF 3 */
+
+/* SERVICE OVERVIEW */
+.services-section {
+  background: var(--white);
+}
+
+.services-intro {
+  display: grid;
+  grid-template-columns: 1fr 0.8fr;
+  align-items: end;
+  gap: 60px;
+  margin-bottom: var(--space-5);
+}
+
+.services-intro .section-heading {
+  margin-bottom: 0;
+}
+
+.services-intro-aside {
+  max-width: 410px;
+  padding-left: 24px;
+  border-left: 2px solid var(--accent);
+  color: var(--ink-soft);
+}
+
+.services-list {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.service-item {
+  position: relative;
+  min-height: 245px;
+  padding: 32px 30px 35px;
+  border-right: 1px solid var(--line);
+}
+
+.service-item:first-child {
+  padding-left: 0;
+}
+
+.service-item:last-child {
+  border-right: 0;
+}
+
+.service-number {
+  display: block;
+  margin-bottom: 35px;
+  color: var(--accent);
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+}
+
+.service-item h3 {
+  margin-bottom: 13px;
+  font-size: 1.65rem;
+}
+
+.service-item p {
+  max-width: 310px;
+  margin-bottom: 0;
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+}
+
+/* CONTRACTOR DIFFERENCE */
+.approach-section {
+  display: grid;
+  grid-template-columns: 0.95fr 1.05fr;
+  align-items: center;
+  gap: clamp(45px, 8vw, 110px);
+  background: var(--paper);
+}
+
+.approach-content {
+  max-width: 560px;
+}
+
+.approach-content h2 {
+  margin-bottom: 24px;
+}
+
+.approach-content > p {
+  color: var(--ink-soft);
+}
+
+.approach-points {
+  display: grid;
+  gap: 0;
+  margin-top: 32px;
+  border-top: 1px solid var(--line);
+}
+
+.approach-point {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 15px;
+  padding-block: 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.approach-point-mark {
+  display: flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  color: var(--accent-dark);
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.approach-point h3 {
+  margin-bottom: 5px;
+  font-family: var(--font-body);
+  font-size: 0.98rem;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.approach-point p {
+  margin-bottom: 0;
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+}
+
+.approach-visual {
+  position: relative;
+  min-height: 540px;
+}
+
+.approach-visual img {
+  width: 100%;
+  height: 540px;
+  object-fit: cover;
+  object-position: center;
+}
+
+.approach-note {
+  position: absolute;
+  right: -22px;
+  bottom: 28px;
+  max-width: 250px;
+  padding: 23px;
+  background: var(--navy);
+  color: var(--white);
+  box-shadow: var(--shadow);
+}
+
+.approach-note strong {
+  display: block;
+  margin-bottom: 5px;
+  font-family: var(--font-display);
+  font-size: 2.1rem;
+  font-weight: 400;
+}
+
+.approach-note span {
+  color: #d4dddf;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+/* PROJECT GALLERY */
+.projects-section {
+  background: var(--navy-deep);
+  color: var(--white);
+}
+
+.projects-section h2,
+.projects-section h3 {
+  color: var(--white);
+}
+
+.projects-section .eyebrow {
+  color: #e4a477;
+}
+
+.projects-section .section-heading p {
+  color: #c7d0d1;
+}
+
+.projects-header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 40px;
+  margin-bottom: var(--space-5);
+}
+
+.projects-header .section-heading {
+  margin-bottom: 0;
+}
+
+.projects-grid {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  grid-template-rows: 300px 300px;
+  gap: 18px;
+}
+
+.project-item {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  background: #34474b;
+}
+
+.project-item:first-child {
+  grid-row: 1 / 3;
+}
+
+.project-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 450ms ease;
+}
+
+.project-item:hover img {
+  transform: scale(1.035);
+}
+
+.project-caption {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  padding: 52px 25px 22px;
+  background: linear-gradient(
+    transparent,
+    rgba(17, 31, 37, 0.88)
+  );
+}
+
+.project-caption h3 {
+  margin-bottom: 5px;
+  font-size: 1.4rem;
+}
+
+.project-caption p {
+  margin-bottom: 0;
+  color: #e1e6e6;
+  font-size: 0.78rem;
+}
+
+/* ROOF ATTENTION SECTION */
+.roof-section {
+  display: grid;
+  grid-template-columns: 0.9fr 1.1fr;
+  align-items: center;
+  gap: clamp(40px, 8vw, 100px);
+  background: var(--white);
+}
+
+.roof-content h2 {
+  margin-bottom: 22px;
+}
+
+.roof-content > p {
+  color: var(--ink-soft);
+}
+
+.roof-signs {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0 28px;
+  margin-top: 28px;
+  border-top: 1px solid var(--line);
+}
+
+.roof-sign {
+  padding: 17px 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.roof-sign::before {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 11px;
+  border-radius: 50%;
+  background: var(--accent);
+  content: "";
+  vertical-align: 2px;
+}
+
+.roof-visual {
+  position: relative;
+  min-height: 480px;
+  background: var(--muted);
+}
+
+.roof-visual img {
+  width: 100%;
+  height: 480px;
+  object-fit: cover;
+}
+
+.roof-visual-caption {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  padding: 15px 21px;
+  background: var(--navy);
+  color: var(--white);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+/* COLORADO ROOFING GUIDE */
+.roof-guide {
+  background: var(--muted);
+}
+
+.guide-layout {
+  display: grid;
+  grid-template-columns: 0.75fr 1.25fr;
+  align-items: start;
+  gap: clamp(45px, 8vw, 110px);
+}
+
+.guide-intro {
+  position: sticky;
+  top: 35px;
+}
+
+.guide-intro h2 {
+  margin-bottom: 20px;
+}
+
+.guide-intro p {
+  color: var(--ink-soft);
+}
+
+.guide-steps {
+  counter-reset: guide;
+  border-top: 1px solid #d2d2ca;
+}
+
+.guide-step {
+  display: grid;
+  grid-template-columns: 58px 1fr;
+  gap: 20px;
+  padding: 27px 0;
+  border-bottom: 1px solid #d2d2ca;
+  counter-increment: guide;
+}
+
+.guide-step::before {
+  display: flex;
+  width: 42px;
+  height: 42px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  color: var(--accent-dark);
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  content: counter(guide, decimal-leading-zero);
+}
+
+.guide-step h3 {
+  margin-bottom: 8px;
+  font-size: 1.35rem;
+}
+
+.guide-step p {
+  max-width: 590px;
+  margin-bottom: 0;
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+}
+
+/* SECTION CTA */
+.section-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 30px;
+  margin-top: 45px;
+  padding: 28px 32px;
+  border-left: 3px solid var(--accent);
+  background: var(--white);
+}
+
+.section-cta p {
+  margin-bottom: 0;
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+}
+```
