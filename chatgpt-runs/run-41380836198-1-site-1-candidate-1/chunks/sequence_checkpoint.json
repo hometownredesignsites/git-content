@@ -1,0 +1,23 @@
+{
+  "status": "running",
+  "chat_id": "site-1-candidate-1",
+  "conversation_url": "https://chatgpt.com/uc/6ae7fddd-fd00-83ea-bf88-4b4578c957b6",
+  "run_token": "bbf84fed6980d869",
+  "context_mode": "source",
+  "brief_sha256": "d413803ce2ce274b1eead742100273c9b3430b4b020805f83fabe1d5552b44da",
+  "started_at_utc": "2026-11-02T03:03:02.003323+00:00",
+  "accepted_parts": [
+    "css-1",
+    "css-2",
+    "css-3"
+  ],
+  "pending_turn": null,
+  "last_response_at_utc": "2026-11-02T03:06:05.531562+00:00",
+  "last_accepted_at_utc": "2026-11-02T03:06:05.568586+00:00",
+  "last_capture": {
+    "accepted": true,
+    "part": "css 3/3",
+    "characters": 8811,
+    "sha256": "7353a1a495e073d1edc9ae10f916ff144594336406a1e6585383265103b853fb"
+  }
+}
