@@ -1,0 +1,691 @@
+RUN TOKEN: 7e6a715a9f5d948d
+
+CSS PART 2 OF 2
+```css
+/* CSS PART 2 OF 2 */
+
+/* ========================================
+   CONTACT / CONVERSION SECTION
+======================================== */
+.contact-section {
+  position: relative;
+  overflow: hidden;
+  background: var(--ink-deep);
+  color: var(--white);
+}
+
+.contact-layout {
+  display: grid;
+  grid-template-columns: 0.85fr 1.15fr;
+  align-items: start;
+  gap: 90px;
+}
+
+.contact-copy {
+  position: sticky;
+  top: 40px;
+}
+
+.contact-copy .eyebrow {
+  color: var(--accent-light);
+}
+
+.contact-copy h2 {
+  max-width: 490px;
+  margin-bottom: 24px;
+  color: var(--white);
+}
+
+.contact-copy > p {
+  max-width: 440px;
+  color: rgba(255, 255, 255, 0.74);
+}
+
+.contact-detail {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-top: 38px;
+  padding-top: 25px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.9rem;
+}
+
+.contact-detail-mark {
+  color: var(--accent-light);
+  font-size: 1.15rem;
+}
+
+.contact-form {
+  padding: clamp(26px, 4vw, 48px);
+  background: var(--white);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+
+.form-heading {
+  margin-bottom: 30px;
+}
+
+.form-heading h3 {
+  margin-bottom: 9px;
+  font-size: 1.9rem;
+}
+
+.form-heading p {
+  margin-bottom: 0;
+  font-size: 0.88rem;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 21px 18px;
+}
+
+.form-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-field--full {
+  grid-column: 1 / -1;
+}
+
+.form-field label {
+  color: var(--ink);
+  font-size: 0.76rem;
+  font-weight: 750;
+  letter-spacing: 0.055em;
+}
+
+.form-field input,
+.form-field select,
+.form-field textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 52px;
+  padding: 13px 15px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: #faf9f6;
+  color: var(--ink);
+  font-size: 0.94rem;
+  transition:
+    border-color var(--transition),
+    background var(--transition);
+}
+
+.form-field textarea {
+  min-height: 135px;
+  resize: vertical;
+}
+
+.form-field input::placeholder,
+.form-field textarea::placeholder {
+  color: #747d80;
+}
+
+.form-field input:focus,
+.form-field select:focus,
+.form-field textarea:focus {
+  border-color: var(--accent);
+  background: var(--white);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.form-submit {
+  margin-top: 25px;
+}
+
+.form-submit .button {
+  width: 100%;
+}
+
+.form-note {
+  margin: 15px 0 0;
+  color: #687277;
+  font-size: 0.76rem;
+  line-height: 1.6;
+}
+
+/* ========================================
+   FOOTER
+======================================== */
+.site-footer {
+  padding-top: 65px;
+  background: #121b20;
+  color: var(--white);
+}
+
+.footer-main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 60px;
+  padding-bottom: 52px;
+}
+
+.footer-brand {
+  max-width: 390px;
+}
+
+.footer-brand .brand-name {
+  color: var(--white);
+}
+
+.footer-brand .brand-description {
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.footer-brand p {
+  max-width: 350px;
+  margin-top: 22px;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 0.88rem;
+}
+
+.footer-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px 35px;
+  padding-top: 12px;
+}
+
+.footer-nav a {
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.79rem;
+  font-weight: 650;
+  transition: color var(--transition);
+}
+
+.footer-nav a:hover {
+  color: var(--accent-light);
+}
+
+.footer-bottom {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding-block: 22px;
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.57);
+  font-size: 0.73rem;
+}
+
+/* ========================================
+   ACCESSIBLE MOBILE MENU BUTTON
+======================================== */
+.menu-toggle {
+  display: none;
+  width: 46px;
+  height: 46px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 5px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--white);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.menu-toggle span[aria-hidden="true"] {
+  display: block;
+  width: 20px;
+  height: 2px;
+  flex: 0 0 2px;
+  background-color: currentColor;
+}
+
+/* ========================================
+   TABLET
+======================================== */
+@media (max-width: 1000px) {
+  :root {
+    --section-space: 86px;
+  }
+
+  .header-inner {
+    gap: 20px;
+  }
+
+  .brand-logo {
+    width: 56px;
+    height: 56px;
+  }
+
+  .brand-name {
+    font-size: 1.05rem;
+  }
+
+  .brand-description {
+    font-size: 0.57rem;
+  }
+
+  .primary-nav {
+    gap: 17px;
+  }
+
+  .primary-nav a {
+    font-size: 0.74rem;
+  }
+
+  .intro-layout,
+  .services-layout,
+  .why-layout,
+  .roof-layout,
+  .contact-layout {
+    gap: 48px;
+  }
+
+  .services-layout {
+    grid-template-columns: 0.8fr 1.2fr;
+  }
+
+  .roof-image,
+  .roof-image img {
+    min-height: 420px;
+  }
+
+  .process-step {
+    padding-right: 22px;
+  }
+
+  .process-step + .process-step {
+    padding-left: 22px;
+  }
+
+  .project-image {
+    height: 320px;
+  }
+
+  .project-card--wide .project-image {
+    height: 420px;
+  }
+}
+
+/* ========================================
+   MOBILE NAVIGATION & LAYOUT
+======================================== */
+@media (max-width: 760px) {
+  :root {
+    --gutter: 24px;
+    --section-space: 74px;
+  }
+
+  html {
+    scroll-padding-top: 75px;
+  }
+
+  .header-inner {
+    position: relative;
+    min-height: 76px;
+    flex-wrap: wrap;
+    gap: 0;
+  }
+
+  .brand {
+    max-width: calc(100% - 62px);
+    gap: 10px;
+  }
+
+  .brand-logo {
+    width: 48px;
+    height: 48px;
+  }
+
+  .brand-name {
+    font-size: 1rem;
+  }
+
+  .brand-description {
+    font-size: 0.53rem;
+    letter-spacing: 0.08em;
+  }
+
+  .menu-toggle {
+    display: inline-flex;
+  }
+
+  .primary-nav {
+    position: absolute;
+    top: 100%;
+    right: calc(var(--gutter) * -1);
+    left: calc(var(--gutter) * -1);
+    display: none;
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0;
+    padding: 10px var(--gutter) 20px;
+    border-top: 1px solid var(--line);
+    background: var(--white);
+    box-shadow: 0 15px 25px rgba(23, 33, 38, 0.1);
+  }
+
+  .primary-nav.is-open {
+    display: flex;
+  }
+
+  .primary-nav a {
+    display: block;
+    width: 100%;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 0.86rem;
+  }
+
+  .primary-nav a::after {
+    display: none;
+  }
+
+  .hero {
+    min-height: 650px;
+    min-height: min(760px, 88svh);
+    background-image:
+      linear-gradient(
+        90deg,
+        rgba(18, 28, 33, 0.84),
+        rgba(18, 28, 33, 0.52)
+      ),
+      url("https://joshbrooksconstructionllc.com/wp-content/uploads/2026/09/finished-roof-ridge-thornton-co-768x1024.jpg");
+    background-position: center, 57% center;
+  }
+
+  .hero-content {
+    width: 100%;
+    padding-block: 85px 95px;
+  }
+
+  .hero h1 {
+    max-width: 620px;
+    font-size: clamp(2.9rem, 10vw, 4.5rem);
+  }
+
+  .hero-description {
+    max-width: 510px;
+    font-size: 1rem;
+  }
+
+  .hero-note {
+    margin-top: 35px;
+    font-size: 0.68rem;
+  }
+
+  .section-header,
+  .projects-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 18px;
+    margin-bottom: 35px;
+  }
+
+  .intro-section {
+    padding-block: 74px;
+  }
+
+  .intro-layout,
+  .services-layout,
+  .why-layout,
+  .roof-layout,
+  .contact-layout {
+    grid-template-columns: 1fr;
+    gap: 35px;
+  }
+
+  .intro-heading,
+  .intro-copy {
+    max-width: 100%;
+  }
+
+  .intro-emphasis {
+    font-size: 1.25rem;
+  }
+
+  .services-heading {
+    position: static;
+  }
+
+  .service-item {
+    grid-template-columns: 38px 1fr;
+    gap: 14px;
+    padding-block: 24px;
+  }
+
+  .why-point {
+    grid-template-columns: 35px 1fr;
+    gap: 15px;
+    padding-block: 23px;
+  }
+
+  .roof-image,
+  .roof-image img {
+    min-height: 350px;
+    max-height: 470px;
+  }
+
+  .process-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .process-step,
+  .process-step + .process-step {
+    padding: 26px 0;
+    border-left: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .process-step:last-child {
+    border-bottom: 0;
+  }
+
+  .process-step-number {
+    margin-bottom: 17px;
+    font-size: 2rem;
+  }
+
+  .projects-grid {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+
+  .project-card--wide {
+    grid-column: auto;
+  }
+
+  .project-image,
+  .project-card--wide .project-image {
+    height: clamp(240px, 65vw, 390px);
+  }
+
+  .project-details {
+    padding: 20px;
+  }
+
+  .contact-copy {
+    position: static;
+  }
+
+  .contact-layout {
+    gap: 30px;
+  }
+
+  .contact-form {
+    padding: 25px 21px;
+  }
+
+  .footer-main {
+    flex-direction: column;
+    gap: 30px;
+  }
+
+  .footer-nav {
+    gap: 17px 24px;
+  }
+}
+
+/* ========================================
+   SMALL MOBILE
+======================================== */
+@media (max-width: 480px) {
+  :root {
+    --gutter: 19px;
+    --section-space: 64px;
+  }
+
+  body {
+    font-size: 15px;
+  }
+
+  h2 {
+    font-size: clamp(2.15rem, 9vw, 2.8rem);
+  }
+
+  .container {
+    width: calc(100% - var(--gutter) * 2);
+  }
+
+  .hero {
+    min-height: 690px;
+    min-height: 90svh;
+    background-position: center, 60% center;
+  }
+
+  .hero-content {
+    padding-block: 70px 85px;
+  }
+
+  .hero h1 {
+    font-size: clamp(2.65rem, 11vw, 3.6rem);
+  }
+
+  .hero-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .hero-actions .button {
+    width: 100%;
+  }
+
+  .hero-note {
+    align-items: flex-start;
+    font-size: 0.62rem;
+    line-height: 1.6;
+  }
+
+  .eyebrow {
+    font-size: 0.65rem;
+  }
+
+  .section-intro {
+    font-size: 1rem;
+  }
+
+  .service-item h3,
+  .process-step h3 {
+    font-size: 1.45rem;
+  }
+
+  .roof-image,
+  .roof-image img {
+    min-height: 290px;
+  }
+
+  .project-details {
+    flex-direction: column;
+    gap: 13px;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+    gap: 17px;
+  }
+
+  .form-field--full {
+    grid-column: auto;
+  }
+
+  .contact-form {
+    padding: 24px 17px;
+  }
+
+  .form-heading h3 {
+    font-size: 1.65rem;
+  }
+
+  .footer-bottom {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .footer-nav {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* ========================================
+   EXTRA-NARROW VIEWPORTS
+======================================== */
+@media (max-width: 340px) {
+  :root {
+    --gutter: 15px;
+  }
+
+  .brand-name {
+    font-size: 0.9rem;
+  }
+
+  .brand-description {
+    font-size: 0.47rem;
+  }
+
+  .hero h1 {
+    font-size: 2.45rem;
+  }
+
+  .button {
+    padding-inline: 16px;
+    font-size: 0.7rem;
+  }
+
+  .project-details {
+    padding: 17px;
+  }
+}
+
+/* ========================================
+   KEYBOARD FOCUS & REDUCED MOTION
+======================================== */
+:where(a, button, input, select, textarea):focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 4px;
+}
+
+.menu-toggle:focus-visible {
+  outline-offset: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+```
