@@ -1,0 +1,29 @@
+{
+  "status": "pending",
+  "reviewer": "",
+  "checks": {
+    "first_screen_hierarchy": false,
+    "section_rhythm": false,
+    "typography": false,
+    "business_specificity": false,
+    "footer": false
+  },
+  "blocking_defects": [
+    "Pending desktop and mobile review"
+  ],
+  "screenshots": [
+    {
+      "viewport": "desktop",
+      "path": "screenshots/desktop.png",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "viewport": "mobile",
+      "path": "screenshots/mobile.png",
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "notes": "Inspect both screenshots; copy to ../visual_review.json and record the result."
+}
