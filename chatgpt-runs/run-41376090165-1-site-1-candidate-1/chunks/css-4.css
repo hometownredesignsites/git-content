@@ -1,0 +1,35 @@
+/* CSS PART 4 OF 4 */
+
+@media (max-width: 600px) {
+  .site-header {
+    padding: 16px 20px;
+  }
+
+  .hero {
+    padding: 56px 20px;
+  }
+
+  .content-section,
+  .contact {
+    padding: 36px 20px;
+  }
+
+  .service-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
