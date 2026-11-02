@@ -290,6 +290,25 @@ def wait_for_valid_response(
     return ""
 
 
+def response_generation_active(page) -> bool:
+    """Return true while ChatGPT exposes its stop-generation control."""
+    selectors = (
+        "button[data-testid='stop-button']",
+        "button[aria-label='Stop generating']",
+        "button[data-stop-generating]",
+        "button:has-text('Stop generating')",
+    )
+    for selector in selectors:
+        try:
+            matches = page.locator(selector)
+            for index in range(matches.count()):
+                if matches.nth(index).is_visible():
+                    return True
+        except Exception:
+            continue
+    return False
+
+
 def stabilize_response(
     page,
     assistant_messages,
@@ -307,13 +326,7 @@ def stabilize_response(
     waited = 0
     previous = ""
     while waited < max_settle_wait_seconds:
-        stop_visible = False
-        try:
-            stop_visible = page.locator(
-                "button[data-testid='stop-button'], button:has-text('Stop generating')"
-            ).first.is_visible()
-        except Exception:
-            pass
+        stop_visible = response_generation_active(page)
         current = extract_response_text(assistant_messages, before_count, before_last_text)
         if not current:
             current = extract_labeled_response(page, prompt_text, before_body_text)

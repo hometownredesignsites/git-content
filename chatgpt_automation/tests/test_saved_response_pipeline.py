@@ -11,6 +11,7 @@ from pathlib import Path
 
 from chatgpt_automation.scripts.website_chunks import WebsiteTurnError, _part_prompt, run_website_chunks
 from chatgpt_file_playwright_anonymous_ci import inspect_chatgpt_page_state
+from playwright_runner.browser_session import response_generation_active
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -25,6 +26,26 @@ REQUEST = (
 
 
 class SavedResponsePipelineTest(unittest.TestCase):
+    def test_chatgpt_aria_stop_control_is_recognized_as_active_generation(self):
+        class Locator:
+            def __init__(self, visible):
+                self.visible = visible
+
+            def count(self):
+                return 1 if self.visible else 0
+
+            def nth(self, _index):
+                return self
+
+            def is_visible(self):
+                return self.visible
+
+        class Page:
+            def locator(self, selector):
+                return Locator(selector == "button[aria-label='Stop generating']")
+
+        self.assertTrue(response_generation_active(Page()))
+
     def test_generation_contract_has_no_legacy_chunk_instructions(self):
         css = _part_prompt("css", 1, RUN_TOKEN, "fixture design brief", None)
         html = _part_prompt("html", 1, RUN_TOKEN, "fixture design brief", ("css", 1))
