@@ -82,6 +82,7 @@ jobs:
           RUN_MODE: ${{ github.event_name == 'push' && 'smoke_test' || inputs.run_mode || 'smoke_test' }}
           SMOKE_WEBSITE: ${{ inputs.smoke_website }}
           RESUME_CANDIDATE: ${{ inputs.resume_candidate }}
+          WEBSITE_CONTEXT_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.website_context_mode || 'minimal' }}
         run: |
           if [[ "$GITHUB_EVENT_NAME" == "push" && -s chatgpt_automation/resume_candidate.txt ]]; then
             RESUME_CANDIDATE="$(tr -d '\r\n' < chatgpt_automation/resume_candidate.txt)"

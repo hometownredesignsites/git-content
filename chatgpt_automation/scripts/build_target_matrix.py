@@ -29,6 +29,7 @@ def read_targets() -> list[dict[str, str]]:
     manual_category = _clean(os.environ.get("INDUSTRY_CATEGORY"))
     manual_location = _clean(os.environ.get("LOCATION"))
     resume_candidate = _clean(os.environ.get("RESUME_CANDIDATE"))
+    context_mode = _clean(os.environ.get("WEBSITE_CONTEXT_MODE")) or "source"
     if resume_candidate:
         if any((manual_url, manual_business, manual_category, manual_location, smoke_website)):
             raise RuntimeError("Resume mode cannot be combined with manual target or smoke website fields.")
@@ -43,8 +44,8 @@ def read_targets() -> list[dict[str, str]]:
         if not inputs_path.is_file():
             raise RuntimeError(f"Resume candidate is missing saved inputs: {inputs_path}")
         inputs = json.loads(inputs_path.read_text(encoding="utf-8"))
-        if not inputs.get("source_url") or not inputs.get("chat_id"):
-            raise RuntimeError("Resume candidate inputs are missing source_url or chat_id.")
+        if not inputs.get("chat_id") or (context_mode == "source" and not inputs.get("source_url")):
+            raise RuntimeError("Resume candidate inputs are missing the conversation ID or required source URL.")
         return [{
             "site_index": str(inputs.get("site_index", "1")),
             "business": str(inputs.get("business", "")),
