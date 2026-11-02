@@ -32,7 +32,9 @@ class SavedResponsePipelineTest(unittest.TestCase):
         for text in (css, html):
             self.assertIn("PART 1 OF 1", text)
             self.assertIn("exactly one", text)
-        self.assertIn("complete CSS in one labeled response", instructions)
+        self.assertIn("one complete, production-usable CSS stylesheet", instructions)
+        self.assertIn("Establish clear reusable class names", css)
+        self.assertIn("Follow the accepted CSS response's class names", html)
         self.assertNotIn("four labeled parts", instructions)
         self.assertNotIn("eight labeled parts", instructions)
         self.assertIn("text` fence", html)

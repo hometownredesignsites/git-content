@@ -70,9 +70,22 @@ def _part_prompt(
             "one .hero rule, and one mobile @media rule. Keep the CSS short and valid."
         )
     elif kind == "css":
-        task = "Return the complete stylesheet in one response: design tokens, typography, all page sections, desktop and mobile layouts, accessible focus states, and navigation behavior."
+        task = (
+            "Return a complete, production-usable stylesheet for the supplied one-page design in this response. "
+            "Keep it focused: a small token set, shared typography and layout rules, the actual sections used by the HTML, "
+            "one coherent desktop composition, responsive mobile rules, visible keyboard focus, and reduced-motion support. "
+            "Establish clear reusable class names that the following HTML response can follow. "
+            "Do not add styles for sections or interactions the page does not contain. Prefer reusable selectors over "
+            "repeating near-identical rules; avoid ornamental effects that do not improve hierarchy or usability."
+        )
     else:
-        task = "Return the complete HTML5 document in one response: metadata, stylesheet link, navigation, every page section, contact form, footer, accessible interactions, and closed document markup."
+        task = (
+            "Return a complete, production-usable HTML5 document in this response: metadata, stylesheet link, "
+            "semantic navigation, the designed hero and source-appropriate content sections, preserved contact fields "
+            "when present in the source, and a substantive footer. Do not invent a form handler or unsupported content. "
+            "Follow the accepted CSS response's class names and design. Keep markup concise, accessible, and closed "
+            "with body and html tags."
+        )
     if context_mode == "minimal":
         context = (
             "Build a clearly fictional generic workshop sample. Do not claim facts about the CSV business. "
