@@ -185,6 +185,7 @@ jobs:
           passed_html=()
           candidate_dirs=()
           STAGE_FLAGS=()
+          PREVIOUS_CANDIDATE_DIR=""
           if [[ "${WEBSITE_STAGE:-full}" != "full" ]]; then
             STAGE_FLAGS=(--website-stop-after "${WEBSITE_STAGE//_/-}")
           fi
@@ -195,6 +196,10 @@ jobs:
           fi
           while [[ "$successful" -lt "$target_passes" && "$attempt" -lt "$max_attempts" ]]; do
             attempt=$((attempt + 1))
+            RETRY_CONTEXT_FLAGS=()
+            if [[ -n "$PREVIOUS_CANDIDATE_DIR" ]]; then
+              RETRY_CONTEXT_FLAGS=(--previous-candidate "$PREVIOUS_CANDIDATE_DIR")
+            fi
             if [[ -n "${RESUME_RUN_DIR:-}" ]]; then
               RUN_DIR="$RESUME_RUN_DIR"
               CANDIDATE_INDEX="$(python -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("candidate_index", 1))' "$RUN_DIR/debug/inputs.json")"
@@ -208,7 +213,8 @@ jobs:
                   --output "$RUN_DIR/debug/website_context.md" \
                   --inputs-output "$RUN_DIR/debug/inputs.json" \
                   --site-index "$SITE_INDEX" \
-                  --candidate-index "$CANDIDATE_INDEX"
+                  --candidate-index "$CANDIDATE_INDEX" \
+                  "${RETRY_CONTEXT_FLAGS[@]}"
               else
                 python chatgpt_automation/scripts/prepare_candidate_context.py \
                   --mode source \
@@ -217,7 +223,8 @@ jobs:
                   --output "$RUN_DIR/debug/website_context.md" \
                   --inputs-output "$RUN_DIR/debug/inputs.json" \
                   --site-index "$SITE_INDEX" \
-                  --candidate-index "$CANDIDATE_INDEX"
+                  --candidate-index "$CANDIDATE_INDEX" \
+                  "${RETRY_CONTEXT_FLAGS[@]}"
                 cp "$SOURCE_FACTS" "$RUN_DIR/debug/source_facts.json"
                 cp chatgpt_automation/website_request.txt "$RUN_DIR/debug/website_request.txt"
               fi
@@ -273,8 +280,10 @@ jobs:
               passed_dirs+=("$RUN_DIR")
               passed_html+=("$RUN_DIR/files/inlined/index.html")
               outcome="passed"
+              PREVIOUS_CANDIDATE_DIR=""
             else
               outcome="did not pass"
+              PREVIOUS_CANDIDATE_DIR="$RUN_DIR"
             fi
             echo "::notice title=Candidate progress::Attempt ${attempt}/${max_attempts} ${outcome}; ${successful}/${target_passes} passing candidates so far."
             if [[ -n "${RESUME_RUN_DIR:-}" || "${WEBSITE_STAGE:-full}" != "full" ]]; then

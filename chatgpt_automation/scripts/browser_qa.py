@@ -64,7 +64,7 @@ SECTION_VISIBILITY_JS = r"""(required) => {
 }"""
 
 
-VIEWPORT_CHECKS_JS = r"""() => {
+VIEWPORT_CHECKS_JS = r"""async () => {
   const visible = element => {
     if (!element) return false;
     const rect = element.getBoundingClientRect();
@@ -77,10 +77,40 @@ VIEWPORT_CHECKS_JS = r"""() => {
   };
   const h1 = document.querySelector('h1');
   const hero = h1 && (h1.closest('section') || h1.closest('[class*="hero" i]') || h1.closest('main'));
-  let heroData = {present: false, spans_viewport: false, media_covers_hero: false};
+  const imageUrls = value => Array.from((value || '').matchAll(/url\((?:["']?)(.*?)(?:["']?)\)/gi))
+    .map(match => match[1]).filter(Boolean);
+  const loadImage = url => new Promise(resolve => {
+    const image = new Image();
+    const timer = setTimeout(() => resolve({url, loaded: false}), 10000);
+    image.onload = () => { clearTimeout(timer); resolve({url, loaded: image.naturalWidth > 0}); };
+    image.onerror = () => { clearTimeout(timer); resolve({url, loaded: false}); };
+    image.src = url;
+  });
+  let heroData = {present: false, spans_viewport: false, media_covers_hero: false, image_loaded: false};
+  let visibleMediaResults = [];
   if (hero) {
     const hr = hero.getBoundingClientRect();
     const nodes = [hero, ...hero.querySelectorAll('*')];
+    const heroUrls = new Set();
+    const heroImageNodes = nodes.filter(node => node.tagName.toLowerCase() === 'img' && visible(node));
+    heroImageNodes.forEach(image => { if (image.currentSrc || image.src) heroUrls.add(image.currentSrc || image.src); });
+    for (const node of nodes.filter(visible)) {
+      const styles = [getComputedStyle(node), getComputedStyle(node, '::before'), getComputedStyle(node, '::after')];
+      styles.forEach(style => imageUrls(style.backgroundImage).forEach(url => heroUrls.add(new URL(url, document.baseURI).href)));
+    }
+    const heroLoads = await Promise.all(Array.from(heroUrls, loadImage));
+    const visibleNodes = Array.from(document.querySelectorAll('body *')).filter(visible);
+    const visibleUrls = new Set();
+    visibleNodes.filter(node => node.tagName.toLowerCase() === 'img').forEach(image => {
+      if (image.currentSrc || image.src) visibleUrls.add(image.currentSrc || image.src);
+    });
+    for (const node of visibleNodes) {
+      for (const pseudo of ['', '::before', '::after']) {
+        const style = getComputedStyle(node, pseudo || null);
+        imageUrls(style.backgroundImage).forEach(url => visibleUrls.add(new URL(url, document.baseURI).href));
+      }
+    }
+    visibleMediaResults = await Promise.all(Array.from(visibleUrls, loadImage));
     const media = nodes.filter(node => {
       const style = getComputedStyle(node);
       const pseudoHasImage = ['::before', '::after'].some(pseudo => getComputedStyle(node, pseudo).backgroundImage !== 'none');
@@ -88,8 +118,8 @@ VIEWPORT_CHECKS_JS = r"""() => {
     }).map(node => ({
       rect: node.getBoundingClientRect(),
       image: node.tagName.toLowerCase() === 'img' ? node.naturalWidth > 0 : true
-    })).filter(item => item.image);
-    const covers = media.some(item => item.rect.left <= hr.left + 2 && item.rect.right >= hr.right - 2 && item.rect.top <= hr.top + 2 && item.rect.bottom >= hr.bottom - 2);
+    }));
+    const covers = media.some(item => item.image && item.rect.left <= hr.left + 2 && item.rect.right >= hr.right - 2 && item.rect.top <= hr.top + 2 && item.rect.bottom >= hr.bottom - 2);
     heroData = {
       present: true,
       left: Math.round(hr.left),
@@ -98,12 +128,37 @@ VIEWPORT_CHECKS_JS = r"""() => {
       height: Math.round(hr.height),
       viewport_width: window.innerWidth,
       spans_viewport: hr.left <= 2 && hr.right >= window.innerWidth - 2,
-      media_covers_hero: covers
+      media_covers_hero: covers,
+      image_loaded: heroLoads.length > 0 && heroLoads.every(item => item.loaded),
+      image_assets: heroLoads
     };
   }
 
-  const ctaWords = /ask|call|contact|book|schedule|inquir|reserve|visit|get in touch/i;
+  const ctaWords = /ask|call|contact|book|schedule|inquir|reserve|visit|get in touch|quote|estimate|get started|start a project|let.s talk/i;
+  const arrowGlyphs = /[←↑→↓↗↘↙↖↩↪⇢⇨⟶⟹➔➜➝➞➟➠➡➢➤⮕⮞❯❱›»]/;
   const actions = Array.from(document.querySelectorAll('a,button,[role="button"],input[type="submit"]'));
+  const visibleCtas = actions.filter(element => {
+    const label = [element.innerText, element.getAttribute('aria-label'), element.getAttribute('value'), element.getAttribute('href')].filter(Boolean).join(' ');
+    const ctaClass = /(?:^|[\s_-])(?:button|btn|cta|call[-_]?to[-_]?action)(?:$|[\s_-])/i.test(String(element.className || ''));
+    return (ctaWords.test(label) || ctaClass) && visible(element);
+  });
+  const ctaArrowIssues = visibleCtas.filter(element => {
+    const label = [element.innerText, element.getAttribute('aria-label'), element.getAttribute('title'), element.getAttribute('value')].filter(Boolean).join(' ');
+    if (arrowGlyphs.test(label)) return true;
+    if (element.querySelector('svg,[class*="arrow" i],[class*="chevron" i],[data-icon*="arrow" i],[data-lucide*="arrow" i]')) return true;
+    const nodes = [element, ...element.querySelectorAll('*')];
+    return nodes.some(node => ['', '::before', '::after'].some(pseudo => {
+      const style = getComputedStyle(node, pseudo || null);
+      if (arrowGlyphs.test(style.content || '') || /url\s*\(/i.test(style.content || '') ||
+          /(?:arrow|chevron)[^)]*\.(?:svg|png|webp)/i.test(style.backgroundImage || '') ||
+          /url\s*\(/i.test(style.backgroundImage || '') || /url\s*\(/i.test(style.maskImage || '')) return true;
+      if (!pseudo || pseudo === '') return false;
+      const borders = ['Top', 'Right', 'Bottom', 'Left'].filter(side =>
+        parseFloat(style[`border${side}Width`]) > 0 && style[`border${side}Style`] !== 'none'
+      );
+      return borders.length >= 2 && (style.transform !== 'none' || parseFloat(style.width) === 0 || parseFloat(style.height) === 0);
+    }));
+  });
   const cta = actions.find(element => {
     const label = [element.innerText, element.getAttribute('aria-label'), element.getAttribute('value'), element.getAttribute('href')].filter(Boolean).join(' ');
     if (!ctaWords.test(label) || !visible(element)) return false;
@@ -121,9 +176,13 @@ VIEWPORT_CHECKS_JS = r"""() => {
   const root = document.documentElement;
   const body = document.body;
   const documentWidth = Math.max(root.scrollWidth, body ? body.scrollWidth : 0);
+  const assetKey = url => { try { const parsed = new URL(url, document.baseURI); return parsed.host + parsed.pathname; } catch (_) { return url; } };
+  const distinctVisibleAssets = new Set(visibleMediaResults.map(item => assetKey(item.url)));
+  const loadedVisibleAssets = new Set(visibleMediaResults.filter(item => item.loaded).map(item => assetKey(item.url)));
   return {
     hero: heroData,
-    cta: {visible_first_screen: Boolean(cta), text: cta ? (cta.innerText || cta.getAttribute('aria-label') || '') : '', bottom: ctaRect ? Math.round(ctaRect.bottom) : null},
+    cta: {visible_first_screen: Boolean(cta), text: cta ? (cta.innerText || cta.getAttribute('aria-label') || '') : '', bottom: ctaRect ? Math.round(ctaRect.bottom) : null, arrow_issues: ctaArrowIssues.map(element => (element.innerText || element.getAttribute('aria-label') || '').trim())},
+    visible_content_images: {distinct_count: distinctVisibleAssets.size, loaded_count: loadedVisibleAssets.size, failures: visibleMediaResults.filter(item => !item.loaded)},
     horizontal_overflow: {scroll_width: documentWidth, viewport_width: root.clientWidth, overflow: documentWidth > root.clientWidth + 1},
     images: {count: images.length, loaded_count: imageResults.filter(item => item.loaded).length, failures: imageResults.filter(item => !item.loaded)},
     fonts: {status: document.fonts.status, loaded_face_count: Array.from(document.fonts).filter(face => face.status === 'loaded').length, failed_face_count: Array.from(document.fonts).filter(face => face.status === 'error').length}
@@ -136,6 +195,30 @@ MENU_BUTTON_JS = r"""button => {
   const nav = controls && document.getElementById(controls);
   const bars = Array.from(button.querySelectorAll(':scope > span[aria-hidden="true"]'));
   return Boolean(controls && nav && button.getAttribute('aria-expanded') !== null && bars.length === 3);
+}"""
+
+
+OPEN_MENU_CTA_ARROWS_JS = r"""() => {
+  const glyphs = /[←↑→↓↗↘↙↖↩↪⇢⇨⟶⟹➔➜➝➞➟➠➡➢➤⮕⮞❯❱›»]/;
+  const id = document.querySelector('button[aria-controls][aria-expanded="true"]')?.getAttribute('aria-controls');
+  const nav = id && document.getElementById(id);
+  if (!nav) return {pass: false, issues: ['open navigation was not found']};
+  const candidates = Array.from(nav.querySelectorAll('a,button,[role="button"]')).filter(element => {
+    const label = [element.innerText, element.getAttribute('aria-label'), element.getAttribute('href')].filter(Boolean).join(' ');
+    return /ask|call|contact|book|schedule|inquir|reserve|visit|get in touch|quote|estimate|get started|start a project|let.s talk/i.test(label) ||
+      /(?:^|[\s_-])(?:button|btn|cta|call[-_]?to[-_]?action)(?:$|[\s_-])/i.test(String(element.className || ''));
+  });
+  const issues = candidates.filter(element => {
+    const label = [element.innerText, element.getAttribute('aria-label'), element.getAttribute('title')].filter(Boolean).join(' ');
+    if (glyphs.test(label) || element.querySelector('svg,[class*="arrow" i],[class*="chevron" i]')) return true;
+    return [element, ...element.querySelectorAll('*')].some(node => ['::before', '::after'].some(pseudo => {
+      const style = getComputedStyle(node, pseudo);
+      return glyphs.test(style.content || '') || /url\s*\(/i.test(style.content || '') ||
+        glyphs.test(style.backgroundImage || '') || /url\s*\(/i.test(style.backgroundImage || '') ||
+        glyphs.test(style.maskImage || '') || /url\s*\(/i.test(style.maskImage || '');
+    }));
+  });
+  return {pass: issues.length === 0, issues: issues.map(element => (element.innerText || element.getAttribute('aria-label') || '').trim())};
 }"""
 
 
@@ -234,7 +317,8 @@ def _exercise_mobile_menu(page) -> dict:
             "found": False, "control_visible": False, "click_opens": False,
             "click_closes": False, "tab_reachable": False,
             "focus_indicator_visible": False, "enter_opens": False,
-            "space_toggles": False, "escape_closes": False, "pass": False,
+            "space_toggles": False, "escape_closes": False,
+            "cta_arrows_absent_when_open": False, "pass": False,
         }
 
     nav_id = button.get_attribute("aria-controls")
@@ -249,6 +333,9 @@ def _exercise_mobile_menu(page) -> dict:
         button.click()
         page.wait_for_timeout(150)
         result["click_opens"] = button.get_attribute("aria-expanded") == "true" and _nav_visible(page, nav_id)
+        if result["click_opens"]:
+            result["cta_arrows_when_open"] = page.evaluate(OPEN_MENU_CTA_ARROWS_JS)
+            result["cta_arrows_absent_when_open"] = bool(result["cta_arrows_when_open"].get("pass"))
         button.click()
         page.wait_for_timeout(150)
         result["click_closes"] = button.get_attribute("aria-expanded") == "false" and not _nav_visible(page, nav_id)
@@ -291,6 +378,7 @@ def _exercise_mobile_menu(page) -> dict:
         result.setdefault("space_toggles", False)
         result.setdefault("escape_closes", False)
         result.setdefault("focus_indicator_visible", False)
+        result.setdefault("cta_arrows_absent_when_open", False)
     result.setdefault("control_visible", False)
     result["pass"] = all(result.get(key, False) for key in (
         "control_visible", "click_opens", "click_closes", "tab_reachable",
@@ -356,9 +444,9 @@ def main() -> int:
                         }""")
                         page.evaluate("window.scrollTo(0, 0)")
                         page.wait_for_timeout(150)
-                        page.screenshot(path=str(screenshots_dir / f"{name}.png"), full_page=False)
                         sections = page.evaluate(SECTION_VISIBILITY_JS, section_aliases)
                         visual = page.evaluate(VIEWPORT_CHECKS_JS)
+                        page.screenshot(path=str(screenshots_dir / f"{name}.png"), full_page=False)
                         font_errors = [item for item in page_errors if item["type"] == "font"]
                         image_errors = [item for item in page_errors if item["type"] == "image"]
                         required_present = all(sections.get(section, {}).get("visible", False) for section in requested_sections)
@@ -370,11 +458,14 @@ def main() -> int:
                             "hero": visual["hero"],
                             "hero_spans_viewport": bool(visual["hero"].get("spans_viewport")),
                             "hero_media_covers_hero": bool(visual["hero"].get("media_covers_hero")),
+                            "hero_image_loaded": bool(visual["hero"].get("image_loaded")),
                             "cta": visual["cta"],
                             "cta_visible_first_screen": visual["cta"]["visible_first_screen"],
                             "horizontal_overflow": visual["horizontal_overflow"],
                             "no_horizontal_overflow": not visual["horizontal_overflow"]["overflow"],
                             "images": resource_state,
+                            "visible_content_images": visual["visible_content_images"],
+                            "cta_arrows_absent": not visual["cta"].get("arrow_issues"),
                             "images_loaded": (
                                 resource_state["loaded_images"] == resource_state["image_count"]
                                 and not resource_state["failed_images"]
@@ -400,9 +491,12 @@ def main() -> int:
                             "all_required_sections_visible": False,
                             "hero_spans_viewport": False,
                             "hero_media_covers_hero": False,
+                            "hero_image_loaded": False,
                             "cta_visible_first_screen": False,
                             "no_horizontal_overflow": False,
                             "images_loaded": False,
+                            "visible_content_images": {"distinct_count": 0, "loaded_count": 0, "failures": []},
+                            "cta_arrows_absent": False,
                             "fonts_loaded": False,
                             "screenshot": f"screenshots/{name}.png",
                         }
@@ -418,6 +512,17 @@ def main() -> int:
             "rendered_sections_visible_desktop_and_mobile": bool(desktop.get("all_required_sections_visible") and mobile.get("all_required_sections_visible")),
             "hero_spans_viewport_desktop_and_mobile": bool(desktop.get("hero_spans_viewport") and mobile.get("hero_spans_viewport")),
             "hero_media_covers_hero_desktop_and_mobile": bool(desktop.get("hero_media_covers_hero") and mobile.get("hero_media_covers_hero")),
+            "hero_image_loads_desktop_and_mobile": bool(desktop.get("hero_image_loaded") and mobile.get("hero_image_loaded")),
+            "visible_content_images_load_in_browser": bool(
+                desktop.get("visible_content_images", {}).get("distinct_count", 0) >= 1
+                and mobile.get("visible_content_images", {}).get("distinct_count", 0) >= 1
+                and desktop.get("visible_content_images", {}).get("loaded_count", 0) == desktop.get("visible_content_images", {}).get("distinct_count", 0)
+                and mobile.get("visible_content_images", {}).get("loaded_count", 0) == mobile.get("visible_content_images", {}).get("distinct_count", 0)
+            ),
+            "cta_arrows_absent_desktop_and_mobile": bool(
+                desktop.get("cta_arrows_absent") and mobile.get("cta_arrows_absent")
+                and mobile_menu.get("cta_arrows_absent_when_open")
+            ),
             "cta_visible_first_screen_desktop_and_mobile": bool(desktop.get("cta_visible_first_screen") and mobile.get("cta_visible_first_screen")),
             "mobile_menu_clicks_work": bool(mobile_menu.get("click_opens") and mobile_menu.get("click_closes")),
             "mobile_menu_control_visible": bool(mobile_menu.get("control_visible")),

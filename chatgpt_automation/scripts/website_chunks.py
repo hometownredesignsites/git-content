@@ -516,12 +516,13 @@ def finalize_candidate(run_folder: str | Path, request_text: str) -> dict[str, A
     debug.mkdir(parents=True, exist_ok=True)
     commands = [
         [sys.executable, str(SCRIPT_DIR / "assemble_chunks.py"), str(run)],
-        [sys.executable, str(SCRIPT_DIR / "normalize_cta_arrows.py"), str(files / "index.html")],
+        [sys.executable, str(SCRIPT_DIR / "normalize_cta_arrows.py"), str(files / "index.html"), "--css-file", str(files / "styles.css")],
         [sys.executable, str(SCRIPT_DIR / "inline_css.py"), str(files / "index.html"),
          str(files / "styles.css"), str(files / "inlined" / "index.html")],
+        [sys.executable, str(SCRIPT_DIR / "normalize_cta_arrows.py"), str(files / "inlined" / "index.html")],
         [sys.executable, str(SCRIPT_DIR / "browser_qa.py"), str(run), request_text],
     ]
-    step_names = ("assembly", "cta_arrow_normalization", "css_inlining", "browser_qa")
+    step_names = ("assembly", "cta_arrow_normalization", "css_inlining", "final_cta_arrow_normalization", "browser_qa")
     step_results: dict[str, Any] = {}
     for name, command in zip(step_names, commands):
         if name == "browser_qa":

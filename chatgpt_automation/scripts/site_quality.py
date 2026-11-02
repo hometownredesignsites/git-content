@@ -32,7 +32,7 @@ VOID_ELEMENTS = {
     "area", "base", "br", "col", "embed", "hr", "img", "input", "link",
     "meta", "param", "source", "track", "wbr",
 }
-CTA_ARROW_GLYPHS = re.compile(r"[←↑→↓↗↘↙↖↩↪➔➜➝➞➟➠➡➢➤›»]")
+CTA_ARROW_GLYPHS = re.compile(r"[←↑→↓↗↘↙↖↩↪⇢⇨⟶⟹➔➜➝➞➟➠➡➢➤⮕⮞❯❱›»]")
 
 
 def _has_alias(value, aliases):
@@ -431,6 +431,9 @@ def _browser_qa_result(session_dir):
         "rendered_sections_visible_desktop_and_mobile",
         "hero_spans_viewport_desktop_and_mobile",
         "hero_media_covers_hero_desktop_and_mobile",
+        "hero_image_loads_desktop_and_mobile",
+        "visible_content_images_load_in_browser",
+        "cta_arrows_absent_desktop_and_mobile",
         "cta_visible_first_screen_desktop_and_mobile",
         "mobile_menu_clicks_work",
         "mobile_menu_control_visible",
@@ -1047,13 +1050,30 @@ def assess_website(prompt, session_dir):
     # Check image-bearing CSS properties across the whole page, not just the hero.
     css_image_urls = _all_css_image_urls(css)
     parser.all_image_urls.extend(css_image_urls)
+    source_context = session_dir / "debug" / "website_context.md"
+    context_text = source_context.read_text(encoding="utf-8", errors="replace") if source_context.is_file() else ""
+    context_site = re.search(r'"site"\s*:\s*"(https?://[^"\\]+)', context_text, re.IGNORECASE)
     target_match = re.search(r"https?://[^\s\"'<>]+", prompt, re.IGNORECASE)
-    base_url = target_match.group(0).rstrip(".,);]") if target_match else None
+    if context_site:
+        base_url = context_site.group(1)
+    elif target_match:
+        base_url = target_match.group(0).rstrip(".,);]")
+    else:
+        base_url = None
     hero_images_load_ok = _hero_images_load_ok(parser.hero_image_urls, base_url=base_url)
     checks["hero_images_load_ok"] = hero_images_load_ok
 
     image_urls = _unique_image_urls(parser.all_image_urls, base_url)
     failed_images = _failed_image_urls(image_urls, base_url)
+    failed_keys = {key for url in failed_images if (key := _url_key(url, base_url))}
+    failed_values = set(failed_images)
+    loaded_image_urls = []
+    for url in image_urls:
+        key = _url_key(url, base_url)
+        if key is not None and key not in failed_keys:
+            loaded_image_urls.append(url)
+        elif key is None and url not in failed_values:
+            loaded_image_urls.append(url)
     checks["all_images_load_ok"] = bool(image_urls) and not failed_images
     checks["image_alt_text_present"] = not parser.images_missing_alt
     request_text = re.split(
@@ -1066,7 +1086,7 @@ def assess_website(prompt, session_dir):
         re.search(r"\b(?:imagery|images|photos|photographs|photo gallery|image gallery)\b", request_text, re.IGNORECASE)
     )
     minimum_image_count = 3 if requires_image_coverage else 1
-    checks["image_coverage"] = len(image_urls) >= minimum_image_count
+    checks["image_coverage"] = len(loaded_image_urls) >= minimum_image_count
     visual_review_required = bool(image_urls)
     visual_review_status, visual_review_missing_urls, visual_review_issues = _visual_review_result(
         session_dir, image_urls, base_url
@@ -1075,11 +1095,15 @@ def assess_website(prompt, session_dir):
         _visual_design_review_result(session_dir)
     )
     checks["visual_design_review_passed"] = visual_design_review_status == "pass"
+    source_image_urls = _source_image_urls_from_prompt(context_text)
     browser_qa_status, browser_qa_checks, browser_qa_report = _browser_qa_result(session_dir)
     browser_check_names = (
         "rendered_sections_visible_desktop_and_mobile",
         "hero_spans_viewport_desktop_and_mobile",
         "hero_media_covers_hero_desktop_and_mobile",
+        "hero_image_loads_desktop_and_mobile",
+        "visible_content_images_load_in_browser",
+        "cta_arrows_absent_desktop_and_mobile",
         "cta_visible_first_screen_desktop_and_mobile",
         "mobile_menu_clicks_work",
         "mobile_menu_control_visible",
@@ -1092,7 +1116,6 @@ def assess_website(prompt, session_dir):
     for name in browser_check_names:
         checks[f"browser_{name}"] = browser_qa_status in {"pass", "fail"} and browser_qa_checks.get(name) is True
 
-    source_image_urls = _source_image_urls_from_prompt(prompt)
     if source_image_urls:
         source_keys = {key for url in source_image_urls if (key := _url_key(url, base_url))}
         used_keys = {key for url in parser.all_image_urls if (key := _url_key(url, base_url))}
@@ -1191,13 +1214,15 @@ def assess_website(prompt, session_dir):
 
     passed = sum(checks.values())
     total = len(checks)
-    # Deterministic rendered layout and mobile-menu checks are user-visible
-    # requirements. Remote asset availability remains advisory because it can
-    # vary with the external site and CI network.
+    # Rendered layout, loaded visible imagery, and CTA output are blocking
+    # requirements because they directly affect the page people see.
     blocking_browser_checks = {
         "browser_rendered_sections_visible_desktop_and_mobile",
         "browser_hero_spans_viewport_desktop_and_mobile",
         "browser_hero_media_covers_hero_desktop_and_mobile",
+        "browser_hero_image_loads_desktop_and_mobile",
+        "browser_visible_content_images_load_in_browser",
+        "browser_cta_arrows_absent_desktop_and_mobile",
         "browser_cta_visible_first_screen_desktop_and_mobile",
         "browser_mobile_menu_clicks_work",
         "browser_mobile_menu_control_visible",
@@ -1208,7 +1233,7 @@ def assess_website(prompt, session_dir):
     advisory_check_names = {
         name for name in checks
         if (name.startswith("browser_") and name not in blocking_browser_checks) or name in {
-            "hero_images_load_ok", "all_images_load_ok", "source_site_photos_load_ok"
+            "all_images_load_ok"
         }
     }
     automated_checks = {
@@ -1225,6 +1250,12 @@ def assess_website(prompt, session_dir):
         missing_sections.append("alt attribute on every content image")
     if not checks["image_coverage"]:
         missing_sections.append(f"at least {minimum_image_count} distinct image assets")
+    if not checks["hero_images_load_ok"] or not checks.get("browser_hero_image_loads_desktop_and_mobile"):
+        missing_sections.append("a successfully loaded hero image on desktop and mobile")
+    if not checks.get("browser_visible_content_images_load_in_browser"):
+        missing_sections.append("all visible content images loading in desktop and mobile browsers")
+    if not checks.get("browser_cta_arrows_absent_desktop_and_mobile"):
+        missing_sections.append("CTA buttons without rendered arrow characters, icons, or pseudo-elements")
     if not checks["footer_has_substance"]:
         missing_sections.append("a substantive footer with at least two useful links")
     if missing_form_fields:
@@ -1237,7 +1268,12 @@ def assess_website(prompt, session_dir):
         missing_sections.append("accessible three-bar mobile navigation button")
     if not checks["browser_hero_media_covers_hero_desktop_and_mobile"]:
         missing_sections.append("hero image or background covering the full hero on desktop and mobile")
-    if not all(checks[name] for name in blocking_browser_checks - {"browser_hero_media_covers_hero_desktop_and_mobile"}):
+    blocking_mobile_checks = {
+        "browser_mobile_menu_clicks_work", "browser_mobile_menu_control_visible",
+        "browser_mobile_menu_focus_indicator_visible", "browser_mobile_menu_keyboard_works",
+        "browser_mobile_has_no_horizontal_overflow",
+    }
+    if not all(checks[name] for name in blocking_mobile_checks):
         missing_sections.append("mobile menu visible, clickable, and keyboard accessible")
     if visual_design_review_status != "pass":
         missing_sections.append("screenshot-backed desktop/mobile visual design review")
@@ -1245,6 +1281,8 @@ def assess_website(prompt, session_dir):
         missing_sections.append("verified source-site photo in hero")
     if source_image_urls and not checks.get("source_site_photos_used"):
         missing_sections.append("at least two verified source-site photos")
+    if source_image_urls and not checks.get("source_site_photos_load_ok"):
+        missing_sections.append("verified source-site photos that load successfully")
     advisory_findings = [name for name in sorted(advisory_check_names) if not checks[name]]
     if browser_qa_status != "pass":
         advisory_findings.append("browser QA did not pass; see debug/browser_qa.json")
@@ -1274,6 +1312,7 @@ def assess_website(prompt, session_dir):
         "hero_images_load_ok": hero_images_load_ok,
         "hero_image_urls": parser.hero_image_urls,
         "image_urls": image_urls,
+        "loaded_image_urls": loaded_image_urls,
         "failed_image_urls": failed_images,
         "minimum_image_count": minimum_image_count,
         "visual_relevance_review_required": visual_review_required,

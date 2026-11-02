@@ -33,7 +33,8 @@ def recheck(candidate: Path) -> dict:
         raise RuntimeError(f"Candidate is missing {request_path}")
     request = request_path.read_text(encoding="utf-8")
     normalized = subprocess.run(
-        [sys.executable, str(SCRIPT_DIR / "normalize_cta_arrows.py"), str(candidate / "files" / "index.html")],
+        [sys.executable, str(SCRIPT_DIR / "normalize_cta_arrows.py"), str(candidate / "files" / "index.html"),
+         "--css-file", str(candidate / "files" / "styles.css")],
         capture_output=True, text=True, encoding="utf-8",
     )
     if normalized.returncode:
@@ -46,6 +47,12 @@ def recheck(candidate: Path) -> dict:
         )
         if normalized_inline.returncode:
             raise RuntimeError(f"Inlined CTA arrow normalization failed: {normalized_inline.stderr or normalized_inline.stdout}")
+        browser_qa = subprocess.run(
+            [sys.executable, str(SCRIPT_DIR / "browser_qa.py"), str(candidate), request],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+        if browser_qa.returncode:
+            raise RuntimeError(f"Rendered browser QA failed: {browser_qa.stderr or browser_qa.stdout}")
     result = subprocess.run(
         [sys.executable, str(SCRIPT_DIR / "check_website.py"), str(candidate), request],
         capture_output=True, text=True, encoding="utf-8",
