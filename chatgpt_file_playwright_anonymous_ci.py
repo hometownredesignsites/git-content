@@ -16,7 +16,7 @@ from playwright_runner.diagnostics import enable_network_logging, save_failure_d
 from playwright_runner.prompt_contracts import build_prompt_text, extract_json_payload
 from playwright_runner.recovery import refresh_chat, start_new_chat_if_available
 from playwright_runner.stage_runner import run_stage_once, write_stage_outputs
-from playwright_runner.browser_session import assistant_turns
+from playwright_runner.browser_session import assistant_turns, find_chat_composer
 from chatgpt_automation.scripts.website_chunks import CSS_PART_COUNT, HTML_PART_COUNT, WebsiteTurnError, run_website_chunks
 
 
@@ -333,12 +333,15 @@ def run() -> int:
                     }
 
                 def start_fresh_html_chat():
-                    old_url = page.url
-                    old_turn_count = assistant_turns(page).count()
-                    started = start_new_chat_if_available(page, args.timeout_ms)
-                    if not started:
+                    # Guest UI shortcuts can leave the existing conversation active.
+                    # Navigate to the guest landing page, then verify a usable empty chat.
+                    try:
+                        page.goto("https://chatgpt.com/", wait_until="domcontentloaded", timeout=args.timeout_ms)
+                        composer = find_chat_composer(page, timeout_ms=args.timeout_ms)
+                        page_state = inspect_chatgpt_page_state(page)
+                        return bool(composer is not None and assistant_turns(page).count() == 0 and page_state["classification"] == "ready")
+                    except Exception:
                         return False
-                    return page.url != old_url or assistant_turns(page).count() < old_turn_count
 
                 website_brief = "\n\n".join(part for part in (instructions_text, prompt_text) if part).strip()
                 if args.website_context_mode == "minimal":

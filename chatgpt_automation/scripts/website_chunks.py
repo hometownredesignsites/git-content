@@ -293,10 +293,18 @@ def run_website_chunks(
             if start_html_conversation is not None:
                 state["css_conversation_url"] = conversation_url() if conversation_url else None
                 if not start_html_conversation():
+                    state["status"] = "interrupted"
+                    state["last_error"] = {
+                        "at_utc": _now(),
+                        "classification": "new_guest_conversation_unavailable",
+                        "error": "Could not establish a fresh guest conversation for the HTML sequence.",
+                    }
+                    _atomic_json(state_path, state)
                     raise RuntimeError("Could not start a fresh guest conversation for the HTML sequence.")
             state["html_conversation_started"] = True
             state["html_conversation_url"] = conversation_url() if conversation_url else None
             state["conversation_url"] = state["html_conversation_url"]
+            state.pop("last_error", None)
             _atomic_json(state_path, state)
         label = f"{kind.upper()} PART {number} OF {TOTALS[kind]}"
         current_pending = state.get("pending_turn")
