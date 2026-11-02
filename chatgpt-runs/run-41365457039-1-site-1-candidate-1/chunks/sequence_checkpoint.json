@@ -1,0 +1,50 @@
+{
+  "status": "interrupted",
+  "chat_id": "site-1-candidate-1",
+  "conversation_url": "https://chatgpt.com/uc/6ae7d519-c998-83ea-9a00-3f0f3ce3bb44",
+  "run_token": "bfc673fda7530cca",
+  "context_mode": "source",
+  "brief_sha256": "8a5f18d687c89e02327cbf30b177f6de5120e3abf1b370ff46ab72ad692ae67d",
+  "started_at_utc": "2026-11-02T00:09:05.590164+00:00",
+  "accepted_parts": [],
+  "pending_turn": {
+    "kind": "css",
+    "part": 1,
+    "attempt": 2,
+    "prompt": "Your previous response for CSS PART 1 OF 1 was rejected: capture rejected: expected exactly one fenced code block; found 0\nRepair it now. Keep the source-grounded website consistent and do not invent facts. State `RUN TOKEN: bfc673fda7530cca` and `CSS PART 1 OF 1` outside the code block. Return exactly one fenced `css` code block; its first nonblank line must be `/* CSS PART 1 OF 1 */`. Do not add any other code blocks. For HTML use a `text` fence, never an HTML preview block.",
+    "started_at_utc": "2026-11-02T00:11:39.670461+00:00"
+  },
+  "last_response_at_utc": "2026-11-02T00:12:14.187988+00:00",
+  "last_error": {
+    "at_utc": "2026-11-02T00:12:14.223227+00:00",
+    "part": "CSS PART 1 OF 1",
+    "attempt": 2,
+    "classification": "response_format_rejected",
+    "error": "capture rejected: expected exactly one fenced code block; found 0",
+    "response_metadata": {
+      "attempt": 1,
+      "retry_count": 0,
+      "used_retry": false,
+      "page_refreshed": false,
+      "thread_reused": true,
+      "new_chat_started": false,
+      "failure_reason": null,
+      "attempt_failures": [],
+      "start_time": 1793578299.704024,
+      "end_time": 1793578334.149691,
+      "duration_seconds": 34.446,
+      "dom_code_block_count": 0,
+      "dom_labeled_code_block_count": 0,
+      "normalization_error": "Expected exactly one rendered assistant code block.",
+      "page_state": {
+        "classification": "ready",
+        "url": "https://chatgpt.com/uc/6ae7d519-c998-83ea-9a00-3f0f3ce3bb44",
+        "title": "ChatGPT: Chat, Work, Create & Code with AI",
+        "conversation_gated": false,
+        "authentication_gated": false,
+        "visible_dialog_count": 0,
+        "signals": []
+      }
+    }
+  }
+}
