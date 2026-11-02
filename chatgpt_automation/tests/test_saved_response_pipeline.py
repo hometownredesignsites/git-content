@@ -56,7 +56,7 @@ class SavedResponsePipelineTest(unittest.TestCase):
         self.assertIn("HTML PART 1 OF 1", html)
         for text in (css, css4, html):
             self.assertIn("exactly one fenced code block", text)
-        self.assertIn("four CSS parts", instructions)
+        self.assertIn("four ordered CSS parts", instructions)
         self.assertIn("Define the reusable class names", css)
         self.assertIn("actual CSS selectors and declarations", css)
         self.assertIn("reduced-motion support", css4)
