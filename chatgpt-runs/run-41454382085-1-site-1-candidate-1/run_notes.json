@@ -1,0 +1,11 @@
+{
+  "status": "stage_complete",
+  "stage": "css-1",
+  "accepted_parts": [
+    "css-1"
+  ],
+  "automated_success": false,
+  "final_success": false,
+  "human_visual_review_status": "pending",
+  "context_mode": "minimal"
+}
