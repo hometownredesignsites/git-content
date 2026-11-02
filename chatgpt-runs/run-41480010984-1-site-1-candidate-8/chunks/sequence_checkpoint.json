@@ -1,0 +1,77 @@
+{
+  "status": "automated_success",
+  "sequence_plan": "css-2-html-2-single-chat-v1",
+  "chat_id": "site-1-candidate-8",
+  "conversation_url": "https://chatgpt.com/uc/6ae8bcfa-27d4-83ea-9d54-47d83d7a9b64",
+  "run_token": "aa9059b9b8d052a6",
+  "context_mode": "source",
+  "brief_sha256": "c537caf14c5eac2c3de2eaff35c7981f44146e1179477c0c673b3da4a6108a87",
+  "started_at_utc": "2026-11-02T16:40:27.752170+00:00",
+  "accepted_parts": [
+    "css-1",
+    "css-2",
+    "html-1",
+    "html-2"
+  ],
+  "pending_turn": null,
+  "last_response_at_utc": "2026-11-02T16:42:29.200284+00:00",
+  "last_accepted_at_utc": "2026-11-02T16:42:29.241010+00:00",
+  "last_capture": {
+    "accepted": true,
+    "part": "html 2/2",
+    "characters": 2502,
+    "sha256": "0dad3dbd39a58513e088cbb42a35ac295f46682e61396804e41161d9c6b3ad0d"
+  },
+  "css_conversation_url": "https://chatgpt.com/uc/6ae8bcfa-27d4-83ea-9d54-47d83d7a9b64",
+  "html_sequence_started": true,
+  "html_conversation_url": "https://chatgpt.com/uc/6ae8bcfa-27d4-83ea-9d54-47d83d7a9b64",
+  "complete": true,
+  "completed_at_utc": "2026-11-02T16:42:29.241546+00:00",
+  "quality": {
+    "status": "automated_success",
+    "automated_success": true,
+    "final_success": false,
+    "human_visual_review_status": "pending",
+    "image_relevance_review_status": "pending",
+    "browser_qa_status": "fail",
+    "browser_qa_advisory": true,
+    "visual_review_status": "pending",
+    "image_review_status": "pending",
+    "file_sha256": {
+      "files/index.html": "4e5cf2547c64b9599edabef2fcd583ffcefc60ba5c1b8f0d8e267ebb5286808e",
+      "files/styles.css": "8c7dad09ce077d24c988d31467613139ff4bed4582d7f96e67798d49eb65bd74",
+      "files/inlined/index.html": "bc1570a5fb030a29f5acb7837a3638e6d784837dca5bc7abcd68342a85a0ee33"
+    },
+    "screenshot_sha256": {
+      "desktop": "6bc932a863fda99cced9305261f3dbc6a87fd7f8f7c9a8203ca78ad6304ee6af",
+      "mobile": "12198de97da89a69777ec87ea751e88abaee393ea9fdbefe96ea1d31941f691c"
+    },
+    "steps": {
+      "assembly": {
+        "exit_code": 0,
+        "duration_seconds": 0.039,
+        "stdout": "{\"assembled\": true, \"chat_id\": \"site-1-candidate-8\", \"css_parts\": 2, \"html_parts\": 2, \"index_html_bytes\": 12763, \"styles_css_bytes\": 16227}\n",
+        "stderr": ""
+      },
+      "cta_arrow_normalization": {
+        "exit_code": 0,
+        "duration_seconds": 0.044,
+        "stdout": "{\"file\": \"/__w/git-content/git-content/chatgpt-runs/run-41480010984-1-site-1-candidate-8/files/index.html\", \"removed_cta_arrow_glyphs\": 0}\n",
+        "stderr": ""
+      },
+      "css_inlining": {
+        "exit_code": 0,
+        "duration_seconds": 0.031,
+        "stdout": "Created /__w/git-content/git-content/chatgpt-runs/run-41480010984-1-site-1-candidate-8/files/inlined/index.html (28965 bytes)\n",
+        "stderr": ""
+      },
+      "browser_qa": {
+        "exit_code": 0,
+        "duration_seconds": 4.41,
+        "stdout": "{\n  \"status\": \"fail\",\n  \"tested_file\": \"files/inlined/index.html\",\n  \"required_sections\": [\n    \"contact\",\n    \"footer\",\n    \"hero\"\n  ],\n  \"viewports\": {\n    \"desktop\": {\n      \"width\": 1440,\n      \"height\": 900,\n      \"sections\": {\n        \"contact\": {\n          \"visible\": true,\n          \"selector_hint\": \"p.form-note\",\n          \"width\": 519,\n          \"height\": 19\n        },\n        \"footer\": {\n          \"visible\": true,\n          \"selector_hint\": \"footer.site-footer\",\n          \"width\": 1440,\n          \"height\": 328\n        },\n        \"hero\": {\n          \"visible\": true,\n          \"selector_hint\": \"section.hero\",\n          \"width\": 1440,\n          \"height\": 738\n        }\n      },\n      \"all_required_sections_visible\": true,\n      \"hero\": {\n        \"present\": true,\n        \"left\": 0,\n        \"right\": 1440,\n        \"width\": 1440,\n        \"height\": 738,\n        \"viewport_width\": 1440,\n        \"spans_viewport\": true,\n        \"media_covers_hero\": true\n      },\n      \"hero_spans_viewport\": true,\n      \"hero_media_covers_hero\": true,\n      \"cta\": {\n        \"visible_first_screen\": true,\n        \"text\": \"GET A FREE ESTIMATE\",\n        \"bottom\": 74\n      },\n      \"cta_visible_first_screen\": true,\n      \"horizontal_overflow\": {\n        \"scroll_width\": 1440,\n        \"viewport_width\": 1440,\n        \"overflow\": false\n      },\n      \"no_horizontal_overflow\": true,\n      \"images\": {\n        \"image_count\": 4,\n        \"loaded_images\": 3,\n        \"failed_images\": [\n          \"https://nativesunlandscaping.net/wp-content/uploads/\"\n        ],\n        \"font_status\": \"loaded\",\n        \"loaded_faces\": 0,\n        \"failed_faces\": 0\n      },\n      \"images_loaded\": false,\n      \"fonts\": {\n        \"image_count\": 4,\n        \"loaded_images\": 3,\n        \"failed_images\": [\n          \"https://nativesunlandscaping.net/wp-content/uploads/\"\n        ],\n        \"font_status\": \"loaded\",\n        \"loaded_faces\": 0,\n        \"failed_faces\": 0\n      },\n      \"fonts_loaded\": true,\n      \"resource_errors\": [\n        {\n          \"type\": \"image\",\n          \"error\": \"net::ERR_BLOCKED_BY_ORB\",\n          \"url\": \"https://www.nativesunlandscaping.net/wp-content/uploads/\"\n        }\n      ],\n      \"screenshot\": \"screenshots/desktop.png\"\n    },\n    \"mobile\": {\n      \"width\": 390,\n      \"height\": 844,\n      \"sections\": {\n        \"contact\": {\n          \"visible\": true,\n          \"selector_hint\": \"p.form-note\",\n          \"width\": 308,\n          \"height\": 19\n        },\n        \"footer\": {\n          \"visible\": true,\n          \"selector_hint\": \"footer.site-footer\",\n          \"width\": 390,\n          \"height\": 553\n        },\n        \"hero\": {\n          \"visible\": true,\n          \"selector_hint\": \"section.hero\",\n          \"width\": 390,\n          \"height\": 743\n        }\n      },\n      \"all_required_sections_visible\": true,\n      \"hero\": {\n        \"present\": true,\n        \"left\": 0,\n        \"right\": 390,\n        \"width\": 390,\n        \"height\": 743,\n        \"viewport_width\": 390,\n        \"spans_viewport\": true,\n        \"media_covers_hero\": true\n      },\n      \"hero_spans_viewport\": true,\n      \"hero_media_covers_hero\": true,\n      \"cta\": {\n        \"visible_first_screen\": true,\n        \"text\": \"GET YOUR FREE ESTIMATE\",\n        \"bottom\": 676\n      },\n      \"cta_visible_first_screen\": true,\n      \"horizontal_overflow\": {\n        \"scroll_width\": 390,\n        \"viewport_width\": 390,\n        \"overflow\": false\n      },\n      \"no_horizontal_overflow\": true,\n      \"images\": {\n        \"image_count\": 4,\n        \"loaded_images\": 3,\n        \"failed_images\": [\n          \"https://nativesunlandscaping.net/wp-content/uploads/\"\n        ],\n        \"font_status\": \"loaded\",\n        \"loaded_faces\": 0,\n        \"failed_faces\": 0\n      },\n      \"images_loaded\": false,\n      \"fonts\": {\n        \"image_count\": 4,\n        \"loaded_images\": 3,\n        \"failed_images\": [\n          \"https://nativesunlandscaping.net/wp-content/uploads/\"\n        ],\n        \"font_status\": \"loaded\",\n        \"loaded_faces\": 0,\n        \"failed_faces\": 0\n      },\n      \"fonts_loaded\": true,\n      \"resource_errors\": [\n        {\n          \"type\": \"image\",\n          \"error\": \"net::ERR_BLOCKED_BY_ORB\",\n          \"url\": \"https://www.nativesunlandscaping.net/wp-content/uploads/\"\n        }\n      ],\n      \"screenshot\": \"screenshots/mobile.png\"\n    }\n  },\n  \"mobile_menu\": {\n    \"found\": true,\n    \"visual\": {\n      \"button_visible\": true,\n      \"bars_visible\": true,\n      \"bar_count\": 3,\n      \"bar_rects\": [\n        {\n          \"width\": 20,\n          \"height\": 2\n        },\n        {\n          \"width\": 20,\n          \"height\": 2\n        },\n        {\n          \"width\": 20,\n          \"height\": 2\n        }\n      ]\n    },\n    \"control_visible\": true,\n    \"click_opens\": true,\n    \"click_closes\": true,\n    \"tab_reachable\": true,\n    \"focus_indicator_visible\": true,\n    \"enter_opens\": true,\n    \"escape_closes\": true,\n    \"space_toggles\": true,\n    \"pass\": true\n  },\n  \"checks\": {\n    \"rendered_sections_visible_desktop_and_mobile\": true,\n    \"hero_spans_viewport_desktop_and_mobile\": true,\n    \"hero_media_covers_hero_desktop_and_mobile\": true,\n    \"cta_visible_first_screen_desktop_and_mobile\": true,\n    \"mobile_menu_clicks_work\": true,\n    \"mobile_menu_control_visible\": true,\n    \"mobile_menu_focus_indicator_visible\": true,\n    \"mobile_menu_keyboard_works\": true,\n    \"mobile_has_no_horizontal_overflow\": true,\n    \"fonts_load_in_browser\": true,\n    \"images_load_in_browser\": false\n  },\n  \"resource_errors\": [\n    {\n      \"type\": \"image\",\n      \"error\": \"net::ERR_BLOCKED_BY_ORB\",\n      \"url\": \"https://www.nativesunlandscaping.net/wp-content/uploads/\"\n    },\n    {\n      \"type\": \"image\",\n      \"error\": \"net::ERR_BLOCKED_BY_ORB\",\n      \"url\": \"https://www.nativesunlandscaping.net/wp-content/uploads/\"\n    }\n  ]\n}\n",
+        "stderr": ""
+      }
+    }
+  },
+  "quality_completed_at_utc": "2026-11-02T16:42:34.675291+00:00"
+}

@@ -1,0 +1,394 @@
+RUN TOKEN: 33d973b708c4d7f0
+
+HTML PART 1 OF 2
+```text
+<!-- HTML PART 1 OF 2 -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#203e30">
+  <meta name="description" content="Native Sun Landscaping provides family-owned landscaping, irrigation, garden maintenance, patios, raised beds, fencing and seasonal services in Boulder, Colorado. Request a free estimate.">
+  <title>Native Sun Landscaping | Boulder, Colorado</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <a class="skip-link" href="#main-content">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container header-inner">
+
+      <a class="brand" href="#home" aria-label="Native Sun Landscaping home">
+        <img
+          class="brand__logo"
+          src="https://nativesunlandscaping.net/wp-content/uploads/"
+          alt="Native Sun Landscaping"
+        >
+        <span class="brand__text">
+          Native Sun
+          <span>Landscaping &amp; Irrigation</span>
+        </span>
+      </a>
+
+      <button
+        class="menu-toggle"
+        type="button"
+        aria-label="Open navigation menu"
+        aria-controls="primary-navigation"
+        aria-expanded="false"
+      >
+        <span aria-hidden="true"></span>
+        <span aria-hidden="true"></span>
+        <span aria-hidden="true"></span>
+      </button>
+
+      <nav class="site-nav" id="primary-navigation" aria-label="Main navigation">
+        <a href="#about">Our Approach</a>
+        <a href="#services">Services</a>
+        <a href="#materials">Our Materials</a>
+        <a href="#landscape-design">Landscape Design</a>
+        <a class="button button--primary" href="/contact">
+          Get a Free Estimate
+          <span class="button__arrow" aria-hidden="true">→</span>
+        </a>
+      </nav>
+
+    </div>
+  </header>
+
+  <main id="main-content">
+
+    <!-- HERO -->
+    <section class="hero" id="home" aria-labelledby="hero-title">
+
+      <div class="hero__media" aria-hidden="true">
+        <img
+          src="https://nativesunlandscaping.net/wp-content/uploads/"
+          alt=""
+          fetchpriority="high"
+        >
+      </div>
+
+      <div class="hero__overlay"></div>
+
+      <div class="container hero__inner">
+        <div class="hero__content">
+
+          <span class="eyebrow">Native Sun Landscaping · Boulder, Colorado</span>
+
+          <h1 id="hero-title">
+            A little more care.
+            <em>A lot more life.</em>
+          </h1>
+
+          <p class="hero__description">
+            Thoughtful landscaping and irrigation from a small,
+            family-owned team. From garden care to outdoor improvements,
+            we help your yard thrive through every season.
+          </p>
+
+          <div class="hero__actions">
+            <a class="button button--light" href="/contact">
+              Get Your Free Estimate
+              <span class="button__arrow" aria-hidden="true">→</span>
+            </a>
+
+            <a class="button button--outline" href="#services">
+              Explore Our Services
+            </a>
+          </div>
+
+          <div class="hero__note">
+            Licensed and insured · Free estimates
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ABOUT / APPROACH -->
+    <section class="section intro" id="about" aria-labelledby="about-title">
+      <div class="container intro__inner">
+
+        <div class="intro__aside">
+          <p>
+            Personal attention makes room for better gardens
+            and more enjoyable outdoor spaces.
+          </p>
+        </div>
+
+        <div class="intro__content">
+          <span class="eyebrow">The Native Sun approach</span>
+
+          <h2 id="about-title">
+            Family-owned.
+            <br>
+            Thoughtfully cared for.
+          </h2>
+
+          <p>
+            We're a small, family-owned and operated landscaping
+            business. That means a personal approach, attentive care
+            and flexible options for the needs of your outdoor space.
+          </p>
+
+          <p>
+            Whether your yard needs regular maintenance, irrigation
+            attention or a new outdoor feature, we provide services
+            designed to help it thrive.
+          </p>
+
+          <div class="intro__highlights">
+            <span class="intro__highlight">Family-owned and operated</span>
+            <span class="intro__highlight">Licensed and insured</span>
+            <span class="intro__highlight">Free estimates</span>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- SERVICES -->
+    <section class="section services" id="services" aria-labelledby="services-title">
+      <div class="container services__layout">
+
+        <div class="services__intro">
+          <span class="eyebrow">What we do</span>
+
+          <h2 id="services-title">
+            Everything your yard needs to grow.
+          </h2>
+
+          <p>
+            Flexible landscaping and maintenance services, with
+            personal attention to the details that keep outdoor
+            spaces looking their best.
+          </p>
+
+          <a class="button button--primary" href="/contact">
+            Discuss Your Project
+            <span class="button__arrow" aria-hidden="true">→</span>
+          </a>
+        </div>
+
+        <div class="services__list">
+
+          <article class="service-item">
+            <span class="service-item__number" aria-hidden="true">01</span>
+            <div class="service-item__content">
+              <h3>Garden &amp; Yard Maintenance</h3>
+              <p>
+                Year-round maintenance, gardening and mowing
+                to help your outdoor space stay cared for.
+              </p>
+            </div>
+            <span class="service-item__arrow" aria-hidden="true">↗</span>
+          </article>
+
+          <article class="service-item">
+            <span class="service-item__number" aria-hidden="true">02</span>
+            <div class="service-item__content">
+              <h3>Irrigation</h3>
+              <p>
+                Irrigation services to support the ongoing
+                health and care of your landscape.
+              </p>
+            </div>
+            <span class="service-item__arrow" aria-hidden="true">↗</span>
+          </article>
+
+          <article class="service-item">
+            <span class="service-item__number" aria-hidden="true">03</span>
+            <div class="service-item__content">
+              <h3>Patios &amp; Outdoor Features</h3>
+              <p>
+                Outdoor improvements including patios,
+                raised beds and fences.
+              </p>
+            </div>
+            <span class="service-item__arrow" aria-hidden="true">↗</span>
+          </article>
+
+          <article class="service-item">
+            <span class="service-item__number" aria-hidden="true">04</span>
+            <div class="service-item__content">
+              <h3>Seasonal Services</h3>
+              <p>
+                Flexible seasonal care, including snow removal
+                and other changing yard needs.
+              </p>
+            </div>
+            <span class="service-item__arrow" aria-hidden="true">↗</span>
+          </article>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- MATERIALS -->
+    <section class="section materials" id="materials" aria-labelledby="materials-title">
+      <div class="container materials__inner">
+
+        <div class="materials__content">
+          <span class="eyebrow">Thoughtful choices</span>
+
+          <h2 id="materials-title">
+            Good landscapes start with good materials.
+          </h2>
+
+          <p>
+            We source mulch, rock and landscaping supplies
+            from local vendors, bringing local materials into
+            the care and improvement of your outdoor space.
+          </p>
+
+          <div class="materials__details">
+            <div class="materials__detail">
+              Mulch and rock from local vendors
+            </div>
+            <div class="materials__detail">
+              Materials selected for landscaping projects
+            </div>
+            <div class="materials__detail">
+              Personal attention from a family-owned team
+            </div>
+          </div>
+        </div>
+
+        <div class="materials__image">
+          <img
+            src="https://nativesunlandscaping.net/wp-content/uploads/"
+            alt="Landscaping materials and garden details"
+            loading="lazy"
+          >
+          <div class="materials__caption">
+            Local supplies. Thoughtful landscaping. Personal care.
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- LANDSCAPE DESIGN -->
+    <section class="section showcase" id="landscape-design" aria-labelledby="showcase-title">
+      <div class="container">
+
+        <div class="showcase__heading">
+          <div class="section-heading">
+            <span class="eyebrow">Make room to grow</span>
+
+            <h2 id="showcase-title">
+              Imagine what your outdoor space could become.
+            </h2>
+
+            <p>
+              From raised beds and patios to practical landscape
+              improvements, let's explore what works for your yard.
+            </p>
+          </div>
+
+          <a class="button button--outline-dark" href="/contact">
+            Start a Conversation
+            <span class="button__arrow" aria-hidden="true">→</span>
+          </a>
+        </div>
+
+        <div class="showcase__visual">
+          <img
+            src="https://nativesunlandscaping.net/wp-content/uploads/"
+            alt="Outdoor landscaping project"
+            loading="lazy"
+          >
+
+          <div class="showcase__label">
+            <div>
+              <h3>Your yard, your possibilities.</h3>
+              <p>Flexible landscaping options and personal attention.</p>
+            </div>
+            <a href="/contact" class="text-link">
+              Get an estimate <span aria-hidden="true">→</span>
+            </a>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- LANDSCAPE DESIGN OFFER -->
+    <section class="promotion" aria-labelledby="promotion-title">
+      <div class="container promotion__inner">
+
+        <div class="promotion__content">
+          <span class="eyebrow">A little inspiration</span>
+
+          <h2 id="promotion-title">
+            Free landscape designs through April 30, 2026.
+          </h2>
+
+          <p>
+            Get in touch to discuss your landscaping ideas
+            and ask about the landscape design offer.
+          </p>
+        </div>
+
+        <div class="promotion__action">
+          <a class="button button--primary" href="/contact">
+            Contact Native Sun
+            <span class="button__arrow" aria-hidden="true">→</span>
+          </a>
+        </div>
+
+      </div>
+    </section>
+
+    <script>
+      (() => {
+        const menuButton = document.querySelector(".menu-toggle");
+        const navigation = document.getElementById("primary-navigation");
+
+        if (!menuButton || !navigation) return;
+
+        const closeMenu = () => {
+          navigation.classList.remove("is-open");
+          menuButton.setAttribute("aria-expanded", "false");
+          menuButton.setAttribute("aria-label", "Open navigation menu");
+        };
+
+        const toggleMenu = () => {
+          const isOpen = menuButton.getAttribute("aria-expanded") === "true";
+
+          navigation.classList.toggle("is-open", !isOpen);
+          menuButton.setAttribute("aria-expanded", String(!isOpen));
+          menuButton.setAttribute(
+            "aria-label",
+            isOpen ? "Open navigation menu" : "Close navigation menu"
+          );
+        };
+
+        menuButton.addEventListener("click", toggleMenu);
+
+        navigation.addEventListener("click", (event) => {
+          if (event.target.closest("a")) closeMenu();
+        });
+
+        document.addEventListener("keydown", (event) => {
+          if (event.key === "Escape" &&
+              menuButton.getAttribute("aria-expanded") === "true") {
+            closeMenu();
+            menuButton.focus();
+          }
+        });
+
+        window.addEventListener("resize", () => {
+          if (window.matchMedia("(min-width: 761px)").matches) {
+            closeMenu();
+          }
+        });
+      })();
+    </script>
+```

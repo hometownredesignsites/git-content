@@ -1,0 +1,46 @@
+{
+  "chat_id": "site-1-candidate-6",
+  "parts": [
+    {
+      "kind": "css",
+      "part": 1,
+      "response_file": "chunks/responses/css-1.txt",
+      "chunk_file": "chunks/css-1.css",
+      "captured_at_utc": "2026-11-02T16:36:30.154534+00:00",
+      "characters": 9591,
+      "sha256": "03214da783c0d20eae68db6d8efd35a14e94571dd013d9c748f19bff31789881",
+      "run_token": "a21b961c944d8edd"
+    },
+    {
+      "kind": "css",
+      "part": 2,
+      "response_file": "chunks/responses/css-2.txt",
+      "chunk_file": "chunks/css-2.css",
+      "captured_at_utc": "2026-11-02T16:36:57.724327+00:00",
+      "characters": 7452,
+      "sha256": "df48d007d4429123da3eb2ed8dc428cc67fe7b0f379643c80e610b6f7b50547a",
+      "run_token": "a21b961c944d8edd"
+    },
+    {
+      "kind": "html",
+      "part": 1,
+      "response_file": "chunks/responses/html-1.txt",
+      "chunk_file": "chunks/html-1.html",
+      "captured_at_utc": "2026-11-02T16:37:21.262235+00:00",
+      "characters": 9277,
+      "sha256": "5394f6dc063e87be94707f20ba1042968674ef43c105dc0201c79759375d4b65",
+      "run_token": "a21b961c944d8edd"
+    },
+    {
+      "kind": "html",
+      "part": 2,
+      "response_file": "chunks/responses/html-2.txt",
+      "chunk_file": "chunks/html-2.html",
+      "captured_at_utc": "2026-11-02T16:37:37.792416+00:00",
+      "characters": 5166,
+      "sha256": "cb0c443bef35be8c44e90f0e38755e0a776a068463d286cc3481914114f27636",
+      "run_token": "a21b961c944d8edd"
+    }
+  ],
+  "run_token": "a21b961c944d8edd"
+}

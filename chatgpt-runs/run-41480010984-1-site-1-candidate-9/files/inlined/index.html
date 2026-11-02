@@ -1,0 +1,1530 @@
+<!-- HTML PART 1 OF 2 -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#203d30">
+  <meta name="description" content="Native Sun Landscaping provides family-owned landscaping, garden care, irrigation, patios, raised beds, fencing and year-round maintenance in Boulder, Colorado.">
+  <title>Native Sun Landscaping | Boulder, Colorado</title>
+  <style>
+/* CSS PART 1 OF 2 */
+
+/* ---------- Design tokens ---------- */
+:root {
+  color-scheme: light;
+  --color-forest: #203d30;
+  --color-forest-deep: #172c23;
+  --color-sage: #819477;
+  --color-moss: #a7ad83;
+  --color-cream: #f5f2e9;
+  --color-paper: #fffdf8;
+  --color-earth: #a36f4d;
+  --color-ink: #27332b;
+  --color-muted: #6d756b;
+  --color-line: #deded2;
+  --color-white: #ffffff;
+
+  --font-display: Georgia, "Times New Roman", serif;
+  --font-body: "Avenir Next", Avenir, "Segoe UI", sans-serif;
+
+  --container: 1200px;
+  --gutter: clamp(22px, 6vw, 88px);
+  --section-space: clamp(76px, 10vw, 132px);
+
+  --radius-sm: 5px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --shadow-soft: 0 14px 45px rgba(30, 49, 36, 0.09);
+
+  --transition: 220ms ease;
+}
+
+/* ---------- Reset and foundations ---------- */
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 100px;
+}
+
+body {
+  margin: 0;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 3px solid var(--color-earth);
+  outline-offset: 4px;
+}
+
+::selection {
+  background: var(--color-sage);
+  color: var(--color-forest-deep);
+}
+
+/* ---------- Shared typography ---------- */
+h1,
+h2,
+h3,
+p {
+  margin-top: 0;
+}
+
+h1,
+h2,
+h3 {
+  color: var(--color-forest);
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.035em;
+  line-height: 1.12;
+}
+
+h1 {
+  font-size: clamp(3.2rem, 7.6vw, 6.8rem);
+}
+
+h2 {
+  margin-bottom: 24px;
+  font-size: clamp(2.5rem, 5vw, 4.35rem);
+}
+
+h3 {
+  font-size: clamp(1.45rem, 2.5vw, 2rem);
+}
+
+p {
+  color: var(--color-muted);
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 22px;
+  color: var(--color-sage);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.19em;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
+.eyebrow::before {
+  width: 30px;
+  height: 1px;
+  background: currentColor;
+  content: "";
+}
+
+.section-intro {
+  max-width: 660px;
+  margin-bottom: 52px;
+}
+
+.section-intro p {
+  max-width: 560px;
+  font-size: 1.06rem;
+}
+
+.text-accent {
+  color: var(--color-earth);
+}
+
+.container {
+  width: min(100% - var(--gutter) * 2, var(--container));
+  margin-inline: auto;
+}
+
+.section {
+  padding-block: var(--section-space);
+}
+
+.section--cream {
+  background: var(--color-cream);
+}
+
+.section--forest {
+  background: var(--color-forest);
+  color: var(--color-white);
+}
+
+.section--forest h2,
+.section--forest h3 {
+  color: var(--color-white);
+}
+
+.section--forest p {
+  color: rgba(255, 255, 255, 0.76);
+}
+
+/* ---------- Header and navigation ---------- */
+.site-header {
+  position: relative;
+  z-index: 20;
+  width: 100%;
+  background: var(--color-paper);
+  border-bottom: 1px solid rgba(32, 61, 48, 0.09);
+}
+
+.header-inner {
+  display: flex;
+  min-height: 88px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 30px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 13px;
+  flex-shrink: 0;
+  color: var(--color-forest);
+}
+
+.brand img {
+  width: 54px;
+  height: 54px;
+  object-fit: contain;
+}
+
+.brand-name {
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  line-height: 1.05;
+}
+
+.brand-name small {
+  margin-top: 6px;
+  color: var(--color-muted);
+  font-family: var(--font-body);
+  font-size: 0.59rem;
+  font-weight: 700;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+}
+
+.main-nav {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: clamp(20px, 3vw, 38px);
+}
+
+.main-nav a:not(.button) {
+  position: relative;
+  padding-block: 9px;
+  color: var(--color-ink);
+  font-size: 0.82rem;
+  font-weight: 600;
+  transition: color var(--transition);
+}
+
+.main-nav a:not(.button)::after {
+  position: absolute;
+  right: 0;
+  bottom: 2px;
+  left: 0;
+  height: 1px;
+  background: var(--color-earth);
+  content: "";
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--transition);
+}
+
+.main-nav a:not(.button):hover {
+  color: var(--color-earth);
+}
+
+.main-nav a:not(.button):hover::after {
+  transform: scaleX(1);
+}
+
+/* ---------- Buttons ---------- */
+.button {
+  display: inline-flex;
+  min-height: 54px;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 14px 25px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--color-forest);
+  color: var(--color-white);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-align: center;
+  text-transform: uppercase;
+  transition:
+    background var(--transition),
+    color var(--transition),
+    border-color var(--transition),
+    transform var(--transition);
+}
+
+.button:hover {
+  background: var(--color-forest-deep);
+  transform: translateY(-2px);
+}
+
+.button--light {
+  border-color: var(--color-white);
+  background: var(--color-white);
+  color: var(--color-forest);
+}
+
+.button--light:hover {
+  border-color: var(--color-white);
+  background: transparent;
+  color: var(--color-white);
+}
+
+.button--outline {
+  border-color: rgba(32, 61, 48, 0.35);
+  background: transparent;
+  color: var(--color-forest);
+}
+
+.button--outline:hover {
+  background: var(--color-forest);
+  color: var(--color-white);
+}
+
+.button-arrow {
+  font-size: 1.15rem;
+  line-height: 1;
+  transition: transform var(--transition);
+}
+
+.button:hover .button-arrow {
+  transform: translateX(4px);
+}
+
+/* ---------- Full-bleed hero ---------- */
+.hero {
+  position: relative;
+  display: flex;
+  min-height: min(780px, calc(100svh - 88px));
+  align-items: center;
+  overflow: hidden;
+  background: var(--color-forest-deep);
+  color: var(--color-white);
+}
+
+.hero-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 52%;
+}
+
+.hero::before {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(19, 39, 29, 0.88) 0%,
+      rgba(19, 39, 29, 0.67) 43%,
+      rgba(19, 39, 29, 0.17) 100%
+    ),
+    linear-gradient(
+      0deg,
+      rgba(19, 39, 29, 0.32),
+      transparent 48%
+    );
+  content: "";
+}
+
+.hero-content {
+  position: relative;
+  z-index: 2;
+  width: min(100% - var(--gutter) * 2, var(--container));
+  margin: 0 auto;
+  padding-block: 100px;
+}
+
+.hero .eyebrow {
+  color: #d5d9b9;
+}
+
+.hero h1 {
+  max-width: 850px;
+  margin-bottom: 27px;
+  color: var(--color-white);
+}
+
+.hero h1 em {
+  color: #d4d6b4;
+  font-weight: 400;
+}
+
+.hero-description {
+  max-width: 520px;
+  margin-bottom: 36px;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: clamp(1rem, 1.5vw, 1.15rem);
+  line-height: 1.8;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+}
+
+.hero-note {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-top: 48px;
+  color: rgba(255, 255, 255, 0.83);
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.hero-note::before {
+  width: 34px;
+  height: 1px;
+  background: #d4d6b4;
+  content: "";
+}
+
+/* ---------- Introduction ---------- */
+.intro-section {
+  position: relative;
+  overflow: hidden;
+  padding-block: var(--section-space);
+}
+
+.intro-layout {
+  display: grid;
+  grid-template-columns: 0.85fr 1.15fr;
+  align-items: center;
+  gap: clamp(48px, 9vw, 130px);
+}
+
+.intro-heading {
+  max-width: 460px;
+}
+
+.intro-heading h2 {
+  margin-bottom: 0;
+}
+
+.intro-copy {
+  max-width: 570px;
+}
+
+.intro-copy p {
+  font-size: 1.05rem;
+  line-height: 1.9;
+}
+
+.intro-copy .button {
+  margin-top: 17px;
+}
+
+/* ---------- Services ---------- */
+.services-section {
+  background: var(--color-cream);
+  padding-block: var(--section-space);
+}
+
+.services-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 35px;
+  margin-bottom: 55px;
+}
+
+.services-heading .section-intro {
+  margin-bottom: 0;
+}
+
+.services-heading > p {
+  max-width: 310px;
+  margin-bottom: 9px;
+}
+
+.services-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid var(--color-line);
+  border-left: 1px solid var(--color-line);
+}
+
+.service-item {
+  min-height: 225px;
+  padding: 35px;
+  border-right: 1px solid var(--color-line);
+  border-bottom: 1px solid var(--color-line);
+  background: rgba(255, 253, 248, 0.5);
+  transition:
+    background var(--transition),
+    transform var(--transition);
+}
+
+.service-item:hover {
+  position: relative;
+  z-index: 1;
+  background: var(--color-paper);
+  transform: translateY(-3px);
+}
+
+.service-number {
+  display: block;
+  margin-bottom: 25px;
+  color: var(--color-earth);
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-style: italic;
+}
+
+.service-item h3 {
+  margin-bottom: 12px;
+}
+
+.service-item p {
+  margin-bottom: 0;
+  font-size: 0.92rem;
+  line-height: 1.75;
+}
+
+/* ---------- Family-owned difference ---------- */
+.difference-section {
+  padding-block: var(--section-space);
+  background: var(--color-forest);
+  color: var(--color-white);
+}
+
+.difference-layout {
+  display: grid;
+  grid-template-columns: 1fr 0.85fr;
+  align-items: center;
+  gap: clamp(50px, 9vw, 120px);
+}
+
+.difference-content {
+  max-width: 620px;
+}
+
+.difference-content h2 {
+  color: var(--color-white);
+}
+
+.difference-content p {
+  max-width: 540px;
+  font-size: 1.03rem;
+  line-height: 1.9;
+}
+
+.difference-points {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 30px;
+  margin-top: 38px;
+}
+
+.difference-point {
+  padding-block: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.22);
+  color: rgba(255, 255, 255, 0.94);
+  font-family: var(--font-display);
+  font-size: 1.12rem;
+}
+
+.difference-point::before {
+  margin-right: 11px;
+  color: #c5cba4;
+  content: "↗";
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+}
+
+.difference-aside {
+  padding: clamp(30px, 5vw, 54px);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.difference-aside h3 {
+  margin-bottom: 20px;
+  color: #e2e2c9;
+}
+
+.difference-aside p {
+  margin-bottom: 0;
+}
+
+/* ---------- Local sourcing / working approach ---------- */
+.approach-section {
+  padding-block: var(--section-space);
+}
+
+.approach-layout {
+  display: grid;
+  grid-template-columns: 0.9fr 1.1fr;
+  align-items: center;
+  gap: clamp(48px, 9vw, 115px);
+}
+
+.approach-heading {
+  max-width: 460px;
+}
+
+.approach-copy {
+  max-width: 580px;
+}
+
+.approach-copy p {
+  font-size: 1.04rem;
+  line-height: 1.9;
+}
+
+.approach-highlight {
+  margin-top: 30px;
+  padding: 22px 25px;
+  border-left: 3px solid var(--color-sage);
+  background: var(--color-cream);
+  color: var(--color-forest);
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  line-height: 1.55;
+}
+
+/* ---------- Reduced-motion preference ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* CSS PART 2 OF 2 */
+
+/* ---------- Contact and conversion ---------- */
+.contact-section {
+  padding-block: var(--section-space);
+  background: var(--color-cream);
+}
+
+.contact-layout {
+  display: grid;
+  grid-template-columns: 0.9fr 1.1fr;
+  align-items: start;
+  gap: clamp(45px, 8vw, 110px);
+}
+
+.contact-content {
+  max-width: 470px;
+}
+
+.contact-content h2 {
+  margin-bottom: 24px;
+}
+
+.contact-content > p {
+  font-size: 1.05rem;
+  line-height: 1.85;
+}
+
+.contact-details {
+  margin-top: 38px;
+  padding-top: 25px;
+  border-top: 1px solid var(--color-line);
+}
+
+.contact-details p {
+  margin-bottom: 8px;
+  color: var(--color-forest);
+  font-weight: 600;
+}
+
+.contact-form {
+  display: grid;
+  gap: 21px;
+  padding: clamp(25px, 5vw, 48px);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-paper);
+  box-shadow: var(--shadow-soft);
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.form-field {
+  display: grid;
+  gap: 8px;
+}
+
+.form-field label {
+  color: var(--color-forest);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.form-field input,
+.form-field textarea,
+.form-field select {
+  width: 100%;
+  min-height: 52px;
+  padding: 13px 15px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-white);
+  color: var(--color-ink);
+  transition: border-color var(--transition);
+}
+
+.form-field textarea {
+  min-height: 145px;
+  resize: vertical;
+}
+
+.form-field input:hover,
+.form-field textarea:hover,
+.form-field select:hover {
+  border-color: var(--color-sage);
+}
+
+.form-field input:focus,
+.form-field textarea:focus,
+.form-field select:focus {
+  border-color: var(--color-forest);
+  outline: 2px solid var(--color-sage);
+  outline-offset: 2px;
+}
+
+.contact-form .button {
+  justify-self: start;
+  min-width: 190px;
+}
+
+.form-note {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.78rem;
+}
+
+/* ---------- Footer ---------- */
+.site-footer {
+  padding: 55px 0 25px;
+  background: var(--color-forest-deep);
+  color: var(--color-white);
+}
+
+.footer-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 35px;
+  padding-bottom: 40px;
+}
+
+.footer-brand {
+  color: var(--color-white);
+}
+
+.footer-brand .brand-name small {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.footer-copy {
+  max-width: 350px;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.9rem;
+}
+
+.footer-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding-top: 23px;
+  border-top: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.footer-bottom p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.75rem;
+}
+
+/* ---------- Accessible mobile navigation ---------- */
+.menu-toggle {
+  display: none;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-forest);
+  cursor: pointer;
+}
+
+.menu-toggle span[aria-hidden="true"] {
+  display: block;
+  width: 20px;
+  height: 2px;
+  flex: 0 0 2px;
+  background-color: currentColor;
+}
+
+@media (max-width: 900px) {
+  :root {
+    --section-space: 85px;
+  }
+
+  .header-inner {
+    min-height: 78px;
+  }
+
+  .menu-toggle {
+    display: flex;
+  }
+
+  .main-nav {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    left: 0;
+    display: none;
+    max-height: calc(100svh - 78px);
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 0;
+    overflow-y: auto;
+    padding: 15px var(--gutter) 25px;
+    border-bottom: 1px solid var(--color-line);
+    background: var(--color-paper);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .main-nav.is-open {
+    display: flex;
+  }
+
+  .main-nav a:not(.button) {
+    display: block;
+    width: 100%;
+    padding: 14px 0;
+    overflow-wrap: anywhere;
+    border-bottom: 1px solid var(--color-line);
+  }
+
+  .main-nav .button {
+    width: 100%;
+    margin-top: 17px;
+  }
+
+  .hero {
+    min-height: 680px;
+  }
+
+  .hero::before {
+    background: linear-gradient(
+      90deg,
+      rgba(19, 39, 29, 0.84),
+      rgba(19, 39, 29, 0.43)
+    );
+  }
+
+  .intro-layout,
+  .difference-layout,
+  .approach-layout,
+  .contact-layout {
+    grid-template-columns: 1fr;
+    gap: 35px;
+  }
+
+  .intro-heading,
+  .approach-heading,
+  .contact-content {
+    max-width: 650px;
+  }
+
+  .difference-aside {
+    max-width: 650px;
+  }
+
+  .services-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .services-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 600px) {
+  :root {
+    --gutter: 22px;
+    --section-space: 68px;
+  }
+
+  body {
+    font-size: 15px;
+  }
+
+  .header-inner {
+    min-height: 72px;
+  }
+
+  .brand img {
+    width: 45px;
+    height: 45px;
+  }
+
+  .brand-name {
+    font-size: 1.12rem;
+  }
+
+  .brand-name small {
+    font-size: 0.53rem;
+  }
+
+  .main-nav {
+    max-height: calc(100svh - 72px);
+  }
+
+  h1 {
+    font-size: clamp(3rem, 13vw, 4.6rem);
+  }
+
+  h2 {
+    font-size: clamp(2.35rem, 10vw, 3.3rem);
+  }
+
+  .hero {
+    min-height: 690px;
+    min-height: min(760px, calc(100svh - 72px));
+    align-items: flex-end;
+  }
+
+  .hero-image {
+    object-position: 58% center;
+  }
+
+  .hero::before {
+    background:
+      linear-gradient(
+        0deg,
+        rgba(19, 39, 29, 0.94) 0%,
+        rgba(19, 39, 29, 0.76) 48%,
+        rgba(19, 39, 29, 0.22) 100%
+      );
+  }
+
+  .hero-content {
+    padding-top: 100px;
+    padding-bottom: 65px;
+  }
+
+  .hero h1 {
+    max-width: 100%;
+    margin-bottom: 20px;
+  }
+
+  .hero-description {
+    font-size: 0.98rem;
+  }
+
+  .hero-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .hero-actions .button {
+    width: 100%;
+  }
+
+  .hero-note {
+    margin-top: 30px;
+    font-size: 0.67rem;
+  }
+
+  .section-intro {
+    margin-bottom: 35px;
+  }
+
+  .intro-layout,
+  .difference-layout,
+  .approach-layout,
+  .contact-layout {
+    gap: 27px;
+  }
+
+  .services-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .service-item {
+    min-height: auto;
+    padding: 26px;
+  }
+
+  .service-number {
+    margin-bottom: 14px;
+  }
+
+  .difference-points {
+    grid-template-columns: 1fr;
+  }
+
+  .difference-aside {
+    padding: 27px;
+  }
+
+  .approach-highlight {
+    padding: 19px;
+    font-size: 1.08rem;
+  }
+
+  .contact-form {
+    gap: 17px;
+    padding: 23px 19px;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+    gap: 17px;
+  }
+
+  .contact-form .button {
+    width: 100%;
+  }
+
+  .footer-main,
+  .footer-bottom {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .footer-main {
+    gap: 22px;
+    padding-bottom: 28px;
+  }
+
+  .footer-bottom {
+    gap: 10px;
+  }
+}
+
+@media (max-width: 360px) {
+  :root {
+    --gutter: 17px;
+  }
+
+  .brand {
+    gap: 8px;
+  }
+
+  .brand-name {
+    font-size: 1rem;
+  }
+
+  .hero h1 {
+    font-size: 2.8rem;
+  }
+
+  .button {
+    padding-inline: 17px;
+  }
+}
+
+/* ---------- Visible keyboard focus ---------- */
+:focus-visible {
+  outline: 3px solid var(--color-earth);
+  outline-offset: 4px;
+}
+
+.main-nav a:focus-visible,
+.button:focus-visible,
+.menu-toggle:focus-visible {
+  outline-color: var(--color-earth);
+  outline-offset: 4px;
+}
+
+/* ---------- Reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Keep the generated mobile menu icon visibly rendered. */
+.menu-toggle {
+  flex-direction: column;
+  gap: 4px;
+}
+
+.menu-toggle > span[aria-hidden="true"] {
+  display: block;
+  width: 20px;
+  height: 2px;
+  flex: 0 0 2px;
+  border-radius: 2px;
+  background-color: currentColor;
+}
+</style>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="#home" aria-label="Native Sun Landscaping home">
+        <img src="https://nativesunlandscaping.net/wp-content/uploads/" alt="" width="54" height="54">
+        <span class="brand-name">
+          Native Sun
+          <small>Landscaping &amp; Irrigation</small>
+        </span>
+      </a>
+
+      <button
+        class="menu-toggle"
+        type="button"
+        aria-label="Open navigation menu"
+        aria-controls="primary-navigation"
+        aria-expanded="false">
+        <span aria-hidden="true"></span>
+        <span aria-hidden="true"></span>
+        <span aria-hidden="true"></span>
+      </button>
+
+      <nav class="main-nav" id="primary-navigation" aria-label="Main navigation">
+        <a href="#home">Home</a>
+        <a href="#services">Services</a>
+        <a href="#about">Our Approach</a>
+        <a href="#contact">Contact</a>
+        <a class="button" href="/contact">
+          Get a Free Estimate
+          
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero" id="home" aria-labelledby="hero-title">
+      <img
+        class="hero-image"
+        src="https://images.unsplash.com/photo-1416879595882-3373a0480b5b?auto=format&amp;fit=crop&amp;w=2000&amp;q=85"
+        alt="Lush green garden with established plants and thoughtfully maintained landscaping"
+        fetchpriority="high">
+
+      <div class="hero-content">
+        <span class="eyebrow">Boulder, Colorado · Landscaping &amp; Irrigation</span>
+
+        <h1 id="hero-title">
+          A little more care.
+          <em>A lot more life.</em>
+        </h1>
+
+        <p class="hero-description">
+          Thoughtful landscaping, dependable garden care and irrigation
+          services from a family-owned team that cares about helping your
+          outdoor space thrive.
+        </p>
+
+        <div class="hero-actions">
+          <a class="button button--light" href="/contact">
+            Get Your Free Estimate
+            
+          </a>
+          <a class="button button--outline" href="#services" style="border-color:rgba(255,255,255,.8);color:#fff">
+            Explore Our Services
+          </a>
+        </div>
+
+        <div class="hero-note">
+          Licensed &amp; insured · Year-round maintenance
+        </div>
+      </div>
+    </section>
+
+    <section class="intro-section" aria-labelledby="intro-title">
+      <div class="container intro-layout">
+        <div class="intro-heading">
+          <span class="eyebrow">Rooted in personal care</span>
+          <h2 id="intro-title">
+            Your yard deserves
+            <span class="text-accent">the thoughtful touch.</span>
+          </h2>
+        </div>
+
+        <div class="intro-copy">
+          <p>
+            Great outdoor spaces take more than occasional attention.
+            They need the right care, reliable maintenance and a team
+            willing to understand what makes each garden unique.
+          </p>
+          <p>
+            As a small, family-owned and operated business, Native Sun
+            offers personal attention and flexible options for your
+            landscaping and irrigation needs.
+          </p>
+          <a class="button button--outline" href="/contact">
+            Let's Talk About Your Yard
+            
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <section class="services-section section" id="services" aria-labelledby="services-title">
+      <div class="container">
+        <div class="services-heading">
+          <div class="section-intro">
+            <span class="eyebrow">What we do</span>
+            <h2 id="services-title">Everything your yard needs to thrive.</h2>
+            <p>
+              From regular garden care to outdoor improvements, we offer
+              flexible services to help keep your property looking its best.
+            </p>
+          </div>
+          <p>
+            One caring team for the changing needs of your outdoor space.
+          </p>
+        </div>
+
+        <div class="services-grid">
+          <article class="service-item">
+            <span class="service-number">01</span>
+            <h3>Garden &amp; Landscape Care</h3>
+            <p>
+              Gardening, mowing and ongoing landscape maintenance
+              tailored to your outdoor space.
+            </p>
+          </article>
+
+          <article class="service-item">
+            <span class="service-number">02</span>
+            <h3>Irrigation</h3>
+            <p>
+              Irrigation services to help support healthy gardens
+              and thriving landscapes.
+            </p>
+          </article>
+
+          <article class="service-item">
+            <span class="service-number">03</span>
+            <h3>Patios</h3>
+            <p>
+              Outdoor patio improvements that help make more of
+              the space around your home.
+            </p>
+          </article>
+
+          <article class="service-item">
+            <span class="service-number">04</span>
+            <h3>Raised Beds</h3>
+            <p>
+              Raised garden beds to bring structure and purpose
+              to your growing space.
+            </p>
+          </article>
+
+          <article class="service-item">
+            <span class="service-number">05</span>
+            <h3>Fences</h3>
+            <p>
+              Fencing as part of a considered approach to your
+              outdoor landscape.
+            </p>
+          </article>
+
+          <article class="service-item">
+            <span class="service-number">06</span>
+            <h3>Seasonal Maintenance</h3>
+            <p>
+              Year-round maintenance options, including snow
+              removal and seasonal garden care.
+            </p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="difference-section" id="about" aria-labelledby="difference-title">
+      <div class="container difference-layout">
+        <div class="difference-content">
+          <span class="eyebrow">Small business. Personal attention.</span>
+          <h2 id="difference-title">
+            Family-owned.
+            <br>
+            Care at every step.
+          </h2>
+          <p>
+            Being a small, family-owned and operated business means
+            we can bring a higher level of personal attention to
+            every garden and project.
+          </p>
+          <p>
+            We believe in flexible options, reliable maintenance and
+            taking the time to care for the details that make an
+            outdoor space feel like yours.
+          </p>
+
+          <div class="difference-points">
+            <div class="difference-point">Family-owned &amp; operated</div>
+            <div class="difference-point">Licensed &amp; insured</div>
+            <div class="difference-point">Year-round maintenance</div>
+            <div class="difference-point">Free estimates</div>
+          </div>
+        </div>
+
+        <aside class="difference-aside">
+          <span class="eyebrow">A thoughtful approach</span>
+          <h3>Good work starts with good care.</h3>
+          <p>
+            We use mulch, rock and landscaping supplies from local
+            vendors, bringing a considered, personal approach to
+            the materials and maintenance that support your yard.
+          </p>
+        </aside>
+      </div>
+    </section>
+
+    <section class="approach-section" aria-labelledby="approach-title">
+      <div class="container approach-layout">
+        <div class="approach-heading">
+          <span class="eyebrow">The Native Sun approach</span>
+          <h2 id="approach-title">
+            Local materials.
+            <span class="text-accent">Personal care.</span>
+          </h2>
+        </div>
+
+        <div class="approach-copy">
+          <p>
+            We source mulch, rock and other supplies from local vendors.
+            It's part of our practical, hands-on approach to landscaping
+            and caring for outdoor spaces.
+          </p>
+          <p>
+            Whether you need ongoing garden maintenance or have a new
+            idea for your yard, we're here to discuss flexible options
+            and help you get started.
+          </p>
+
+          <div class="approach-highlight">
+            Free estimates to help you take the first step toward
+            a yard that thrives.
+          </div>
+
+          <a class="button" href="/contact" style="margin-top:28px">
+            Request Your Free Estimate
+            
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const toggle = document.querySelector(".menu-toggle");
+      const navigation = document.querySelector("#primary-navigation");
+
+      if (!toggle || !navigation) return;
+
+      const closeMenu = () => {
+        navigation.classList.remove("is-open");
+        toggle.setAttribute("aria-expanded", "false");
+        toggle.setAttribute("aria-label", "Open navigation menu");
+      };
+
+      const openMenu = () => {
+        navigation.classList.add("is-open");
+        toggle.setAttribute("aria-expanded", "true");
+        toggle.setAttribute("aria-label", "Close navigation menu");
+      };
+
+      toggle.addEventListener("click", () => {
+        const expanded = toggle.getAttribute("aria-expanded") === "true";
+        expanded ? closeMenu() : openMenu();
+      });
+
+      navigation.addEventListener("click", (event) => {
+        if (event.target.closest("a")) closeMenu();
+      });
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" &&
+            toggle.getAttribute("aria-expanded") === "true") {
+          closeMenu();
+          toggle.focus();
+        }
+      });
+
+      window.addEventListener("resize", () => {
+        if (window.innerWidth > 900) closeMenu();
+      });
+    })();
+  </script>
+
+<!-- HTML PART 2 OF 2 -->
+
+<section class="contact-section" id="contact" aria-labelledby="contact-title">
+  <div class="container contact-layout">
+
+    <div class="contact-content">
+      <span class="eyebrow">Let's get started</span>
+      <h2 id="contact-title">
+        Your yard's next chapter starts here.
+      </h2>
+      <p>
+        Have a garden that needs attention, an irrigation project in mind,
+        or an idea for improving your outdoor space? We'd love to hear
+        what you're planning.
+      </p>
+      <p>
+        Get in touch with Native Sun Landscaping to discuss your needs
+        and request a free estimate.
+      </p>
+
+      <div class="contact-details">
+        <p>Native Sun Landscaping</p>
+        <p>Landscaping &amp; Irrigation</p>
+        <p>Boulder, Colorado</p>
+        <p>Licensed &amp; insured</p>
+      </div>
+
+      <a class="button button--outline" href="/contact">
+        Contact Native Sun
+        
+      </a>
+    </div>
+
+    <form class="contact-form" action="/contact" method="get">
+      <div class="section-intro">
+        <span class="eyebrow">Request an estimate</span>
+        <h3>Tell us about your yard.</h3>
+        <p>
+          Share a little about what you're looking for so you can
+          get started with your estimate.
+        </p>
+      </div>
+
+      <p class="form-note">
+        Please use the contact page for inquiries and estimate requests.
+      </p>
+
+      <a class="button" href="/contact">
+        Continue to Contact Page
+        
+      </a>
+    </form>
+
+  </div>
+</section>
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-main">
+      <a class="brand footer-brand" href="#home" aria-label="Native Sun Landscaping home">
+        <span class="brand-name">
+          Native Sun
+          <small>Landscaping &amp; Irrigation</small>
+        </span>
+      </a>
+
+      <p class="footer-copy">
+        Family-owned landscaping and irrigation services in Boulder,
+        Colorado. Thoughtful garden care, flexible maintenance and
+        outdoor improvements to help your yard thrive.
+      </p>
+
+      <a class="button button--light" href="/contact">
+        Get a Free Estimate
+        
+      </a>
+    </div>
+
+    <div class="footer-bottom">
+      <p>Native Sun Landscaping · Boulder, Colorado</p>
+      <p>Family-owned · Licensed &amp; insured</p>
+      <p><a href="/contact">Contact</a></p>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
