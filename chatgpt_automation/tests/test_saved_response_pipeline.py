@@ -257,6 +257,21 @@ class SavedResponsePipelineTest(unittest.TestCase):
             self.assertEqual(failed_gate.returncode, 2)
             failed_report = json.loads(failed_gate.stdout)
             self.assertIn("browser_mobile_menu_control_visible", failed_report["blocking_failures"])
+            browser_checks["mobile_menu_control_visible"] = True
+            browser_checks["cta_visible_first_screen_desktop_and_mobile"] = False
+            (run / "debug" / "browser_qa.json").write_text(json.dumps({
+                "status": "fail", "checks": browser_checks,
+                "mobile_menu": {"escape_closes": True},
+            }), encoding="utf-8")
+            failed_cta_gate = subprocess.run([
+                sys.executable,
+                str(SCRIPTS / "check_website.py"),
+                str(run),
+                REQUEST,
+            ], capture_output=True, text=True, encoding="utf-8")
+            self.assertEqual(failed_cta_gate.returncode, 2)
+            failed_cta_report = json.loads(failed_cta_gate.stdout)
+            self.assertIn("browser_cta_visible_first_screen_desktop_and_mobile", failed_cta_report["blocking_failures"])
             self.assertEqual(len(json.loads((run / "chunks" / "capture_manifest.json").read_text(encoding="utf-8"))["parts"]), 4)
             self.assertEqual(css_file.read_text(encoding="utf-8").count("CSS PART "), 2)
             self.assertTrue(inlined_file.is_file())

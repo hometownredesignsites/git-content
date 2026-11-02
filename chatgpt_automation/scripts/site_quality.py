@@ -1189,14 +1189,18 @@ def assess_website(prompt, session_dir):
 
     passed = sum(checks.values())
     total = len(checks)
-    # Browser-rendered geometry and remote asset results remain advisory. The
-    # mobile-menu visibility and keyboard checks are deterministic user-facing
-    # requirements, so keep them in the blocking automated gate.
+    # Deterministic rendered layout and mobile-menu checks are user-visible
+    # requirements. Remote asset availability remains advisory because it can
+    # vary with the external site and CI network.
     blocking_browser_checks = {
+        "browser_rendered_sections_visible_desktop_and_mobile",
+        "browser_hero_spans_viewport_desktop_and_mobile",
+        "browser_cta_visible_first_screen_desktop_and_mobile",
         "browser_mobile_menu_clicks_work",
         "browser_mobile_menu_control_visible",
         "browser_mobile_menu_focus_indicator_visible",
         "browser_mobile_menu_keyboard_works",
+        "browser_mobile_has_no_horizontal_overflow",
     }
     advisory_check_names = {
         name for name in checks

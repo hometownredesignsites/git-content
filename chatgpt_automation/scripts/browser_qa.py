@@ -102,7 +102,7 @@ VIEWPORT_CHECKS_JS = r"""() => {
     };
   }
 
-  const ctaWords = /ask|contact|book|schedule|inquir|reserve|visit|get in touch/i;
+  const ctaWords = /ask|call|contact|book|schedule|inquir|reserve|visit|get in touch/i;
   const actions = Array.from(document.querySelectorAll('a,button,[role="button"],input[type="submit"]'));
   const cta = actions.find(element => {
     const label = [element.innerText, element.getAttribute('aria-label'), element.getAttribute('value'), element.getAttribute('href')].filter(Boolean).join(' ');
