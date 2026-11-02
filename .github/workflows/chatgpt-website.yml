@@ -1,0 +1,313 @@
+name: ChatGPT Website Redesign
+
+on:
+  push:
+    branches: [chatgpt]
+    paths:
+      - ".github/workflows/chatgpt-website.yml"
+      - "chatgpt_automation/source_urls.csv"
+      - "chatgpt_automation/scripts/**"
+      - "chatgpt_automation/design_brief.txt"
+      - "chatgpt_automation/website_request.txt"
+      - "chatgpt_automation/resume_candidate.txt"
+      - "chatgpt_file_playwright_anonymous_ci.py"
+  workflow_dispatch:
+    inputs:
+      run_mode:
+        description: Full batch or one-candidate CSV smoke test
+        required: true
+        default: smoke_test
+        type: choice
+        options: [smoke_test, full_batch]
+      smoke_website:
+        description: Optional exact website value from source_urls.csv for smoke_test
+        required: false
+        type: string
+      resume_candidate:
+        description: Optional saved candidate folder under chatgpt-runs/ to resume
+        required: false
+        type: string
+      resume_chat_url:
+        description: Optional saved ChatGPT conversation URL for resuming
+        required: false
+        type: string
+      website_stage:
+        description: Optional incremental capture stage; resume the same candidate for the next stage
+        required: false
+        default: css_1
+        type: choice
+        options:
+          - full
+          - css_1
+          - html_1
+      website_context_mode:
+        description: Use a fictional minimal prompt for chunk diagnostics or source-grounded context for a real candidate
+        required: false
+        default: minimal
+        type: choice
+        options: [source, minimal]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: chatgpt-website-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      targets: ${{ steps.targets.outputs.targets }}
+      run_mode: ${{ steps.targets.outputs.run_mode }}
+      resume_candidate: ${{ steps.targets.outputs.resume_candidate }}
+    steps:
+      - name: Require the chatgpt branch
+        if: github.ref_name != 'chatgpt'
+        run: |
+          echo "Run this workflow on the chatgpt branch."
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - name: Validate saved-response assembly and structural gate fixtures
+        run: python -m unittest discover -s chatgpt_automation/tests -v
+
+      - name: Validate CSV targets and create matrix
+        id: targets
+        env:
+          RUN_MODE: ${{ github.event_name == 'push' && 'smoke_test' || inputs.run_mode || 'smoke_test' }}
+          SMOKE_WEBSITE: ${{ inputs.smoke_website }}
+          RESUME_CANDIDATE: ${{ inputs.resume_candidate }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "push" && -s chatgpt_automation/resume_candidate.txt ]]; then
+            RESUME_CANDIDATE="$(tr -d '\r\n' < chatgpt_automation/resume_candidate.txt)"
+          fi
+          python chatgpt_automation/scripts/build_target_matrix.py
+          echo "run_mode=${RUN_MODE}" >> "$GITHUB_OUTPUT"
+          echo "resume_candidate=${RESUME_CANDIDATE}" >> "$GITHUB_OUTPUT"
+
+  generate:
+    needs: prepare
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright/python:v1.58.0-noble
+      options: --user root --shm-size=1gb
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        target: ${{ fromJSON(needs.prepare.outputs.targets) }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ github.workspace }}
+    env:
+      RUN_MODE: ${{ needs.prepare.outputs.run_mode }}
+      RESUME_CANDIDATE: ${{ needs.prepare.outputs.resume_candidate }}
+      BUSINESS_NAME: ${{ matrix.target.business }}
+      INDUSTRY_CATEGORY: ${{ matrix.target.category }}
+      LOCATION: ${{ matrix.target.location }}
+      SOURCE_URL: ${{ matrix.target.source_url }}
+      SITE_INDEX: ${{ matrix.target.site_index }}
+      RESUME_FOLDER: ${{ matrix.target.resume_folder }}
+      RESUME_CHAT_URL: ${{ inputs.resume_chat_url }}
+      WEBSITE_STAGE: ${{ github.event_name == 'workflow_dispatch' && inputs.website_stage || 'css_1' }}
+      WEBSITE_CONTEXT_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.website_context_mode || 'minimal' }}
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install pinned Playwright dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r .github/workflows/requirements-playwright.txt
+
+      - name: Prepare source facts or diagnostic context
+        id: context
+        run: |
+          set -euo pipefail
+          if [[ "${WEBSITE_CONTEXT_MODE:-source}" == "minimal" && "${WEBSITE_STAGE:-full}" == "full" ]]; then
+            echo "Minimal context is diagnostic-only. Choose a staged stop; use source context for the full candidate gate."
+            exit 1
+          fi
+          if [[ -n "${RESUME_FOLDER:-}" ]]; then
+            RUN_DIR="$RESUME_FOLDER"
+            test -s "$RUN_DIR/debug/website_context.md"
+            test -s "$RUN_DIR/debug/inputs.json"
+            python - "$RUN_DIR/debug/inputs.json" "${WEBSITE_CONTEXT_MODE:-source}" <<'PY'
+          import json, sys
+          from pathlib import Path
+          inputs = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          if inputs.get("context_mode", "source") != sys.argv[2]:
+              raise SystemExit("Resume context mode differs from the saved candidate; start a fresh candidate for the new mode.")
+          PY
+            echo "run_dir=$RUN_DIR" >> "$GITHUB_OUTPUT"
+            echo "Resuming saved candidate at $RUN_DIR"
+            exit 0
+          fi
+          RUN_DIR="chatgpt-runs/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-site-${SITE_INDEX}-candidate-1"
+          mkdir -p "$RUN_DIR/debug"
+          if [[ "${WEBSITE_CONTEXT_MODE:-source}" == "minimal" ]]; then
+            python chatgpt_automation/scripts/prepare_candidate_context.py \
+              --mode minimal \
+              --output "$RUN_DIR/debug/website_context.md" \
+              --inputs-output "$RUN_DIR/debug/inputs.json" \
+              --site-index "$SITE_INDEX"
+          else
+            python chatgpt_automation/scripts/fetch_source_facts.py \
+              --source-url "$SOURCE_URL" \
+              --business "$BUSINESS_NAME" \
+              --category "$INDUSTRY_CATEGORY" \
+              --location "$LOCATION" \
+              --output "$RUN_DIR/debug/source_facts.json"
+            python chatgpt_automation/scripts/prepare_candidate_context.py \
+              --mode source \
+              --source-facts "$RUN_DIR/debug/source_facts.json" \
+              --design-brief chatgpt_automation/design_brief.txt \
+              --output "$RUN_DIR/debug/website_context.md" \
+              --inputs-output "$RUN_DIR/debug/inputs.json" \
+              --site-index "$SITE_INDEX"
+            cp chatgpt_automation/website_request.txt "$RUN_DIR/debug/website_request.txt"
+          fi
+          echo "run_dir=$RUN_DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Generate one candidate in a single ChatGPT conversation
+        id: generate
+        env:
+          RUN_DIR: ${{ steps.context.outputs.run_dir }}
+        run: |
+          set -uo pipefail
+          mkdir -p "$RUN_DIR/debug" tmp/playwright-profiles
+          CHAT_ID="$(python -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["chat_id"])' "$RUN_DIR/debug/inputs.json")"
+          CHAT_URL="https://chatgpt.com/"
+          EXTRA_FLAGS=(--start-new-chat)
+          if [[ -n "${RESUME_FOLDER:-}" ]]; then
+            EXTRA_FLAGS=()
+            CHAT_URL="${RESUME_CHAT_URL:-}"
+            if [[ -z "$CHAT_URL" ]]; then
+              CHAT_URL="$(python -c 'import json,sys; p=json.load(open(sys.argv[1], encoding="utf-8")); print(p.get("conversation_url") or "")' "$RUN_DIR/chunks/sequence_checkpoint.json")"
+            fi
+            if [[ -z "$CHAT_URL" ]]; then
+              echo "No saved conversation URL is available; cannot resume this candidate."
+              exit 1
+            fi
+          fi
+          PROFILE="tmp/playwright-profiles/${GITHUB_RUN_ID}/${SITE_INDEX}/candidate-1"
+          STAGE_FLAGS=()
+          if [[ "${WEBSITE_STAGE:-full}" != "full" ]]; then
+            STAGE_FLAGS=(--website-stop-after "${WEBSITE_STAGE//_/-}")
+          fi
+          CONTEXT_FLAGS=(--website-context-mode "${WEBSITE_CONTEXT_MODE:-source}")
+          INSTRUCTION_FLAGS=()
+          if [[ "${WEBSITE_CONTEXT_MODE:-source}" == "source" ]]; then
+            INSTRUCTION_FLAGS=(--instructions-file chatgpt_automation/website_request.txt)
+          fi
+          set +e
+          xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' \
+            python -u chatgpt_file_playwright_anonymous_ci.py \
+              --stage-name website \
+              --input-file "$RUN_DIR/debug/website_context.md" \
+              "${INSTRUCTION_FLAGS[@]}" \
+              --output-file "$RUN_DIR/debug/runner_output.txt" \
+              --metadata-output-file "$RUN_DIR/debug/runner_metadata.json" \
+              --website-run-folder "$RUN_DIR" \
+              --website-chat-id "$CHAT_ID" \
+              --website-quality-request "Include only sections supported by the source pages. Preserve the source contact form's purpose and fields when present. Use relevant imagery." \
+              --url "$CHAT_URL" \
+              --user-data-dir "$PROFILE" \
+              --wait-seconds 60 \
+              --timeout-ms 180000 \
+              --post-response-wait-seconds 3 \
+              --response-settle-seconds 3 \
+              --max-settle-wait-seconds 180 \
+              --error-screenshot "$RUN_DIR/debug/chatgpt_playwright_error.png" \
+              "${CONTEXT_FLAGS[@]}" \
+              "${STAGE_FLAGS[@]}" \
+              "${EXTRA_FLAGS[@]}" \
+              2>&1 | tee "$RUN_DIR/debug/action.log"
+          RUNNER_STATUS=${PIPESTATUS[0]}
+          set -e
+          echo "runner_status=$RUNNER_STATUS" >> "$GITHUB_OUTPUT"
+          if [[ ! -f "$RUN_DIR/run_notes.json" ]]; then
+            printf '{"status":"generation_failed","automated_success":false,"final_success":false,"human_visual_review_status":"pending"}\n' > "$RUN_DIR/run_notes.json"
+          fi
+          if [[ "$RUNNER_STATUS" -ne 0 ]]; then
+            echo "Website generation or QA exited with status $RUNNER_STATUS; candidate evidence will be committed."
+          fi
+
+      - name: Commit candidate and checkpoint evidence
+        if: always()
+        env:
+          RUN_DIR: ${{ steps.context.outputs.run_dir }}
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [[ -z "$RUN_DIR" || ! -d "$RUN_DIR" ]]; then
+            echo "No candidate folder was created."
+            exit 0
+          fi
+          git add -- "$RUN_DIR"
+          if git diff --cached --quiet; then
+            echo "No new candidate evidence to commit."
+            exit 0
+          fi
+          git commit -m "chatgpt: save website candidate evidence for site ${SITE_INDEX} [skip ci]"
+          for attempt in 1 2 3; do
+            if git push origin "HEAD:refs/heads/${GITHUB_REF_NAME}"; then
+              echo "Saved candidate evidence to ${GITHUB_REF_NAME}."
+              exit 0
+            fi
+            git fetch origin "${GITHUB_REF_NAME}"
+            git rebase "origin/${GITHUB_REF_NAME}"
+            sleep 2
+          done
+          exit 1
+
+      - name: Require the candidate automated gate
+        if: always()
+        env:
+          RUN_DIR: ${{ steps.context.outputs.run_dir }}
+        run: |
+          if [[ "${WEBSITE_STAGE:-full}" != "full" ]]; then
+            STAGE_KEY="${WEBSITE_STAGE//_/-}"
+            python - "$RUN_DIR/chunks/sequence_checkpoint.json" "$STAGE_KEY" <<'PY'
+          import json, sys
+          from pathlib import Path
+          path, stage = Path(sys.argv[1]), sys.argv[2]
+          if not path.is_file():
+              raise SystemExit("Staged candidate checkpoint is missing.")
+          state = json.loads(path.read_text(encoding="utf-8"))
+          expected = ["css-1"] if stage == "css-1" else ["css-1", "html-1"]
+          if state.get("status") != "stage_complete" or state.get("staged_until") != stage:
+              raise SystemExit(f"Candidate did not finish staged checkpoint {stage}.")
+          if state.get("accepted_parts") != expected:
+              raise SystemExit(f"Checkpoint parts do not match {stage}: {state.get('accepted_parts')}")
+          print(f"Incremental generation stage {stage} passed with {len(expected)} validated full responses.")
+          PY
+            exit 0
+          fi
+          python - "$RUN_DIR/run_notes.json" <<'PY'
+          import json, sys
+          from pathlib import Path
+          path = Path(sys.argv[1])
+          if not path.is_file():
+              raise SystemExit("Candidate run notes are missing.")
+          notes = json.loads(path.read_text(encoding="utf-8"))
+          if not notes.get("automated_success"):
+              checkpoint_path = path.parent / "chunks" / "sequence_checkpoint.json"
+              checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8")) if checkpoint_path.is_file() else {}
+              error = checkpoint.get("last_error") or {}
+              failure_class = error.get("classification", "not_recorded")
+              raise SystemExit(
+                  f"Candidate did not reach automated success (status={notes.get('status', 'unknown')}; "
+                  f"generation_failure={failure_class}). Evidence has been saved for review."
+              )
+          print("Smoke candidate passed automated QA. Human visual and image review remain pending.")
+          PY
