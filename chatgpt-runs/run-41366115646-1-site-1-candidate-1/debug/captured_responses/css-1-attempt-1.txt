@@ -1,0 +1,27 @@
+RUN TOKEN: b3607cb9dead3257
+
+CSS PART 1 OF 1
+```css
+/* CSS PART 1 OF 1 */
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  color: #333;
+  background: #f7f5f0;
+}
+
+.hero {
+  padding: 48px 24px;
+  text-align: center;
+  background: #e8e2d5;
+  border-radius: 12px;
+}
+
+@media (max-width: 600px) {
+  .hero {
+    padding: 28px 16px;
+    border-radius: 0;
+  }
+}
+```
