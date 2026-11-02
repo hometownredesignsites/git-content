@@ -10,6 +10,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 CTA_ARROW_GLYPHS = re.compile(r"[←↑→↓↗↘↙↖↩↪➔➜➝➞➟➠➡➢➤›»]")
+CTA_ARROW_ICON_CLASS = re.compile(r"(?:^|[\s_-])(?:button[-_]?arrow|cta[-_]?arrow|arrow[-_]?icon|icon[-_]?arrow|chevron[-_]?right|caret[-_]?right)(?:$|[\s_-])", re.IGNORECASE)
 CTA_CLASS = re.compile(
     r"(?:^|[\s_-])(?:button|btn|cta|call[-_]?to[-_]?action)(?:$|[\s_-])",
     re.IGNORECASE,
@@ -35,7 +36,7 @@ class _ArrowRemover(HTMLParser):
         self.line_offsets = [0]
         self.line_offsets.extend(index + 1 for index, char in enumerate(source) if char == "\n")
         self.cta_depth = 0
-        self.stack: list[tuple[str, bool]] = []
+        self.stack: list[tuple[str, bool, int | None]] = []
         self.edits: list[tuple[int, int]] = []
 
     def _offset(self) -> int:
@@ -43,7 +44,7 @@ class _ArrowRemover(HTMLParser):
         return self.line_offsets[line - 1] + column
 
     def _remove_matches(self, decoded: str, source_text: str, start: int) -> None:
-        if not self.cta_depth:
+        if not self.cta_depth or any(icon_start is not None for _, _, icon_start in self.stack):
             return
         if decoded == source_text:
             self.edits.extend(
@@ -76,18 +77,32 @@ class _ArrowRemover(HTMLParser):
                 for token in tokens:
                     if CTA_ARROW_GLYPHS.search(html.unescape(token.group())):
                         self.edits.append((value_start + token.start(), value_start + token.end()))
-        self.stack.append((tag.lower(), is_cta))
+        icon_start = None
+        classes = (dict(attrs).get("class") or "").strip()
+        if (self.cta_depth or is_cta) and tag.lower() in {"span", "svg", "i"} and CTA_ARROW_ICON_CLASS.search(classes):
+            icon_start = self._offset()
+        self.stack.append((tag.lower(), is_cta, icon_start))
         self.cta_depth += int(is_cta)
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        return
+        start = self._offset()
+        self.handle_starttag(tag, attrs)
+        if self.stack and self.stack[-1][2] is not None:
+            end = self.source.find(">", start)
+            if end >= 0:
+                self.edits.append((start, end + 1))
+        self.handle_endtag(tag)
 
     def handle_endtag(self, tag: str) -> None:
         # Mirror the quality checker’s tag-based CTA closure behavior.
         for index in range(len(self.stack) - 1, -1, -1):
-            stack_tag, is_cta = self.stack[index]
+            stack_tag, is_cta, icon_start = self.stack[index]
             if is_cta:
                 self.cta_depth -= 1
+            if stack_tag == tag.lower() and icon_start is not None:
+                end = self.source.find(">", self._offset())
+                if end >= 0:
+                    self.edits.append((icon_start, end + 1))
             del self.stack[index]
             if stack_tag == tag.lower():
                 break

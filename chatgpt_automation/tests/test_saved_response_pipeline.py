@@ -56,6 +56,21 @@ class SavedResponsePipelineTest(unittest.TestCase):
         )
         self.assertEqual(normalize(output), (output, 0))
 
+    def test_cta_arrow_normalizer_removes_decorative_arrow_elements(self):
+        source = (
+            '<a class="button" href="/estimate">Get an Estimate '
+            '<span class="button-arrow" aria-hidden="true"><i>→</i></span></a>'
+            '<a class="button" href="tel:555">Call <span class="phone-icon"></span></a>'
+        )
+        output, removed = normalize(source)
+        self.assertEqual(removed, 1)
+        self.assertEqual(
+            output,
+            '<a class="button" href="/estimate">Get an Estimate </a>'
+            '<a class="button" href="tel:555">Call <span class="phone-icon"></span></a>',
+        )
+        self.assertEqual(normalize(output), (output, 0))
+
     def test_chatgpt_aria_stop_control_is_recognized_as_active_generation(self):
         class Locator:
             def __init__(self, visible):

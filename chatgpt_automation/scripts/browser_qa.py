@@ -238,7 +238,7 @@ def _exercise_mobile_menu(page) -> dict:
     nav_id = button.get_attribute("aria-controls")
     result = {"found": True}
     try:
-        result["visual"] = page.evaluate(MENU_VISUAL_JS, button)
+        result["visual"] = button.evaluate(MENU_VISUAL_JS)
         result["control_visible"] = bool(
             result["visual"].get("button_visible") and result["visual"].get("bars_visible")
         )
@@ -251,7 +251,7 @@ def _exercise_mobile_menu(page) -> dict:
         page.wait_for_timeout(150)
         result["click_closes"] = button.get_attribute("aria-expanded") == "false" and not _nav_visible(page, nav_id)
 
-        preceding_focusable = page.evaluate(MENU_FOCUSABLE_BEFORE_JS, button)
+        preceding_focusable = button.evaluate(MENU_FOCUSABLE_BEFORE_JS)
         if preceding_focusable:
             page.keyboard.press("Tab")
         result["tab_reachable"] = bool(
