@@ -1,0 +1,675 @@
+RUN TOKEN: e901953b5f97abd3
+
+CSS PART 1 OF 2
+```css
+/* CSS PART 1 OF 2 */
+
+/* Design tokens */
+:root {
+  color-scheme: light;
+  --ink: #202b2d;
+  --ink-soft: #526164;
+  --paper: #f6f5f0;
+  --white: #ffffff;
+  --navy: #233b40;
+  --navy-deep: #192d32;
+  --orange: #c66c3e;
+  --orange-dark: #a94f29;
+  --sand: #e8e4d9;
+  --line: #d9d8cf;
+  --serif: Georgia, "Times New Roman", serif;
+  --sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --container: 1160px;
+  --gutter: clamp(22px, 5vw, 76px);
+  --radius: 3px;
+  --shadow: 0 16px 45px rgba(25, 45, 50, 0.12);
+}
+
+/* Reset */
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 100px;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid var(--orange);
+  outline-offset: 4px;
+}
+
+::selection {
+  color: var(--white);
+  background: var(--navy);
+}
+
+/* Shared typography */
+h1,
+h2,
+h3,
+p {
+  margin-top: 0;
+}
+
+h1,
+h2,
+h3 {
+  color: var(--navy-deep);
+  font-family: var(--serif);
+  font-weight: 400;
+  line-height: 1.12;
+  letter-spacing: -0.035em;
+}
+
+h1 {
+  font-size: clamp(3rem, 6.4vw, 5.6rem);
+}
+
+h2 {
+  font-size: clamp(2.3rem, 4.2vw, 3.8rem);
+}
+
+h3 {
+  font-size: 1.65rem;
+}
+
+p {
+  color: var(--ink-soft);
+}
+
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  color: var(--orange-dark);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.eyebrow::before {
+  width: 27px;
+  height: 2px;
+  background: currentColor;
+  content: "";
+}
+
+.lead {
+  max-width: 600px;
+  font-size: clamp(1.05rem, 1.5vw, 1.22rem);
+  line-height: 1.8;
+}
+
+.section-heading {
+  max-width: 700px;
+  margin-bottom: 48px;
+}
+
+.section-heading h2 {
+  margin-bottom: 18px;
+}
+
+.section-heading p {
+  max-width: 570px;
+}
+
+/* Page layout */
+.container {
+  width: min(var(--container), calc(100% - var(--gutter) * 2));
+  margin-inline: auto;
+}
+
+.section {
+  padding-block: clamp(76px, 10vw, 132px);
+}
+
+.section--white {
+  background: var(--white);
+}
+
+.section--dark {
+  background: var(--navy);
+  color: var(--white);
+}
+
+.section--dark h2,
+.section--dark h3 {
+  color: var(--white);
+}
+
+.section--dark p {
+  color: #d0d9d8;
+}
+
+/* Header and navigation */
+.site-header {
+  position: relative;
+  z-index: 10;
+  background: var(--white);
+  border-bottom: 1px solid rgba(32, 43, 45, 0.09);
+}
+
+.header-inner {
+  display: flex;
+  min-height: 94px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 30px;
+}
+
+.brand {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 14px;
+}
+
+.brand-logo {
+  width: 68px;
+  height: 68px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+.brand-copy {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.brand-name {
+  color: var(--navy-deep);
+  font-family: var(--serif);
+  font-size: 1.13rem;
+  font-weight: 700;
+}
+
+.brand-caption {
+  margin-top: 5px;
+  color: var(--ink-soft);
+  font-size: 0.63rem;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.main-nav {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: clamp(16px, 2.5vw, 34px);
+}
+
+.main-nav a:not(.button) {
+  color: var(--ink);
+  font-size: 0.83rem;
+  font-weight: 650;
+  transition: color 180ms ease;
+}
+
+.main-nav a:not(.button):hover {
+  color: var(--orange-dark);
+}
+
+.header-phone {
+  white-space: nowrap;
+  color: var(--navy);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+/* Buttons */
+.button {
+  display: inline-flex;
+  min-height: 54px;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 14px 23px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: var(--orange);
+  color: var(--white);
+  font-size: 0.85rem;
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: center;
+  transition: background 180ms ease, transform 180ms ease;
+  cursor: pointer;
+}
+
+.button:hover {
+  transform: translateY(-2px);
+  background: var(--orange-dark);
+}
+
+.button--dark {
+  background: var(--navy);
+}
+
+.button--dark:hover {
+  background: var(--navy-deep);
+}
+
+.button--outline {
+  border-color: rgba(255, 255, 255, 0.55);
+  background: transparent;
+  color: var(--white);
+}
+
+.button--outline:hover {
+  background: var(--white);
+  color: var(--navy);
+}
+
+.button--light {
+  border-color: var(--line);
+  background: var(--white);
+  color: var(--navy);
+}
+
+.button--light:hover {
+  background: var(--sand);
+}
+
+/* Hero */
+.hero {
+  position: relative;
+  overflow: hidden;
+  background: var(--navy-deep);
+  color: var(--white);
+}
+
+.hero-grid {
+  display: grid;
+  min-height: 650px;
+  grid-template-columns: 1.02fr 0.98fr;
+}
+
+.hero-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 88px max(40px, calc((100vw - var(--container)) / 2)) 88px var(--gutter);
+}
+
+.hero .eyebrow {
+  color: #e9a27b;
+}
+
+.hero h1 {
+  max-width: 650px;
+  margin-bottom: 25px;
+  color: var(--white);
+}
+
+.hero h1 em {
+  color: #e9a27b;
+  font-style: normal;
+}
+
+.hero .lead {
+  max-width: 530px;
+  margin-bottom: 32px;
+  color: #d2dcda;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 13px;
+}
+
+.hero-note {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-top: 35px;
+  color: #d2dcda;
+  font-size: 0.82rem;
+}
+
+.hero-note::before {
+  width: 25px;
+  height: 1px;
+  background: #e9a27b;
+  content: "";
+}
+
+.hero-media {
+  position: relative;
+  min-height: 550px;
+  overflow: hidden;
+  background: #c9c6ba;
+}
+
+.hero-media img {
+  width: 100%;
+  height: 100%;
+  min-height: 550px;
+  object-fit: cover;
+  object-position: center;
+}
+
+.hero-media::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(25, 45, 50, 0.15), transparent 35%);
+  content: "";
+  pointer-events: none;
+}
+
+/* Credentials and approach */
+.intro-strip {
+  border-bottom: 1px solid var(--line);
+  background: var(--white);
+}
+
+.intro-strip-inner {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  padding-block: 30px;
+}
+
+.intro-fact {
+  padding-inline: 28px;
+  border-right: 1px solid var(--line);
+}
+
+.intro-fact:first-child {
+  padding-left: 0;
+}
+
+.intro-fact:last-child {
+  border-right: 0;
+}
+
+.intro-fact strong {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--navy);
+  font-family: var(--serif);
+  font-size: 1.65rem;
+  font-weight: 400;
+}
+
+.intro-fact span {
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+}
+
+/* Why choose us */
+.why-layout {
+  display: grid;
+  grid-template-columns: 0.85fr 1.15fr;
+  align-items: start;
+  gap: clamp(45px, 8vw, 110px);
+}
+
+.why-copy {
+  position: sticky;
+  top: 35px;
+}
+
+.why-copy h2 {
+  margin-bottom: 23px;
+}
+
+.why-copy p {
+  max-width: 430px;
+}
+
+.why-list {
+  border-top: 1px solid var(--line);
+}
+
+.why-item {
+  display: grid;
+  grid-template-columns: 54px 1fr;
+  gap: 22px;
+  padding-block: 28px;
+  border-bottom: 1px solid var(--line);
+}
+
+.why-number {
+  color: var(--orange-dark);
+  font-family: var(--serif);
+  font-size: 1.5rem;
+}
+
+.why-item h3 {
+  margin-bottom: 8px;
+  font-size: 1.45rem;
+}
+
+.why-item p {
+  max-width: 530px;
+  margin-bottom: 0;
+  font-size: 0.94rem;
+}
+
+/* Roofing assessment */
+.roofing-panel {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: var(--navy);
+}
+
+.roofing-image {
+  min-height: 500px;
+  overflow: hidden;
+}
+
+.roofing-image img {
+  width: 100%;
+  height: 100%;
+  min-height: 500px;
+  object-fit: cover;
+}
+
+.roofing-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: clamp(40px, 6vw, 85px);
+}
+
+.roofing-content h2 {
+  margin-bottom: 22px;
+}
+
+.roofing-content p {
+  max-width: 470px;
+}
+
+.roofing-signs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 24px;
+  margin: 24px 0 32px;
+  padding: 0;
+  list-style: none;
+}
+
+.roofing-signs li {
+  position: relative;
+  padding-left: 19px;
+  color: #e0e6e3;
+  font-size: 0.88rem;
+}
+
+.roofing-signs li::before {
+  position: absolute;
+  top: 0.7em;
+  left: 0;
+  width: 7px;
+  height: 7px;
+  background: #e9a27b;
+  content: "";
+}
+
+/* Colorado roofing guide */
+.roof-guide {
+  display: grid;
+  grid-template-columns: 0.7fr 1.3fr;
+  gap: clamp(40px, 8vw, 100px);
+}
+
+.roof-guide-intro {
+  max-width: 400px;
+}
+
+.roof-guide-intro h2 {
+  margin-bottom: 20px;
+}
+
+.roof-guide-steps {
+  border-top: 1px solid var(--line);
+}
+
+.roof-guide-step {
+  display: grid;
+  grid-template-columns: 50px 1fr;
+  gap: 22px;
+  padding-block: 23px;
+  border-bottom: 1px solid var(--line);
+}
+
+.roof-guide-step > span {
+  color: var(--orange-dark);
+  font-family: var(--serif);
+  font-size: 1.55rem;
+}
+
+.roof-guide-step h3 {
+  margin-bottom: 7px;
+  font-size: 1.35rem;
+}
+
+.roof-guide-step p {
+  margin-bottom: 0;
+  font-size: 0.92rem;
+}
+
+/* Recent projects */
+.projects-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 35px;
+  margin-bottom: 42px;
+}
+
+.projects-heading .section-heading {
+  margin-bottom: 0;
+}
+
+.projects-feature {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 22px;
+}
+
+.project-card {
+  min-width: 0;
+  background: var(--white);
+}
+
+.project-image {
+  overflow: hidden;
+  background: var(--sand);
+}
+
+.project-image img {
+  width: 100%;
+  height: 100%;
+  min-height: 290px;
+  object-fit: cover;
+  transition: transform 400ms ease;
+}
+
+.project-card:hover .project-image img {
+  transform: scale(1.025);
+}
+
+.project-card--featured .project-image img {
+  min-height: 465px;
+}
+
+.project-caption {
+  padding: 21px 24px 24px;
+}
+
+.project-caption h3 {
+  margin-bottom: 6px;
+  font-size: 1.4rem;
+}
+
+.project-caption p {
+  margin-bottom: 0;
+  font-size: 0.84rem;
+}
+
+.project-secondary {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 22px;
+}
+
+.project-secondary .project-card {
+  display: grid;
+  grid-template-columns: 1fr 0.9fr;
+}
+
+.project-secondary .project-image img {
+  min-height: 210px;
+}
+
+.project-secondary .project-caption {
+  align-self: center;
+  padding: 20px;
+}
+```

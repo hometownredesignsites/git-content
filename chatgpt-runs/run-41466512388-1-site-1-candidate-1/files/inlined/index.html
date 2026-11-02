@@ -1,0 +1,1839 @@
+<!-- HTML PART 1 OF 2 -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#192d32">
+  <meta name="description" content="Josh Brooks Construction and Renovation Inc. Licensed general contractor serving Longmont, Colorado. Roofing, remodeling and hail restoration.">
+  <title>Josh Brooks Construction & Renovation | Longmont, Colorado</title>
+  <style>
+/* CSS PART 1 OF 2 */
+
+/* Design tokens */
+:root {
+  color-scheme: light;
+  --ink: #202b2d;
+  --ink-soft: #526164;
+  --paper: #f6f5f0;
+  --white: #ffffff;
+  --navy: #233b40;
+  --navy-deep: #192d32;
+  --orange: #c66c3e;
+  --orange-dark: #a94f29;
+  --sand: #e8e4d9;
+  --line: #d9d8cf;
+  --serif: Georgia, "Times New Roman", serif;
+  --sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --container: 1160px;
+  --gutter: clamp(22px, 5vw, 76px);
+  --radius: 3px;
+  --shadow: 0 16px 45px rgba(25, 45, 50, 0.12);
+}
+
+/* Reset */
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 100px;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid var(--orange);
+  outline-offset: 4px;
+}
+
+::selection {
+  color: var(--white);
+  background: var(--navy);
+}
+
+/* Shared typography */
+h1,
+h2,
+h3,
+p {
+  margin-top: 0;
+}
+
+h1,
+h2,
+h3 {
+  color: var(--navy-deep);
+  font-family: var(--serif);
+  font-weight: 400;
+  line-height: 1.12;
+  letter-spacing: -0.035em;
+}
+
+h1 {
+  font-size: clamp(3rem, 6.4vw, 5.6rem);
+}
+
+h2 {
+  font-size: clamp(2.3rem, 4.2vw, 3.8rem);
+}
+
+h3 {
+  font-size: 1.65rem;
+}
+
+p {
+  color: var(--ink-soft);
+}
+
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  color: var(--orange-dark);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.eyebrow::before {
+  width: 27px;
+  height: 2px;
+  background: currentColor;
+  content: "";
+}
+
+.lead {
+  max-width: 600px;
+  font-size: clamp(1.05rem, 1.5vw, 1.22rem);
+  line-height: 1.8;
+}
+
+.section-heading {
+  max-width: 700px;
+  margin-bottom: 48px;
+}
+
+.section-heading h2 {
+  margin-bottom: 18px;
+}
+
+.section-heading p {
+  max-width: 570px;
+}
+
+/* Page layout */
+.container {
+  width: min(var(--container), calc(100% - var(--gutter) * 2));
+  margin-inline: auto;
+}
+
+.section {
+  padding-block: clamp(76px, 10vw, 132px);
+}
+
+.section--white {
+  background: var(--white);
+}
+
+.section--dark {
+  background: var(--navy);
+  color: var(--white);
+}
+
+.section--dark h2,
+.section--dark h3 {
+  color: var(--white);
+}
+
+.section--dark p {
+  color: #d0d9d8;
+}
+
+/* Header and navigation */
+.site-header {
+  position: relative;
+  z-index: 10;
+  background: var(--white);
+  border-bottom: 1px solid rgba(32, 43, 45, 0.09);
+}
+
+.header-inner {
+  display: flex;
+  min-height: 94px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 30px;
+}
+
+.brand {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 14px;
+}
+
+.brand-logo {
+  width: 68px;
+  height: 68px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+.brand-copy {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.brand-name {
+  color: var(--navy-deep);
+  font-family: var(--serif);
+  font-size: 1.13rem;
+  font-weight: 700;
+}
+
+.brand-caption {
+  margin-top: 5px;
+  color: var(--ink-soft);
+  font-size: 0.63rem;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.main-nav {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: clamp(16px, 2.5vw, 34px);
+}
+
+.main-nav a:not(.button) {
+  color: var(--ink);
+  font-size: 0.83rem;
+  font-weight: 650;
+  transition: color 180ms ease;
+}
+
+.main-nav a:not(.button):hover {
+  color: var(--orange-dark);
+}
+
+.header-phone {
+  white-space: nowrap;
+  color: var(--navy);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+/* Buttons */
+.button {
+  display: inline-flex;
+  min-height: 54px;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 14px 23px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: var(--orange);
+  color: var(--white);
+  font-size: 0.85rem;
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: center;
+  transition: background 180ms ease, transform 180ms ease;
+  cursor: pointer;
+}
+
+.button:hover {
+  transform: translateY(-2px);
+  background: var(--orange-dark);
+}
+
+.button--dark {
+  background: var(--navy);
+}
+
+.button--dark:hover {
+  background: var(--navy-deep);
+}
+
+.button--outline {
+  border-color: rgba(255, 255, 255, 0.55);
+  background: transparent;
+  color: var(--white);
+}
+
+.button--outline:hover {
+  background: var(--white);
+  color: var(--navy);
+}
+
+.button--light {
+  border-color: var(--line);
+  background: var(--white);
+  color: var(--navy);
+}
+
+.button--light:hover {
+  background: var(--sand);
+}
+
+/* Hero */
+.hero {
+  position: relative;
+  overflow: hidden;
+  background: var(--navy-deep);
+  color: var(--white);
+}
+
+.hero-grid {
+  display: grid;
+  min-height: 650px;
+  grid-template-columns: 1.02fr 0.98fr;
+}
+
+.hero-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 88px max(40px, calc((100vw - var(--container)) / 2)) 88px var(--gutter);
+}
+
+.hero .eyebrow {
+  color: #e9a27b;
+}
+
+.hero h1 {
+  max-width: 650px;
+  margin-bottom: 25px;
+  color: var(--white);
+}
+
+.hero h1 em {
+  color: #e9a27b;
+  font-style: normal;
+}
+
+.hero .lead {
+  max-width: 530px;
+  margin-bottom: 32px;
+  color: #d2dcda;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 13px;
+}
+
+.hero-note {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-top: 35px;
+  color: #d2dcda;
+  font-size: 0.82rem;
+}
+
+.hero-note::before {
+  width: 25px;
+  height: 1px;
+  background: #e9a27b;
+  content: "";
+}
+
+.hero-media {
+  position: relative;
+  min-height: 550px;
+  overflow: hidden;
+  background: #c9c6ba;
+}
+
+.hero-media img {
+  width: 100%;
+  height: 100%;
+  min-height: 550px;
+  object-fit: cover;
+  object-position: center;
+}
+
+.hero-media::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(25, 45, 50, 0.15), transparent 35%);
+  content: "";
+  pointer-events: none;
+}
+
+/* Credentials and approach */
+.intro-strip {
+  border-bottom: 1px solid var(--line);
+  background: var(--white);
+}
+
+.intro-strip-inner {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  padding-block: 30px;
+}
+
+.intro-fact {
+  padding-inline: 28px;
+  border-right: 1px solid var(--line);
+}
+
+.intro-fact:first-child {
+  padding-left: 0;
+}
+
+.intro-fact:last-child {
+  border-right: 0;
+}
+
+.intro-fact strong {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--navy);
+  font-family: var(--serif);
+  font-size: 1.65rem;
+  font-weight: 400;
+}
+
+.intro-fact span {
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+}
+
+/* Why choose us */
+.why-layout {
+  display: grid;
+  grid-template-columns: 0.85fr 1.15fr;
+  align-items: start;
+  gap: clamp(45px, 8vw, 110px);
+}
+
+.why-copy {
+  position: sticky;
+  top: 35px;
+}
+
+.why-copy h2 {
+  margin-bottom: 23px;
+}
+
+.why-copy p {
+  max-width: 430px;
+}
+
+.why-list {
+  border-top: 1px solid var(--line);
+}
+
+.why-item {
+  display: grid;
+  grid-template-columns: 54px 1fr;
+  gap: 22px;
+  padding-block: 28px;
+  border-bottom: 1px solid var(--line);
+}
+
+.why-number {
+  color: var(--orange-dark);
+  font-family: var(--serif);
+  font-size: 1.5rem;
+}
+
+.why-item h3 {
+  margin-bottom: 8px;
+  font-size: 1.45rem;
+}
+
+.why-item p {
+  max-width: 530px;
+  margin-bottom: 0;
+  font-size: 0.94rem;
+}
+
+/* Roofing assessment */
+.roofing-panel {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: var(--navy);
+}
+
+.roofing-image {
+  min-height: 500px;
+  overflow: hidden;
+}
+
+.roofing-image img {
+  width: 100%;
+  height: 100%;
+  min-height: 500px;
+  object-fit: cover;
+}
+
+.roofing-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: clamp(40px, 6vw, 85px);
+}
+
+.roofing-content h2 {
+  margin-bottom: 22px;
+}
+
+.roofing-content p {
+  max-width: 470px;
+}
+
+.roofing-signs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 24px;
+  margin: 24px 0 32px;
+  padding: 0;
+  list-style: none;
+}
+
+.roofing-signs li {
+  position: relative;
+  padding-left: 19px;
+  color: #e0e6e3;
+  font-size: 0.88rem;
+}
+
+.roofing-signs li::before {
+  position: absolute;
+  top: 0.7em;
+  left: 0;
+  width: 7px;
+  height: 7px;
+  background: #e9a27b;
+  content: "";
+}
+
+/* Colorado roofing guide */
+.roof-guide {
+  display: grid;
+  grid-template-columns: 0.7fr 1.3fr;
+  gap: clamp(40px, 8vw, 100px);
+}
+
+.roof-guide-intro {
+  max-width: 400px;
+}
+
+.roof-guide-intro h2 {
+  margin-bottom: 20px;
+}
+
+.roof-guide-steps {
+  border-top: 1px solid var(--line);
+}
+
+.roof-guide-step {
+  display: grid;
+  grid-template-columns: 50px 1fr;
+  gap: 22px;
+  padding-block: 23px;
+  border-bottom: 1px solid var(--line);
+}
+
+.roof-guide-step > span {
+  color: var(--orange-dark);
+  font-family: var(--serif);
+  font-size: 1.55rem;
+}
+
+.roof-guide-step h3 {
+  margin-bottom: 7px;
+  font-size: 1.35rem;
+}
+
+.roof-guide-step p {
+  margin-bottom: 0;
+  font-size: 0.92rem;
+}
+
+/* Recent projects */
+.projects-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 35px;
+  margin-bottom: 42px;
+}
+
+.projects-heading .section-heading {
+  margin-bottom: 0;
+}
+
+.projects-feature {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 22px;
+}
+
+.project-card {
+  min-width: 0;
+  background: var(--white);
+}
+
+.project-image {
+  overflow: hidden;
+  background: var(--sand);
+}
+
+.project-image img {
+  width: 100%;
+  height: 100%;
+  min-height: 290px;
+  object-fit: cover;
+  transition: transform 400ms ease;
+}
+
+.project-card:hover .project-image img {
+  transform: scale(1.025);
+}
+
+.project-card--featured .project-image img {
+  min-height: 465px;
+}
+
+.project-caption {
+  padding: 21px 24px 24px;
+}
+
+.project-caption h3 {
+  margin-bottom: 6px;
+  font-size: 1.4rem;
+}
+
+.project-caption p {
+  margin-bottom: 0;
+  font-size: 0.84rem;
+}
+
+.project-secondary {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 22px;
+}
+
+.project-secondary .project-card {
+  display: grid;
+  grid-template-columns: 1fr 0.9fr;
+}
+
+.project-secondary .project-image img {
+  min-height: 210px;
+}
+
+.project-secondary .project-caption {
+  align-self: center;
+  padding: 20px;
+}
+
+/* CSS PART 2 OF 2 */
+
+/* Contact and conversion */
+.contact-section {
+  padding-block: clamp(76px, 10vw, 125px);
+  background: var(--sand);
+}
+
+.contact-layout {
+  display: grid;
+  grid-template-columns: 0.85fr 1.15fr;
+  align-items: start;
+  gap: clamp(45px, 8vw, 105px);
+}
+
+.contact-intro h2 {
+  margin-bottom: 22px;
+}
+
+.contact-intro > p {
+  max-width: 420px;
+}
+
+.contact-details {
+  display: flex;
+  flex-direction: column;
+  gap: 17px;
+  margin-top: 32px;
+}
+
+.contact-detail {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: var(--navy);
+  font-size: 0.94rem;
+  font-weight: 750;
+}
+
+.contact-detail-icon {
+  display: grid;
+  width: 43px;
+  height: 43px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(35, 59, 64, 0.2);
+  color: var(--orange-dark);
+}
+
+.contact-detail small {
+  display: block;
+  color: var(--ink-soft);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.contact-form-wrap {
+  padding: clamp(26px, 4vw, 48px);
+  background: var(--white);
+  box-shadow: var(--shadow);
+}
+
+.contact-form-wrap h3 {
+  margin-bottom: 8px;
+  font-size: 1.8rem;
+}
+
+.contact-form-wrap > p {
+  margin-bottom: 27px;
+  font-size: 0.88rem;
+}
+
+.contact-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 19px;
+}
+
+.form-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.form-field--full {
+  grid-column: 1 / -1;
+}
+
+.form-field label {
+  color: var(--navy);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.form-field input,
+.form-field select,
+.form-field textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 49px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+
+.form-field textarea {
+  min-height: 125px;
+  resize: vertical;
+}
+
+.form-field input::placeholder,
+.form-field textarea::placeholder {
+  color: #777f7e;
+}
+
+.form-field input:focus,
+.form-field select:focus,
+.form-field textarea:focus {
+  border-color: var(--orange-dark);
+  outline: 2px solid rgba(198, 108, 62, 0.18);
+  outline-offset: 1px;
+}
+
+.form-submit {
+  grid-column: 1 / -1;
+  width: 100%;
+  margin-top: 5px;
+}
+
+.form-note {
+  grid-column: 1 / -1;
+  margin: -5px 0 0;
+  color: var(--ink-soft);
+  font-size: 0.74rem;
+}
+
+/* Footer */
+.site-footer {
+  padding-block: 62px 25px;
+  background: var(--navy-deep);
+  color: var(--white);
+}
+
+.footer-main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 50px;
+  padding-bottom: 45px;
+}
+
+.footer-brand {
+  max-width: 390px;
+}
+
+.footer-brand .brand-name {
+  color: var(--white);
+}
+
+.footer-brand .brand-caption {
+  color: #bdc9c7;
+}
+
+.footer-brand p {
+  max-width: 340px;
+  margin-top: 22px;
+  color: #c5d0ce;
+  font-size: 0.88rem;
+}
+
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 18px 30px;
+}
+
+.footer-links a {
+  color: #e2e8e6;
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.footer-links a:hover {
+  color: #e9a27b;
+}
+
+.footer-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding-top: 22px;
+  border-top: 1px solid rgba(255, 255, 255, 0.17);
+}
+
+.footer-bottom p {
+  margin: 0;
+  color: #bdc9c7;
+  font-size: 0.73rem;
+}
+
+/* Desktop menu button is hidden */
+.menu-toggle {
+  display: none;
+}
+
+/* Large and medium screens */
+@media (max-width: 1050px) {
+  .header-inner {
+    gap: 18px;
+  }
+
+  .brand-logo {
+    width: 58px;
+    height: 58px;
+  }
+
+  .main-nav {
+    gap: 15px;
+  }
+
+  .main-nav a:not(.button) {
+    font-size: 0.76rem;
+  }
+
+  .header-phone {
+    display: none;
+  }
+
+  .hero-grid {
+    min-height: 570px;
+  }
+
+  .hero-content {
+    padding-right: 35px;
+  }
+
+  .why-layout,
+  .roof-guide {
+    gap: 45px;
+  }
+}
+
+/* Tablet layout */
+@media (max-width: 760px) {
+  :root {
+    --gutter: 25px;
+  }
+
+  html {
+    scroll-padding-top: 75px;
+  }
+
+  .section {
+    padding-block: 76px;
+  }
+
+  .header-inner {
+    min-height: 76px;
+  }
+
+  .brand-logo {
+    width: 52px;
+    height: 52px;
+  }
+
+  .brand-name {
+    font-size: 1rem;
+  }
+
+  .brand-caption {
+    font-size: 0.57rem;
+  }
+
+  /* Accessible mobile navigation */
+  .menu-toggle {
+    display: flex;
+    width: 44px;
+    height: 44px;
+    flex: 0 0 auto;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    background: var(--white);
+    color: var(--navy);
+    cursor: pointer;
+  }
+
+  .menu-toggle span[aria-hidden="true"] {
+    display: block;
+    width: 20px;
+    height: 2px;
+    flex: 0 0 2px;
+    background-color: currentColor;
+  }
+
+  .main-nav {
+    display: none;
+  }
+
+  .main-nav.is-open {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    left: 0;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 0;
+    max-height: calc(100vh - 76px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 12px var(--gutter) 22px;
+    border-top: 1px solid var(--line);
+    background: var(--white);
+    box-shadow: 0 15px 25px rgba(25, 45, 50, 0.12);
+  }
+
+  .main-nav.is-open a {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    padding: 13px 0;
+    overflow-wrap: anywhere;
+    border-bottom: 1px solid var(--line);
+    font-size: 0.92rem;
+  }
+
+  .main-nav.is-open .button {
+    justify-content: center;
+    margin-top: 14px;
+    padding-inline: 18px;
+    border: 0;
+  }
+
+  .hero-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-content {
+    padding: 78px var(--gutter) 65px;
+  }
+
+  .hero h1 {
+    max-width: 650px;
+    font-size: clamp(2.8rem, 10vw, 4.5rem);
+  }
+
+  .hero-media {
+    min-height: 350px;
+    max-height: 480px;
+  }
+
+  .hero-media img {
+    min-height: 350px;
+  }
+
+  .intro-strip-inner {
+    grid-template-columns: 1fr;
+    padding-block: 10px;
+  }
+
+  .intro-fact,
+  .intro-fact:first-child {
+    padding: 17px 0;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .intro-fact:last-child {
+    border-bottom: 0;
+  }
+
+  .why-layout,
+  .roof-guide,
+  .contact-layout {
+    grid-template-columns: 1fr;
+    gap: 35px;
+  }
+
+  .why-copy {
+    position: static;
+  }
+
+  .roofing-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .roofing-image {
+    min-height: 340px;
+    max-height: 460px;
+  }
+
+  .roofing-image img {
+    min-height: 340px;
+  }
+
+  .roofing-content {
+    padding: 45px var(--gutter) 55px;
+  }
+
+  .projects-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  .projects-feature {
+    grid-template-columns: 1fr;
+  }
+
+  .project-card--featured .project-image img {
+    min-height: 340px;
+  }
+
+  .project-secondary {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto;
+  }
+
+  .project-secondary .project-card {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .project-secondary .project-image img {
+    min-height: 200px;
+  }
+
+  .project-secondary .project-caption {
+    padding: 18px;
+  }
+
+  .contact-layout {
+    gap: 35px;
+  }
+
+  .footer-main {
+    flex-direction: column;
+    gap: 30px;
+  }
+
+  .footer-links {
+    justify-content: flex-start;
+  }
+}
+
+/* Narrow mobile screens */
+@media (max-width: 480px) {
+  :root {
+    --gutter: 20px;
+  }
+
+  body {
+    font-size: 15px;
+  }
+
+  .section {
+    padding-block: 62px;
+  }
+
+  h2 {
+    font-size: 2.35rem;
+  }
+
+  .brand {
+    gap: 9px;
+  }
+
+  .brand-logo {
+    width: 45px;
+    height: 45px;
+  }
+
+  .brand-name {
+    font-size: 0.9rem;
+  }
+
+  .brand-caption {
+    font-size: 0.51rem;
+    letter-spacing: 0.08em;
+  }
+
+  .hero-content {
+    padding-block: 63px 50px;
+  }
+
+  .hero h1 {
+    font-size: clamp(2.55rem, 12vw, 3.4rem);
+  }
+
+  .hero-actions {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .hero-actions .button {
+    width: 100%;
+  }
+
+  .hero-media {
+    min-height: 280px;
+  }
+
+  .hero-media img {
+    min-height: 280px;
+  }
+
+  .why-item {
+    grid-template-columns: 36px 1fr;
+    gap: 14px;
+  }
+
+  .roofing-image,
+  .roofing-image img {
+    min-height: 270px;
+  }
+
+  .roofing-signs {
+    grid-template-columns: 1fr;
+  }
+
+  .roof-guide-step {
+    grid-template-columns: 36px 1fr;
+    gap: 14px;
+  }
+
+  .project-card--featured .project-image img {
+    min-height: 270px;
+  }
+
+  .project-secondary {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+
+  .project-secondary .project-card {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .project-secondary .project-image img {
+    min-height: 160px;
+  }
+
+  .project-secondary .project-caption {
+    padding: 14px;
+  }
+
+  .project-caption h3 {
+    font-size: 1.15rem;
+  }
+
+  .project-caption p {
+    font-size: 0.77rem;
+  }
+
+  .contact-form-wrap {
+    padding: 23px 18px;
+  }
+
+  .contact-form {
+    grid-template-columns: 1fr;
+  }
+
+  .form-field--full,
+  .form-submit,
+  .form-note {
+    grid-column: 1;
+  }
+
+  .footer-links {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .footer-bottom {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+/* Visible keyboard focus */
+:where(a, button, input, select, textarea):focus-visible {
+  outline: 3px solid var(--orange);
+  outline-offset: 4px;
+}
+
+.menu-toggle:focus-visible {
+  outline-offset: 4px;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .button:hover,
+  .project-card:hover .project-image img {
+    transform: none;
+  }
+}
+
+/* Keep the generated mobile menu icon visibly rendered. */
+.menu-toggle {
+  flex-direction: column;
+  gap: 4px;
+}
+
+.menu-toggle > span[aria-hidden="true"] {
+  display: block;
+  width: 20px;
+  height: 2px;
+  flex: 0 0 2px;
+  border-radius: 2px;
+  background-color: currentColor;
+}
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container header-inner">
+    <a class="brand" href="#home" aria-label="Josh Brooks Construction and Renovation home">
+      <img
+        class="brand-logo"
+        src="https://joshbrooksconstructionllc.com/wp-content/uploads/2026/04/IMG_20251112_220214_251.webp?w=400&ssl=1"
+        alt=""
+        width="68"
+        height="68"
+      >
+      <span class="brand-copy">
+        <span class="brand-name">Josh Brooks</span>
+        <span class="brand-caption">Construction & Renovation Inc.</span>
+      </span>
+    </a>
+
+    <button
+      class="menu-toggle"
+      type="button"
+      aria-label="Open navigation menu"
+      aria-controls="primary-navigation"
+      aria-expanded="false"
+    >
+      <span aria-hidden="true"></span>
+      <span aria-hidden="true"></span>
+      <span aria-hidden="true"></span>
+    </button>
+
+    <nav class="main-nav" id="primary-navigation" aria-label="Main navigation">
+      <a href="#about">Why Josh Brooks</a>
+      <a href="#roofing">Roofing</a>
+      <a href="#process">The Process</a>
+      <a href="#projects">Recent Projects</a>
+      <a class="button" href="#contact">Get an Estimate <span aria-hidden="true"></span></a>
+    </nav>
+  </div>
+</header>
+
+<main id="home">
+
+  <!-- Hero -->
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="hero-grid">
+      <div class="hero-content">
+        <span class="eyebrow">Licensed General Contractor · Longmont, Colorado</span>
+        <h1 id="hero-title">Your home deserves <em>the whole job</em> done right.</h1>
+        <p class="lead">
+          Roofing, remodeling and hail restoration led by an experienced general contractor.
+          Josh Brooks runs every project from start to finish.
+        </p>
+        <div class="hero-actions">
+          <a class="button" href="tel:7208287997">Call (720) 828-7997 <span aria-hidden="true"></span></a>
+          <a class="button button--outline" href="#projects">Explore Recent Work</a>
+        </div>
+        <p class="hero-note">One general contractor. Your project, start to finish.</p>
+      </div>
+
+      <div class="hero-media">
+        <img
+          src="https://joshbrooksconstructionllc.com/wp-content/uploads/2026/09/finished-roof-ridge-thornton-co-768x1024.jpg"
+          alt="Completed Owens Corning Estate Gray roof on a Colorado home in Thornton"
+          fetchpriority="high"
+        >
+      </div>
+    </div>
+  </section>
+
+  <!-- Experience and credentials -->
+  <section class="intro-strip" aria-label="Company experience">
+    <div class="container intro-strip-inner">
+      <div class="intro-fact">
+        <strong>Since 2014</strong>
+        <span>Serving homeowners as Josh Brooks Construction and Renovation Inc.</span>
+      </div>
+      <div class="intro-fact">
+        <strong>30 Years</strong>
+        <span>Owner Josh Brooks' construction experience</span>
+      </div>
+      <div class="intro-fact">
+        <strong>Licensed GC</strong>
+        <span>Based in Longmont, Colorado</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Why choose Josh Brooks -->
+  <section class="section section--white" id="about" aria-labelledby="about-title">
+    <div class="container why-layout">
+      <div class="why-copy">
+        <span class="eyebrow">A different kind of contractor</span>
+        <h2 id="about-title">One point of responsibility. From beginning to end.</h2>
+        <p>
+          Your project deserves a general contractor who takes ownership of the entire job,
+          not someone who steps in for only one part.
+        </p>
+        <a class="button button--dark" href="#contact">Talk About Your Project <span aria-hidden="true"></span></a>
+      </div>
+
+      <div class="why-list">
+        <article class="why-item">
+          <span class="why-number" aria-hidden="true">01</span>
+          <div>
+            <h3>Experienced leadership</h3>
+            <p>
+              Owner Josh Brooks brings 30 years of construction experience to the work.
+            </p>
+          </div>
+        </article>
+
+        <article class="why-item">
+          <span class="why-number" aria-hidden="true">02</span>
+          <div>
+            <h3>Start-to-finish management</h3>
+            <p>
+              Every accepted project is managed as a complete job, with Josh Brooks
+              serving as your general contractor throughout.
+            </p>
+          </div>
+        </article>
+
+        <article class="why-item">
+          <span class="why-number" aria-hidden="true">03</span>
+          <div>
+            <h3>Direct homeowner projects</h3>
+            <p>
+              The company works directly with homeowners rather than taking subcontract
+              assignments from other general contractors or owner-managed projects.
+            </p>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- Roofing assessment -->
+  <section class="section" id="roofing" aria-labelledby="roofing-title">
+    <div class="container">
+      <div class="roofing-panel">
+        <div class="roofing-image">
+          <img
+            src="https://joshbrooksconstructionllc.com/wp-content/uploads/2026/09/finished-roof-ridge-thornton-co-768x1024.jpg"
+            alt="Completed residential roof with Owens Corning Estate Gray shingles"
+            loading="lazy"
+          >
+        </div>
+
+        <div class="roofing-content">
+          <span class="eyebrow">Roofing & hail restoration</span>
+          <h2 id="roofing-title">Does your roof need attention?</h2>
+          <p>
+            Colorado weather can leave homeowners wondering whether their roof needs
+            repair or replacement. If you've noticed damage or have concerns after a
+            storm, start a conversation about your property.
+          </p>
+
+          <ul class="roofing-signs">
+            <li>Visible shingle damage</li>
+            <li>Possible hail damage</li>
+            <li>Signs of roof wear</li>
+            <li>Questions about replacement</li>
+          </ul>
+
+          <div class="hero-actions">
+            <a class="button" href="sms:7204535095">Text Photos of Damage <span aria-hidden="true"></span></a>
+            <a class="button button--outline" href="tel:7208287997">Call Josh</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Roofing process guide -->
+  <section class="section section--white" id="process" aria-labelledby="process-title">
+    <div class="container roof-guide">
+      <div class="roof-guide-intro">
+        <span class="eyebrow">A homeowner's guide</span>
+        <h2 id="process-title">How do you get a new roof in Colorado?</h2>
+        <p>
+          A roof replacement is a significant home project. Start by understanding
+          the condition of your existing roof and discussing the work with your contractor.
+        </p>
+        <a class="button button--dark" href="#contact">Discuss Your Roof <span aria-hidden="true"></span></a>
+      </div>
+
+      <div class="roof-guide-steps">
+        <article class="roof-guide-step">
+          <span aria-hidden="true">01</span>
+          <div>
+            <h3>Start with the roof's condition</h3>
+            <p>
+              Share what you've noticed, including visible damage or concerns following
+              a hailstorm.
+            </p>
+          </div>
+        </article>
+
+        <article class="roof-guide-step">
+          <span aria-hidden="true">02</span>
+          <div>
+            <h3>Talk through the project</h3>
+            <p>
+              Discuss the property, the roofing work you're considering and the scope
+              of the project with your general contractor.
+            </p>
+          </div>
+        </article>
+
+        <article class="roof-guide-step">
+          <span aria-hidden="true">03</span>
+          <div>
+            <h3>Plan the work with your GC</h3>
+            <p>
+              Understand the proposed work and project responsibilities before moving
+              forward with a replacement.
+            </p>
+          </div>
+        </article>
+
+        <article class="roof-guide-step">
+          <span aria-hidden="true">04</span>
+          <div>
+            <h3>Keep the project under one lead</h3>
+            <p>
+              Josh Brooks Construction manages accepted jobs from start to finish
+              as the general contractor.
+            </p>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- Recent projects -->
+  <section class="section" id="projects" aria-labelledby="projects-title">
+    <div class="container">
+      <div class="projects-heading">
+        <div class="section-heading">
+          <span class="eyebrow">Recent work</span>
+          <h2 id="projects-title">Which project looks like your home?</h2>
+          <p>
+            Explore examples of roofing and remodeling work completed by
+            Josh Brooks Construction and Renovation Inc.
+          </p>
+        </div>
+        <a class="button button--dark" href="#contact">Start a Project Conversation <span aria-hidden="true"></span></a>
+      </div>
+
+      <div class="projects-feature">
+        <article class="project-card project-card--featured">
+          <div class="project-image">
+            <img
+              src="https://joshbrooksconstructionllc.com/wp-content/uploads/2026/09/finished-roof-ridge-thornton-co-768x1024.jpg"
+              alt="Completed Owens Corning Estate Gray residential roof in Thornton, Colorado"
+              loading="lazy"
+            >
+          </div>
+          <div class="project-caption">
+            <h3>Residential Roofing</h3>
+            <p>Completed Owens Corning Estate Gray roof · Thornton, Colorado</p>
+          </div>
+        </article>
+
+        <div class="project-secondary">
+          <article class="project-card">
+            <div class="project-image">
+              <img
+                src="https://joshbrooksconstructionllc.com/wp-content/uploads/2026/08/kitchen-island-granite-before-erie-co-sm.jpg"
+                alt="Kitchen island with granite countertop before remodeling in Erie, Colorado"
+                loading="lazy"
+              >
+            </div>
+            <div class="project-caption">
+              <h3>Kitchen Remodeling</h3>
+              <p>Kitchen island and granite countertop · Erie, Colorado</p>
+            </div>
+          </article>
+
+          <article class="project-card">
+            <div class="project-image">
+              <img
+                src="https://joshbrooksconstructionllc.com/wp-content/uploads/2026/10/longmont-bathroom-remodel-soaking-tub-lit-niches-brass-trim-1024x768.jpg"
+                alt="Longmont bathroom remodel with tiled soaking tub deck and illuminated recessed niches"
+                loading="lazy"
+              >
+            </div>
+            <div class="project-caption">
+              <h3>Bathroom Remodeling</h3>
+              <p>Soaking tub, tiled surfaces and illuminated niches · Longmont, Colorado</p>
+            </div>
+          </article>
+        </div>
+      </div>
+    </div>
+  </section>
+
+<script>
+  (() => {
+    const menuButton = document.querySelector(".menu-toggle");
+    const navigation = document.getElementById("primary-navigation");
+
+    if (!menuButton || !navigation) return;
+
+    const closeMenu = () => {
+      navigation.classList.remove("is-open");
+      menuButton.setAttribute("aria-expanded", "false");
+      menuButton.setAttribute("aria-label", "Open navigation menu");
+    };
+
+    menuButton.addEventListener("click", () => {
+      const isOpen = menuButton.getAttribute("aria-expanded") === "true";
+
+      navigation.classList.toggle("is-open", !isOpen);
+      menuButton.setAttribute("aria-expanded", String(!isOpen));
+      menuButton.setAttribute(
+        "aria-label",
+        isOpen ? "Open navigation menu" : "Close navigation menu"
+      );
+    });
+
+    navigation.addEventListener("click", (event) => {
+      if (event.target.closest("a")) closeMenu();
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && menuButton.getAttribute("aria-expanded") === "true") {
+        closeMenu();
+        menuButton.focus();
+      }
+    });
+
+    window.addEventListener("resize", () => {
+      if (window.innerWidth > 760) closeMenu();
+    });
+  })();
+</script>
+
+<!-- HTML PART 2 OF 2 -->
+
+  <!-- Contact and project inquiries -->
+  <section class="contact-section" id="contact" aria-labelledby="contact-title">
+    <div class="container contact-layout">
+
+      <div class="contact-intro">
+        <span class="eyebrow">Let's talk about your project</span>
+        <h2 id="contact-title">What's happening with your home?</h2>
+        <p>
+          Whether you're considering a new roof, addressing hail damage or planning
+          a remodel, tell Josh a little about the project.
+        </p>
+
+        <div class="contact-details">
+          <a class="contact-detail" href="tel:7208287997">
+            <span class="contact-detail-icon" aria-hidden="true"></span>
+            <span>
+              <small>Call Josh Brooks</small>
+              (720) 828-7997
+            </span>
+          </a>
+
+          <a class="contact-detail" href="sms:7204535095">
+            <span class="contact-detail-icon" aria-hidden="true">✉</span>
+            <span>
+              <small>Text photos of damage</small>
+              (720) 453-5095
+            </span>
+          </a>
+
+          <a class="contact-detail" href="/renovation-cost-calculator/">
+            <span class="contact-detail-icon" aria-hidden="true">↗</span>
+            <span>
+              <small>Explore project costs</small>
+              Renovation Cost Calculator
+            </span>
+          </a>
+        </div>
+      </div>
+
+      <div class="contact-form-wrap">
+        <h3>Tell Josh about your project</h3>
+        <p>Share your contact details and a little about the work you're considering.</p>
+
+        <form class="contact-form" action="#contact" method="get">
+          <div class="form-field">
+            <label for="contact-name">Name <span aria-hidden="true">*</span></label>
+            <input
+              id="contact-name"
+              name="name"
+              type="text"
+              autocomplete="name"
+              placeholder="Your name"
+              required
+            >
+          </div>
+
+          <div class="form-field">
+            <label for="contact-phone">Phone <span aria-hidden="true">*</span></label>
+            <input
+              id="contact-phone"
+              name="phone"
+              type="tel"
+              autocomplete="tel"
+              placeholder="Your phone number"
+              required
+            >
+          </div>
+
+          <div class="form-field">
+            <label for="contact-email">Email</label>
+            <input
+              id="contact-email"
+              name="email"
+              type="email"
+              autocomplete="email"
+              placeholder="Your email address"
+            >
+          </div>
+
+          <div class="form-field">
+            <label for="contact-address">Property Address or City</label>
+            <input
+              id="contact-address"
+              name="property-address"
+              type="text"
+              autocomplete="street-address"
+              placeholder="Property address or city"
+            >
+          </div>
+
+          <div class="form-field form-field--full">
+            <label for="contact-service">What do you need?</label>
+            <select id="contact-service" name="what-do-you-need">
+              <option value="">Select a project type</option>
+              <option value="Roofing">Roofing</option>
+              <option value="Hail restoration">Hail restoration</option>
+              <option value="Remodeling">Remodeling</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          <div class="form-field form-field--full">
+            <label for="contact-message">Tell Josh about the project</label>
+            <textarea
+              id="contact-message"
+              name="project-details"
+              placeholder="Describe your project, questions or concerns"
+              rows="5"
+            ></textarea>
+          </div>
+
+          <button class="button form-submit" type="submit">
+            Send Project Details <span aria-hidden="true"></span>
+          </button>
+
+          <p class="form-note">
+            This form is a static website template and is not connected to a
+            submission service. You can call or text Josh directly using the
+            contact details provided.
+          </p>
+        </form>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- Footer -->
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-main">
+
+      <div class="footer-brand">
+        <a class="brand" href="#home" aria-label="Josh Brooks Construction and Renovation home">
+          <img
+            class="brand-logo"
+            src="https://joshbrooksconstructionllc.com/wp-content/uploads/2026/04/IMG_20251112_220214_251.webp?w=400&ssl=1"
+            alt=""
+            width="68"
+            height="68"
+            loading="lazy"
+          >
+          <span class="brand-copy">
+            <span class="brand-name">Josh Brooks</span>
+            <span class="brand-caption">Construction & Renovation Inc.</span>
+          </span>
+        </a>
+
+        <p>
+          Licensed general contractor serving Longmont, Colorado.
+          Roofing, remodeling and hail restoration, managed from start to finish.
+        </p>
+      </div>
+
+      <nav class="footer-links" aria-label="Footer navigation">
+        <a href="#about">About</a>
+        <a href="#roofing">Roofing</a>
+        <a href="#process">Roofing Guide</a>
+        <a href="#projects">Recent Projects</a>
+        <a href="#contact">Contact</a>
+        <a href="/renovation-cost-calculator/">Renovation Cost Calculator</a>
+        <a href="tel:7208287997">Call (720) 828-7997</a>
+      </nav>
+
+    </div>
+
+    <div class="footer-bottom">
+      <p>© <span id="copyright-year">2026</span> Josh Brooks Construction and Renovation Inc.</p>
+      <p>Longmont, Colorado</p>
+    </div>
+  </div>
+</footer>
+
+<script>
+  const copyrightYear = document.getElementById("copyright-year");
+  if (copyrightYear) {
+    copyrightYear.textContent = new Date().getFullYear();
+  }
+</script>
+
+</body>
+</html>

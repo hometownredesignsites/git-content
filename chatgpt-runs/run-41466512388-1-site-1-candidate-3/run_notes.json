@@ -1,0 +1,46 @@
+{
+  "status": "automated_success",
+  "automated_success": true,
+  "final_success": false,
+  "human_visual_review_status": "pending",
+  "image_relevance_review_status": "pending",
+  "browser_qa_status": "pass",
+  "browser_qa_advisory": true,
+  "visual_review_status": "pending",
+  "image_review_status": "pending",
+  "file_sha256": {
+    "files/index.html": "32aeab910e23165c5d231a2c3562aa6ab3b3066d3fd947a5bda0e1abd101b4c8",
+    "files/styles.css": "cafc3c6199b250d5b93c7127bcb08bac7867cc00a16bff10ddcb0e3bf98cb75b",
+    "files/inlined/index.html": "368e5f04e013b1bd4efd79162ee807a72806dc20e87709272c7131bfd848fa90"
+  },
+  "screenshot_sha256": {
+    "desktop": "f012b4a690c647b108024bab9618fb96d24d9bb9fd54cd9f1998b1d70478829f",
+    "mobile": "b8bc8f9165381da1fd555866a9680c5ee78456be2397c07fdff68814be6a411e"
+  },
+  "steps": {
+    "assembly": {
+      "exit_code": 0,
+      "duration_seconds": 0.035,
+      "stdout": "{\"assembled\": true, \"chat_id\": \"site-1-candidate-3\", \"css_parts\": 2, \"html_parts\": 2, \"index_html_bytes\": 19057, \"styles_css_bytes\": 20211}\n",
+      "stderr": ""
+    },
+    "cta_arrow_normalization": {
+      "exit_code": 0,
+      "duration_seconds": 0.042,
+      "stdout": "{\"file\": \"/__w/git-content/git-content/chatgpt-runs/run-41466512388-1-site-1-candidate-3/files/index.html\", \"removed_cta_arrow_glyphs\": 2}\n",
+      "stderr": ""
+    },
+    "css_inlining": {
+      "exit_code": 0,
+      "duration_seconds": 0.032,
+      "stdout": "Created /__w/git-content/git-content/chatgpt-runs/run-41466512388-1-site-1-candidate-3/files/inlined/index.html (39237 bytes)\n",
+      "stderr": ""
+    },
+    "browser_qa": {
+      "exit_code": 0,
+      "duration_seconds": 4.15,
+      "stdout": "{\n  \"status\": \"pass\",\n  \"tested_file\": \"files/inlined/index.html\",\n  \"required_sections\": [\n    \"contact\",\n    \"footer\",\n    \"hero\"\n  ],\n  \"viewports\": {\n    \"desktop\": {\n      \"width\": 1440,\n      \"height\": 900,\n      \"sections\": {\n        \"contact\": {\n          \"visible\": true,\n          \"selector_hint\": \"p.form-note\",\n          \"width\": 546,\n          \"height\": 25\n        },\n        \"footer\": {\n          \"visible\": true,\n          \"selector_hint\": \"footer.site-footer\",\n          \"width\": 1440,\n          \"height\": 206\n        },\n        \"hero\": {\n          \"visible\": true,\n          \"selector_hint\": \"section.hero\",\n          \"width\": 1440,\n          \"height\": 920\n        }\n      },\n      \"all_required_sections_visible\": true,\n      \"hero\": {\n        \"present\": true,\n        \"left\": 0,\n        \"right\": 1440,\n        \"width\": 1440,\n        \"height\": 920,\n        \"viewport_width\": 1440,\n        \"spans_viewport\": true,\n        \"media_covers_hero\": false\n      },\n      \"hero_spans_viewport\": true,\n      \"cta\": {\n        \"visible_first_screen\": true,\n        \"text\": \"Request an Estimate\",\n        \"bottom\": 74\n      },\n      \"cta_visible_first_screen\": true,\n      \"horizontal_overflow\": {\n        \"scroll_width\": 1440,\n        \"viewport_width\": 1440,\n        \"overflow\": false\n      },\n      \"no_horizontal_overflow\": true,\n      \"images\": {\n        \"image_count\": 7,\n        \"loaded_images\": 7,\n        \"failed_images\": [],\n        \"font_status\": \"loaded\",\n        \"loaded_faces\": 0,\n        \"failed_faces\": 0\n      },\n      \"images_loaded\": true,\n      \"fonts\": {\n        \"image_count\": 7,\n        \"loaded_images\": 7,\n        \"failed_images\": [],\n        \"font_status\": \"loaded\",\n        \"loaded_faces\": 0,\n        \"failed_faces\": 0\n      },\n      \"fonts_loaded\": true,\n      \"resource_errors\": [],\n      \"screenshot\": \"screenshots/desktop.png\"\n    },\n    \"mobile\": {\n      \"width\": 390,\n      \"height\": 844,\n      \"sections\": {\n        \"contact\": {\n          \"visible\": true,\n          \"selector_hint\": \"select#contact-service\",\n          \"width\": 318,\n          \"height\": 49\n        },\n        \"footer\": {\n          \"visible\": true,\n          \"selector_hint\": \"footer.site-footer\",\n          \"width\": 390,\n          \"height\": 348\n        },\n        \"hero\": {\n          \"visible\": true,\n          \"selector_hint\": \"section.hero\",\n          \"width\": 390,\n          \"height\": 974\n        }\n      },\n      \"all_required_sections_visible\": true,\n      \"hero\": {\n        \"present\": true,\n        \"left\": 0,\n        \"right\": 390,\n        \"width\": 390,\n        \"height\": 974,\n        \"viewport_width\": 390,\n        \"spans_viewport\": true,\n        \"media_covers_hero\": false\n      },\n      \"hero_spans_viewport\": true,\n      \"cta\": {\n        \"visible_first_screen\": true,\n        \"text\": \"Get a Free Estimate\",\n        \"bottom\": 523\n      },\n      \"cta_visible_first_screen\": true,\n      \"horizontal_overflow\": {\n        \"scroll_width\": 390,\n        \"viewport_width\": 390,\n        \"overflow\": false\n      },\n      \"no_horizontal_overflow\": true,\n      \"images\": {\n        \"image_count\": 7,\n        \"loaded_images\": 7,\n        \"failed_images\": [],\n        \"font_status\": \"loaded\",\n        \"loaded_faces\": 0,\n        \"failed_faces\": 0\n      },\n      \"images_loaded\": true,\n      \"fonts\": {\n        \"image_count\": 7,\n        \"loaded_images\": 7,\n        \"failed_images\": [],\n        \"font_status\": \"loaded\",\n        \"loaded_faces\": 0,\n        \"failed_faces\": 0\n      },\n      \"fonts_loaded\": true,\n      \"resource_errors\": [],\n      \"screenshot\": \"screenshots/mobile.png\"\n    }\n  },\n  \"mobile_menu\": {\n    \"found\": true,\n    \"visual\": {\n      \"button_visible\": true,\n      \"bars_visible\": true,\n      \"bar_count\": 3,\n      \"bar_rects\": [\n        {\n          \"width\": 20,\n          \"height\": 2\n        },\n        {\n          \"width\": 20,\n          \"height\": 2\n        },\n        {\n          \"width\": 20,\n          \"height\": 2\n        }\n      ]\n    },\n    \"control_visible\": true,\n    \"click_opens\": true,\n    \"click_closes\": true,\n    \"tab_reachable\": true,\n    \"focus_indicator_visible\": true,\n    \"enter_opens\": true,\n    \"escape_closes\": true,\n    \"space_toggles\": true,\n    \"pass\": true\n  },\n  \"checks\": {\n    \"rendered_sections_visible_desktop_and_mobile\": true,\n    \"hero_spans_viewport_desktop_and_mobile\": true,\n    \"cta_visible_first_screen_desktop_and_mobile\": true,\n    \"mobile_menu_clicks_work\": true,\n    \"mobile_menu_control_visible\": true,\n    \"mobile_menu_focus_indicator_visible\": true,\n    \"mobile_menu_keyboard_works\": true,\n    \"mobile_has_no_horizontal_overflow\": true,\n    \"fonts_load_in_browser\": true,\n    \"images_load_in_browser\": true\n  },\n  \"resource_errors\": []\n}\n",
+      "stderr": ""
+    }
+  }
+}

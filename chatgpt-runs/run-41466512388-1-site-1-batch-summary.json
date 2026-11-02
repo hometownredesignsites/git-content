@@ -1,0 +1,17 @@
+{
+  "site_index": 1,
+  "target_passing_candidates": 3,
+  "successful_candidates": 3,
+  "attempts": 3,
+  "passed_candidate_folders": [
+    "chatgpt-runs/run-41466512388-1-site-1-candidate-1",
+    "chatgpt-runs/run-41466512388-1-site-1-candidate-2",
+    "chatgpt-runs/run-41466512388-1-site-1-candidate-3"
+  ],
+  "passed_inlined_html": [
+    "chatgpt-runs/run-41466512388-1-site-1-candidate-1/files/inlined/index.html",
+    "chatgpt-runs/run-41466512388-1-site-1-candidate-2/files/inlined/index.html",
+    "chatgpt-runs/run-41466512388-1-site-1-candidate-3/files/inlined/index.html"
+  ],
+  "automated_success": true
+}
