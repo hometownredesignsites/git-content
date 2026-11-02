@@ -1,0 +1,77 @@
+{
+  "status": "automated_failed",
+  "sequence_plan": "css-2-html-2-single-chat-v1",
+  "chat_id": "site-1-candidate-1",
+  "conversation_url": "https://chatgpt.com/uc/6ae89a27-e890-83ea-9040-94e450a520c7",
+  "run_token": "b9a6896a42f5240d",
+  "context_mode": "source",
+  "brief_sha256": "1c19aa598356837a3c9ca4adbade566a850316d45df521bc6d5726d8f635f82f",
+  "started_at_utc": "2026-11-02T14:09:51.054739+00:00",
+  "accepted_parts": [
+    "css-1",
+    "css-2",
+    "html-1",
+    "html-2"
+  ],
+  "pending_turn": null,
+  "last_response_at_utc": "2026-11-02T14:14:15.476601+00:00",
+  "last_accepted_at_utc": "2026-11-02T14:14:15.514351+00:00",
+  "last_capture": {
+    "accepted": true,
+    "part": "html 2/2",
+    "characters": 5474,
+    "sha256": "f65232f2319709862ff078851da9bdf0dde6c81caa8d30dc5b01bbb30987687e"
+  },
+  "css_conversation_url": "https://chatgpt.com/uc/6ae89a27-e890-83ea-9040-94e450a520c7",
+  "html_sequence_started": true,
+  "html_conversation_url": "https://chatgpt.com/uc/6ae89a27-e890-83ea-9040-94e450a520c7",
+  "complete": true,
+  "completed_at_utc": "2026-11-02T14:14:15.514770+00:00",
+  "quality": {
+    "status": "automated_failed",
+    "automated_success": false,
+    "final_success": false,
+    "human_visual_review_status": "pending",
+    "image_relevance_review_status": "pending",
+    "browser_qa_status": "fail",
+    "browser_qa_advisory": true,
+    "visual_review_status": "pending",
+    "image_review_status": "pending",
+    "file_sha256": {
+      "files/index.html": "b2a98cad48e8034e506eb6198487727aff8cfcce8b0fda635cbe1a1013411c38",
+      "files/styles.css": "d1b9bfdc09da66f01a01589996c1cb94586da9c3aa79d3462585e891f8dab146",
+      "files/inlined/index.html": "1c668ea50ca547bc0651ab480be6f9f11d505aedd1f1d941dab7e35562575468"
+    },
+    "screenshot_sha256": {
+      "desktop": "9fc819a1f4251310b917d762b38a0d358b8d723fa92c6b38c9137e28d57fa6ff",
+      "mobile": "4ecb8c65c163c79957f695ba35e2266ba08461c94f72f440cdc36c1907e8eeb0"
+    },
+    "steps": {
+      "assembly": {
+        "exit_code": 0,
+        "duration_seconds": 0.035,
+        "stdout": "{\"assembled\": true, \"chat_id\": \"site-1-candidate-1\", \"css_parts\": 2, \"html_parts\": 2, \"index_html_bytes\": 19105, \"styles_css_bytes\": 21316}\n",
+        "stderr": ""
+      },
+      "cta_arrow_normalization": {
+        "exit_code": 0,
+        "duration_seconds": 0.042,
+        "stdout": "{\"file\": \"/__w/git-content/git-content/chatgpt-runs/run-41458722715-1-site-1-candidate-1/files/index.html\", \"removed_cta_arrow_glyphs\": 2}\n",
+        "stderr": ""
+      },
+      "css_inlining": {
+        "exit_code": 0,
+        "duration_seconds": 0.032,
+        "stdout": "Created /__w/git-content/git-content/chatgpt-runs/run-41458722715-1-site-1-candidate-1/files/inlined/index.html (40390 bytes)\n",
+        "stderr": ""
+      },
+      "browser_qa": {
+        "exit_code": 0,
+        "duration_seconds": 4.494,
+        "stdout": "{\n  \"status\": \"fail\",\n  \"tested_file\": \"files/inlined/index.html\",\n  \"required_sections\": [\n    \"contact\",\n    \"footer\",\n    \"hero\"\n  ],\n  \"viewports\": {\n    \"desktop\": {\n      \"width\": 1440,\n      \"height\": 900,\n      \"sections\": {\n        \"contact\": {\n          \"visible\": true,\n          \"selector_hint\": \"span.contact-detail-label\",\n          \"width\": 451,\n          \"height\": 19\n        },\n        \"footer\": {\n          \"visible\": true,\n          \"selector_hint\": \"footer.site-footer\",\n          \"width\": 1440,\n          \"height\": 186\n        },\n        \"hero\": {\n          \"visible\": true,\n          \"selector_hint\": \"section.hero\",\n          \"width\": 1440,\n          \"height\": 866\n        }\n      },\n      \"all_required_sections_visible\": true,\n      \"hero\": {\n        \"present\": true,\n        \"left\": 0,\n        \"right\": 1440,\n        \"width\": 1440,\n        \"height\": 866,\n        \"viewport_width\": 1440,\n        \"spans_viewport\": true,\n        \"media_covers_hero\": false\n      },\n      \"hero_spans_viewport\": true,\n      \"cta\": {\n        \"visible_first_screen\": true,\n        \"text\": \"Get an Estimate\",\n        \"bottom\": 70\n      },\n      \"cta_visible_first_screen\": true,\n      \"horizontal_overflow\": {\n        \"scroll_width\": 1440,\n        \"viewport_width\": 1440,\n        \"overflow\": false\n      },\n      \"no_horizontal_overflow\": true,\n      \"images\": {\n        \"image_count\": 7,\n        \"loaded_images\": 7,\n        \"failed_images\": [],\n        \"font_status\": \"loaded\",\n        \"loaded_faces\": 5,\n        \"failed_faces\": 0\n      },\n      \"images_loaded\": true,\n      \"fonts\": {\n        \"image_count\": 7,\n        \"loaded_images\": 7,\n        \"failed_images\": [],\n        \"font_status\": \"loaded\",\n        \"loaded_faces\": 5,\n        \"failed_faces\": 0\n      },\n      \"fonts_loaded\": true,\n      \"resource_errors\": [],\n      \"screenshot\": \"screenshots/desktop.png\"\n    },\n    \"mobile\": {\n      \"width\": 390,\n      \"height\": 844,\n      \"sections\": {\n        \"contact\": {\n          \"visible\": true,\n          \"selector_hint\": \"span.contact-detail-label\",\n          \"width\": 354,\n          \"height\": 19\n        },\n        \"footer\": {\n          \"visible\": true,\n          \"selector_hint\": \"footer.site-footer\",\n          \"width\": 390,\n          \"height\": 378\n        },\n        \"hero\": {\n          \"visible\": true,\n          \"selector_hint\": \"section.hero\",\n          \"width\": 390,\n          \"height\": 1123\n        }\n      },\n      \"all_required_sections_visible\": true,\n      \"hero\": {\n        \"present\": true,\n        \"left\": 0,\n        \"right\": 390,\n        \"width\": 390,\n        \"height\": 1123,\n        \"viewport_width\": 390,\n        \"spans_viewport\": true,\n        \"media_covers_hero\": false\n      },\n      \"hero_spans_viewport\": true,\n      \"cta\": {\n        \"visible_first_screen\": true,\n        \"text\": \"Get a Free Estimate\",\n        \"bottom\": 568\n      },\n      \"cta_visible_first_screen\": true,\n      \"horizontal_overflow\": {\n        \"scroll_width\": 390,\n        \"viewport_width\": 390,\n        \"overflow\": false\n      },\n      \"no_horizontal_overflow\": true,\n      \"images\": {\n        \"image_count\": 7,\n        \"loaded_images\": 7,\n        \"failed_images\": [],\n        \"font_status\": \"loaded\",\n        \"loaded_faces\": 5,\n        \"failed_faces\": 0\n      },\n      \"images_loaded\": true,\n      \"fonts\": {\n        \"image_count\": 7,\n        \"loaded_images\": 7,\n        \"failed_images\": [],\n        \"font_status\": \"loaded\",\n        \"loaded_faces\": 5,\n        \"failed_faces\": 0\n      },\n      \"fonts_loaded\": true,\n      \"resource_errors\": [],\n      \"screenshot\": \"screenshots/mobile.png\"\n    }\n  },\n  \"mobile_menu\": {\n    \"found\": true,\n    \"visual\": {\n      \"button_visible\": true,\n      \"bars_visible\": false,\n      \"bar_count\": 3,\n      \"bar_rects\": [\n        {\n          \"width\": 20,\n          \"height\": 2\n        },\n        {\n          \"width\": 20,\n          \"height\": 2\n        },\n        {\n          \"width\": 20,\n          \"height\": 2\n        }\n      ]\n    },\n    \"control_visible\": false,\n    \"click_opens\": true,\n    \"click_closes\": true,\n    \"tab_reachable\": true,\n    \"focus_indicator_visible\": true,\n    \"enter_opens\": true,\n    \"escape_closes\": true,\n    \"space_toggles\": true,\n    \"pass\": false\n  },\n  \"checks\": {\n    \"rendered_sections_visible_desktop_and_mobile\": true,\n    \"hero_spans_viewport_desktop_and_mobile\": true,\n    \"cta_visible_first_screen_desktop_and_mobile\": true,\n    \"mobile_menu_clicks_work\": true,\n    \"mobile_menu_control_visible\": false,\n    \"mobile_menu_focus_indicator_visible\": true,\n    \"mobile_menu_keyboard_works\": true,\n    \"mobile_has_no_horizontal_overflow\": true,\n    \"fonts_load_in_browser\": true,\n    \"images_load_in_browser\": true\n  },\n  \"resource_errors\": []\n}\n",
+        "stderr": ""
+      }
+    }
+  },
+  "quality_completed_at_utc": "2026-11-02T14:14:20.602302+00:00"
+}
