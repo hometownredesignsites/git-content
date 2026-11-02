@@ -1,0 +1,195 @@
+RUN TOKEN: 65a6a2373f34ce04
+
+HTML PART 2 OF 2
+```text
+<!-- HTML PART 2 OF 2 -->
+
+    <!-- CONTACT / PROJECT ENQUIRY -->
+    <section class="contact-section" id="contact" aria-labelledby="contact-title">
+      <div class="container contact-layout">
+
+        <div class="contact-copy">
+          <span class="eyebrow">Start a conversation</span>
+
+          <h2 id="contact-title">
+            Tell Josh what you're planning.
+          </h2>
+
+          <p>
+            Whether you're considering a new roof, addressing
+            hail damage, or planning a home renovation, share
+            a few details about your project.
+          </p>
+
+          <p>
+            Josh Brooks Construction and Renovation Inc. manages
+            accepted projects as the general contractor from
+            start to finish.
+          </p>
+
+          <div class="contact-detail">
+            <strong>Josh Brooks Construction and Renovation Inc.</strong>
+            <p>Longmont, Colorado</p>
+            <p>Licensed General Contractor</p>
+          </div>
+        </div>
+
+        <div class="contact-form">
+          <h3>What can we help with?</h3>
+
+          <form action="#" method="post">
+            <div class="form-grid">
+
+              <div class="form-field">
+                <label for="contact-name">Name *</label>
+                <input
+                  type="text"
+                  id="contact-name"
+                  name="Name"
+                  placeholder="Your name"
+                  autocomplete="name"
+                  required
+                >
+              </div>
+
+              <div class="form-field">
+                <label for="contact-phone">Phone *</label>
+                <input
+                  type="tel"
+                  id="contact-phone"
+                  name="Phone"
+                  placeholder="Your phone number"
+                  autocomplete="tel"
+                  required
+                >
+              </div>
+
+              <div class="form-field">
+                <label for="contact-email">Email</label>
+                <input
+                  type="email"
+                  id="contact-email"
+                  name="Email"
+                  placeholder="Your email address"
+                  autocomplete="email"
+                >
+              </div>
+
+              <div class="form-field">
+                <label for="contact-location">Property Address or City</label>
+                <input
+                  type="text"
+                  id="contact-location"
+                  name="Property Address or City"
+                  placeholder="Property address or city"
+                  autocomplete="street-address"
+                >
+              </div>
+
+              <div class="form-field form-field--full">
+                <label for="contact-service">What do you need?</label>
+                <select
+                  id="contact-service"
+                  name="What do you need?"
+                >
+                  <option value="" selected>Select a project type</option>
+                  <option value="Roofing">Roofing</option>
+                  <option value="Hail restoration">Hail restoration</option>
+                  <option value="Kitchen remodeling">Kitchen remodeling</option>
+                  <option value="Bathroom remodeling">Bathroom remodeling</option>
+                  <option value="Other remodeling">Other remodeling</option>
+                  <option value="Other project">Other project</option>
+                </select>
+              </div>
+
+              <div class="form-field form-field--full">
+                <label for="contact-message">Tell Josh about the project</label>
+                <textarea
+                  id="contact-message"
+                  name="Tell Josh about the project"
+                  placeholder="Describe your project, what you're considering, or any questions you have."
+                  rows="6"
+                ></textarea>
+              </div>
+
+            </div>
+
+            <button class="button button--copper form-submit" type="submit">
+              Send Project Details
+              <span aria-hidden="true">→</span>
+            </button>
+
+            <p class="form-note">
+              Please note: This is a demonstration contact form.
+              No project information is transmitted or submitted.
+            </p>
+          </form>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="site-footer">
+    <div class="container">
+
+      <div class="footer-main">
+
+        <div class="footer-brand">
+          <a class="brand" href="#home" aria-label="Josh Brooks Construction and Renovation home">
+            <img
+              class="brand-logo"
+              src="https://joshbrooksconstructionllc.com/wp-content/uploads/2026/04/IMG_20251112_220214_251.webp?w=400&ssl=1"
+              alt=""
+              width="68"
+              height="68"
+              loading="lazy"
+            >
+            <span class="brand-copy">
+              <span class="brand-name">Josh Brooks</span>
+              <span class="brand-description">Construction &amp; Renovation Inc.</span>
+            </span>
+          </a>
+
+          <p class="footer-copy">
+            Licensed general contractor in Longmont, Colorado.
+            Roofing, remodeling and hail restoration, managed
+            from start to finish.
+          </p>
+        </div>
+
+        <nav class="footer-nav" aria-label="Footer navigation">
+          <a href="#home">Home</a>
+          <a href="#about">About</a>
+          <a href="#roofing">Roofing</a>
+          <a href="#process">The Process</a>
+          <a href="#projects">Recent Work</a>
+          <a href="#contact">Contact</a>
+        </nav>
+
+      </div>
+
+      <div class="footer-bottom">
+        <span>
+          &copy; <span id="current-year">2026</span>
+          Josh Brooks Construction and Renovation Inc.
+        </span>
+        <span>Longmont, Colorado</span>
+      </div>
+
+    </div>
+  </footer>
+
+  <script>
+    const yearElement = document.getElementById("current-year");
+
+    if (yearElement) {
+      yearElement.textContent = new Date().getFullYear();
+    }
+  </script>
+
+</body>
+</html>
+```

@@ -1,0 +1,158 @@
+RUN TOKEN: 66539e3849ac4aa4
+
+HTML PART 2 OF 2
+```text
+<!-- HTML PART 2 OF 2 -->
+
+    <section class="contact-section" id="contact" aria-labelledby="contact-title">
+      <div class="container contact-layout">
+
+        <div class="contact-copy">
+          <span class="eyebrow">Let's talk about your project</span>
+          <h2 id="contact-title">Tell Josh what your home needs.</h2>
+          <p>
+            Planning a roof replacement, dealing with possible hail damage,
+            or considering a kitchen or bathroom renovation? Share a few
+            details about your property and what you'd like to accomplish.
+          </p>
+          <p>
+            Josh Brooks Construction and Renovation Inc. works directly
+            with property owners as the general contractor, managing
+            projects from start to finish.
+          </p>
+          <div class="contact-note">
+            Please note: We take on projects that we manage as the general
+            contractor. We don't accept subcontract work for other GCs
+            or owner-managed projects.
+          </div>
+        </div>
+
+        <form class="contact-form" action="#" method="post">
+          <div class="form-field">
+            <label for="contact-name">Name <span aria-hidden="true">*</span></label>
+            <input
+              id="contact-name"
+              name="name"
+              type="text"
+              autocomplete="name"
+              placeholder="Your name"
+              required>
+          </div>
+
+          <div class="form-field">
+            <label for="contact-phone">Phone <span aria-hidden="true">*</span></label>
+            <input
+              id="contact-phone"
+              name="phone"
+              type="tel"
+              autocomplete="tel"
+              placeholder="Your phone number"
+              required>
+          </div>
+
+          <div class="form-field">
+            <label for="contact-email">Email</label>
+            <input
+              id="contact-email"
+              name="email"
+              type="email"
+              autocomplete="email"
+              placeholder="Your email address">
+          </div>
+
+          <div class="form-field">
+            <label for="contact-address">Property Address or City</label>
+            <input
+              id="contact-address"
+              name="property_address"
+              type="text"
+              autocomplete="street-address"
+              placeholder="Property address or city">
+          </div>
+
+          <div class="form-field full-width">
+            <label for="contact-service">What do you need?</label>
+            <select id="contact-service" name="project_type">
+              <option value="">Select a project type</option>
+              <option value="Roofing">Roofing</option>
+              <option value="Hail restoration">Hail restoration</option>
+              <option value="Kitchen remodeling">Kitchen remodeling</option>
+              <option value="Bathroom remodeling">Bathroom remodeling</option>
+              <option value="Other renovation">Other renovation</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          <div class="form-field full-width">
+            <label for="contact-message">Tell Josh about the project</label>
+            <textarea
+              id="contact-message"
+              name="message"
+              placeholder="What are you planning, and what would you like Josh to know?"></textarea>
+          </div>
+
+          <button class="button form-submit" type="submit">
+            Send Project Details
+            <span class="button-arrow" aria-hidden="true">→</span>
+          </button>
+
+          <p class="form-disclaimer">
+            Fields marked with * are required. This form is a static
+            website template and requires a configured submission service
+            before it can receive inquiries.
+          </p>
+        </form>
+
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+
+      <div class="footer-main">
+        <a class="brand footer-brand" href="#home" aria-label="Josh Brooks Construction and Renovation home">
+          <img
+            src="https://joshbrooksconstructionllc.com/wp-content/uploads/2026/04/IMG_20251112_220214_251.webp?w=400&amp;ssl=1"
+            alt=""
+            width="65"
+            height="65"
+            loading="lazy">
+          <span class="brand-copy">
+            <span class="brand-name">Josh Brooks Construction</span>
+            <span class="brand-description">Construction &amp; Renovation Inc.</span>
+          </span>
+        </a>
+
+        <p class="footer-copy">
+          Licensed general contractor serving Longmont, Colorado.
+          Roofing, remodeling and hail restoration, with every job
+          managed from start to finish.
+        </p>
+
+        <a class="button" href="#contact">
+          Start a Conversation
+          <span class="button-arrow" aria-hidden="true">→</span>
+        </a>
+      </div>
+
+      <div class="footer-bottom">
+        <p>
+          &copy; <span>Josh Brooks Construction and Renovation Inc.</span>
+        </p>
+
+        <nav class="footer-links" aria-label="Footer navigation">
+          <a href="#why-us">About</a>
+          <a href="#roofing">Roofing</a>
+          <a href="#projects">Projects</a>
+          <a href="#contact">Contact</a>
+        </nav>
+      </div>
+
+    </div>
+  </footer>
+
+</body>
+</html>
+```

@@ -1,0 +1,46 @@
+{
+  "status": "automated_success",
+  "automated_success": true,
+  "final_success": false,
+  "human_visual_review_status": "pending",
+  "image_relevance_review_status": "pending",
+  "browser_qa_status": "pass",
+  "browser_qa_advisory": true,
+  "visual_review_status": "pending",
+  "image_review_status": "pending",
+  "file_sha256": {
+    "files/index.html": "7f02cf4f6c1dac5298818a1a3e2abed9a61fa152b600222a8cc001c46d813d10",
+    "files/styles.css": "73407bba55f85c6c287cd6d381bfc72d9f2e3a39e79b9f4271e6ae39e94add3b",
+    "files/inlined/index.html": "8c23492ef76d0c4aed4955261e2d0b27acf03d2c013b635e9bb2173618e98dcc"
+  },
+  "screenshot_sha256": {
+    "desktop": "fa32818521b9fa5f607f0abe5469e0a770c56a46ac1f3652efb3f14d9df6b0ef",
+    "mobile": "377958b896fae01a99857b4e9d1cb2e94438fbba70cb9f40e38103279a91e3b9"
+  },
+  "steps": {
+    "assembly": {
+      "exit_code": 0,
+      "duration_seconds": 0.036,
+      "stdout": "{\"assembled\": true, \"chat_id\": \"site-1-candidate-3\", \"css_parts\": 2, \"html_parts\": 2, \"index_html_bytes\": 18939, \"styles_css_bytes\": 22391}\n",
+      "stderr": ""
+    },
+    "cta_arrow_normalization": {
+      "exit_code": 0,
+      "duration_seconds": 0.043,
+      "stdout": "{\"file\": \"/__w/git-content/git-content/chatgpt-runs/run-41477102826-1-site-1-candidate-3/files/index.html\", \"removed_cta_arrow_glyphs\": 5}\n",
+      "stderr": ""
+    },
+    "css_inlining": {
+      "exit_code": 0,
+      "duration_seconds": 0.033,
+      "stdout": "Created /__w/git-content/git-content/chatgpt-runs/run-41477102826-1-site-1-candidate-3/files/inlined/index.html (41025 bytes)\n",
+      "stderr": ""
+    },
+    "browser_qa": {
+      "exit_code": 0,
+      "duration_seconds": 4.554,
+      "stdout": "{\n  \"status\": \"pass\",\n  \"tested_file\": \"files/inlined/index.html\",\n  \"required_sections\": [\n    \"contact\",\n    \"footer\",\n    \"hero\"\n  ],\n  \"viewports\": {\n    \"desktop\": {\n      \"width\": 1440,\n      \"height\": 900,\n      \"sections\": {\n        \"contact\": {\n          \"visible\": true,\n          \"selector_hint\": \"button.button.form-submit\",\n          \"width\": 217,\n          \"height\": 53\n        },\n        \"footer\": {\n          \"visible\": true,\n          \"selector_hint\": \"footer.site-footer\",\n          \"width\": 1440,\n          \"height\": 229\n        },\n        \"hero\": {\n          \"visible\": true,\n          \"selector_hint\": \"section.hero\",\n          \"width\": 1440,\n          \"height\": 863\n        }\n      },\n      \"all_required_sections_visible\": true,\n      \"hero\": {\n        \"present\": true,\n        \"left\": 0,\n        \"right\": 1440,\n        \"width\": 1440,\n        \"height\": 863,\n        \"viewport_width\": 1440,\n        \"spans_viewport\": true,\n        \"media_covers_hero\": true\n      },\n      \"hero_spans_viewport\": true,\n      \"hero_media_covers_hero\": true,\n      \"cta\": {\n        \"visible_first_screen\": true,\n        \"text\": \"DISCUSS YOUR PROJECT\",\n        \"bottom\": 69\n      },\n      \"cta_visible_first_screen\": true,\n      \"horizontal_overflow\": {\n        \"scroll_width\": 1440,\n        \"viewport_width\": 1440,\n        \"overflow\": false\n      },\n      \"no_horizontal_overflow\": true,\n      \"images\": {\n        \"image_count\": 7,\n        \"loaded_images\": 7,\n        \"failed_images\": [],\n        \"font_status\": \"loaded\",\n        \"loaded_faces\": 5,\n        \"failed_faces\": 0\n      },\n      \"images_loaded\": true,\n      \"fonts\": {\n        \"image_count\": 7,\n        \"loaded_images\": 7,\n        \"failed_images\": [],\n        \"font_status\": \"loaded\",\n        \"loaded_faces\": 5,\n        \"failed_faces\": 0\n      },\n      \"fonts_loaded\": true,\n      \"resource_errors\": [],\n      \"screenshot\": \"screenshots/desktop.png\"\n    },\n    \"mobile\": {\n      \"width\": 390,\n      \"height\": 844,\n      \"sections\": {\n        \"contact\": {\n          \"visible\": true,\n          \"selector_hint\": \"select#contact-service\",\n          \"width\": 320,\n          \"height\": 50\n        },\n        \"footer\": {\n          \"visible\": true,\n          \"selector_hint\": \"footer.site-footer\",\n          \"width\": 390,\n          \"height\": 404\n        },\n        \"hero\": {\n          \"visible\": true,\n          \"selector_hint\": \"section.hero\",\n          \"width\": 390,\n          \"height\": 760\n        }\n      },\n      \"all_required_sections_visible\": true,\n      \"hero\": {\n        \"present\": true,\n        \"left\": 0,\n        \"right\": 390,\n        \"width\": 390,\n        \"height\": 760,\n        \"viewport_width\": 390,\n        \"spans_viewport\": true,\n        \"media_covers_hero\": true\n      },\n      \"hero_spans_viewport\": true,\n      \"hero_media_covers_hero\": true,\n      \"cta\": {\n        \"visible_first_screen\": true,\n        \"text\": \"START A PROJECT\",\n        \"bottom\": 586\n      },\n      \"cta_visible_first_screen\": true,\n      \"horizontal_overflow\": {\n        \"scroll_width\": 390,\n        \"viewport_width\": 390,\n        \"overflow\": false\n      },\n      \"no_horizontal_overflow\": true,\n      \"images\": {\n        \"image_count\": 7,\n        \"loaded_images\": 7,\n        \"failed_images\": [],\n        \"font_status\": \"loaded\",\n        \"loaded_faces\": 5,\n        \"failed_faces\": 0\n      },\n      \"images_loaded\": true,\n      \"fonts\": {\n        \"image_count\": 7,\n        \"loaded_images\": 7,\n        \"failed_images\": [],\n        \"font_status\": \"loaded\",\n        \"loaded_faces\": 5,\n        \"failed_faces\": 0\n      },\n      \"fonts_loaded\": true,\n      \"resource_errors\": [],\n      \"screenshot\": \"screenshots/mobile.png\"\n    }\n  },\n  \"mobile_menu\": {\n    \"found\": true,\n    \"visual\": {\n      \"button_visible\": true,\n      \"bars_visible\": true,\n      \"bar_count\": 3,\n      \"bar_rects\": [\n        {\n          \"width\": 20,\n          \"height\": 2\n        },\n        {\n          \"width\": 20,\n          \"height\": 2\n        },\n        {\n          \"width\": 20,\n          \"height\": 2\n        }\n      ]\n    },\n    \"control_visible\": true,\n    \"click_opens\": true,\n    \"click_closes\": true,\n    \"tab_reachable\": true,\n    \"focus_indicator_visible\": true,\n    \"enter_opens\": true,\n    \"escape_closes\": true,\n    \"space_toggles\": true,\n    \"pass\": true\n  },\n  \"checks\": {\n    \"rendered_sections_visible_desktop_and_mobile\": true,\n    \"hero_spans_viewport_desktop_and_mobile\": true,\n    \"hero_media_covers_hero_desktop_and_mobile\": true,\n    \"cta_visible_first_screen_desktop_and_mobile\": true,\n    \"mobile_menu_clicks_work\": true,\n    \"mobile_menu_control_visible\": true,\n    \"mobile_menu_focus_indicator_visible\": true,\n    \"mobile_menu_keyboard_works\": true,\n    \"mobile_has_no_horizontal_overflow\": true,\n    \"fonts_load_in_browser\": true,\n    \"images_load_in_browser\": true\n  },\n  \"resource_errors\": []\n}\n",
+      "stderr": ""
+    }
+  }
+}
