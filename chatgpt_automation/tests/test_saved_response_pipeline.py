@@ -235,8 +235,14 @@ class SavedResponsePipelineTest(unittest.TestCase):
             context = output.read_text(encoding="utf-8")
             metadata = json.loads(inputs.read_text(encoding="utf-8"))
             self.assertLessEqual(len(context), metadata["generation_context_maximum_characters"])
-            self.assertIn('"type":"tel"', context)
+            self.assertIn('"label":"Phone"', context)
+            self.assertIn('"required":true', context)
             self.assertIn("fixture.invalid/", context)
+            self.assertIn("Source copy with verified service facts.", context)
+            self.assertNotIn("Fixture Studio", context)
+            self.assertLess(len(context), 4000)
+            self.assertNotIn('"text_excerpt"', context)
+            self.assertNotIn('"type":"tel"', context)
 
 
 class _FakeLocator:

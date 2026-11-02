@@ -9,65 +9,117 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 
-PAGE_TEXT_LIMIT = 420
-MAX_HEADINGS_PER_PAGE = 5
-MAX_CONTEXT_PAGES = 4
-MAX_SOURCE_IMAGES = 6
-MAX_NAVIGATION_LINKS = 8
-MAX_GENERATION_CONTEXT_CHARS = 9000
-RELEVANT_LINK = re.compile(
-    r"about|service|kitchen|bath|roof|remodel|contact|work|project|team|pricing|hours|location|product|portfolio|gallery|faq",
-    re.IGNORECASE,
-)
-
-
+MAX_SOURCE_IMAGES = 4
+MAX_NAVIGATION_LINKS = 3
+MAX_GENERATION_CONTEXT_CHARS = 3500
+MAX_VERIFIED_FACT_CHARS = 720
 def _select_context_pages(facts: dict) -> list[dict]:
-    """Keep the homepage, form evidence, and a few representative source pages."""
+    """Keep the homepage and, only if needed, one page containing a contact form."""
     reviewed = facts.get("pages_reviewed", [])
     if not reviewed:
         return []
     requested = str(facts.get("requested_url", "")).rstrip("/").lower()
-    ranked = []
+    homepage = None
+    form_page = None
     for index, page in enumerate(reviewed):
         url = str(page.get("url", ""))
-        title = str(page.get("title", ""))
-        combined = f"{url} {title}"
-        score = 0
         if url.rstrip("/").lower() == requested:
-            score += 100
-        if page.get("forms"):
-            score += 80
-        if re.search(r"service|about|contact|work|project|product|gallery|portfolio", combined, re.IGNORECASE):
-            score += 20
-        ranked.append((score, -index, page))
-    ranked.sort(reverse=True, key=lambda item: (item[0], item[1]))
-    chosen = [item[2] for item in ranked[:MAX_CONTEXT_PAGES]]
-    return sorted(chosen, key=lambda page: reviewed.index(page))
+            homepage = page
+        if form_page is None and page.get("forms"):
+            form_page = page
+    chosen = [homepage or reviewed[0]]
+    if form_page is not None and form_page is not chosen[0]:
+        chosen.append(form_page)
+    return chosen
+
+
+def _verified_facts(page: dict, limit: int = MAX_VERIFIED_FACT_CHARS) -> list[str]:
+    """Select a few concise source sentences instead of repeating page excerpts."""
+    text = " ".join(str(page.get("text", "")).split())
+    title = " ".join(str(page.get("title", "")).split())
+    if title and text.lower().startswith(title.lower()):
+        text = text[len(title):].lstrip(" .|:-")
+    candidates = re.split(r"(?<!Inc)(?<!LLC)(?<!Co)(?<=[.!?])\s+(?=[A-Z0-9])", text)
+    chosen: list[str] = []
+    seen: set[str] = set()
+    used = 0
+    for sentence in candidates:
+        sentence = sentence.strip(" \t\r\n|•")
+        key = re.sub(r"\W+", " ", sentence).strip().lower()
+        if len(sentence) < 35 or key in seen:
+            continue
+        # Discard menu/page-title fragments and recurring scrape boilerplate.
+        if re.match(r"^(?:home|about|services|contact|menu|skip to content)\b", sentence, re.I):
+            continue
+        if len(sentence) > 280:
+            sentence = sentence[:277].rsplit(" ", 1)[0].rstrip(" ,;:") + "…"
+        if used + len(sentence) > limit:
+            continue
+        chosen.append(sentence)
+        seen.add(key)
+        used += len(sentence)
+        if len(chosen) >= 4:
+            break
+    return chosen
 
 
 def compact_facts(facts: dict) -> tuple[dict, list[str]]:
-    """Keep the complete source audit on disk but bound the generation context."""
+    """Build a small design brief while retaining the full source audit on disk."""
     domain = str(facts.get("source_domain", "")).lower().removeprefix("www.")
-    pages = []
-    for page in _select_context_pages(facts):
-        pages.append({
-            "url": page.get("url", ""),
-            "title": page.get("title", ""),
-            "headings": page.get("headings", [])[:MAX_HEADINGS_PER_PAGE],
-            "text_excerpt": str(page.get("text", ""))[:PAGE_TEXT_LIMIT],
-            # The first form is enough to preserve purpose and field parity; the
-            # full form audit remains available in debug/source_facts.json.
-            "forms": page.get("forms", [])[:1],
-        })
+    pages = _select_context_pages(facts)
+    homepage = pages[0] if pages else {}
+    headings = []
+    seen_headings = set()
+    for heading in homepage.get("headings", []):
+        if isinstance(heading, dict) and heading.get("tag") not in {"h1", "h2"}:
+            continue
+        value = " ".join(str(heading.get("text", "")).split()) if isinstance(heading, dict) else " ".join(str(heading).split())
+        key = value.lower()
+        if value and key not in seen_headings:
+            seen_headings.add(key)
+            headings.append(value[:110])
+        if len(headings) >= 5:
+            break
+
+    form_fields = []
+    for page in pages:
+        for form in page.get("forms", [])[:1]:
+            for field in form.get("fields", []):
+                label = " ".join(str(field.get("label") or field.get("name") or "").split())
+                label = re.sub(r"\s*[(*]required[*)]\s*", " ", label, flags=re.IGNORECASE).strip()
+                if not label or str(field.get("name", "")).lower().startswith(("ak_hp", "honeypot")):
+                    continue
+                item = {"label": label[:70], "required": bool(field.get("required"))}
+                if item not in form_fields:
+                    form_fields.append(item)
+                if len(form_fields) >= 8:
+                    break
+            if form_fields:
+                break
 
     images = []
     seen_images = set()
+    seen_image_buckets = set()
     for image in facts.get("source_assets", []):
         image_url = str(image.get("url", "")).strip()
         image_host = (urlsplit(image_url).hostname or "").lower().removeprefix("www.")
         if image_url and image_host == domain and image_url not in seen_images:
-            seen_images.add(image_url)
-            images.append({"url": image_url, "alt": str(image.get("alt", ""))[:140]})
+            alt = " ".join(str(image.get("alt", "")).split())
+            if alt:
+                lowered_alt = alt.lower()
+                bucket = next((
+                    name for name, pattern in (
+                        ("brand", r"logo|josh brooks construction"),
+                        ("kitchen", r"kitchen|countertop|island"),
+                        ("bath", r"bath|tub|shower"),
+                        ("roof", r"roof|shingle|hail"),
+                        ("exterior", r"deck|siding|porch|exterior"),
+                    ) if re.search(pattern, lowered_alt)
+                ), "other")
+                if bucket not in seen_image_buckets:
+                    images.append({"url": image_url, "alt": alt[:100]})
+                    seen_images.add(image_url)
+                    seen_image_buckets.add(bucket)
         if len(images) >= MAX_SOURCE_IMAGES:
             break
 
@@ -81,7 +133,7 @@ def compact_facts(facts: dict) -> tuple[dict, list[str]]:
         path = urlsplit(href).path if href else ""
         if host and host != domain:
             continue
-        if not (RELEVANT_LINK.search(label + " " + path) or len(links) < 8):
+        if not (re.search(r"estimate|contact|call|text|quote", label + " " + path, re.IGNORECASE)):
             continue
         key = href.lower()
         if href and key not in seen_links:
@@ -90,17 +142,14 @@ def compact_facts(facts: dict) -> tuple[dict, list[str]]:
         if len(links) >= MAX_NAVIGATION_LINKS:
             break
 
-    metadata = facts.get("business_metadata_unverified", {})
     compact = {
-        "business_name": metadata.get("business", ""),
-        "category_hint_unverified": metadata.get("category", ""),
-        "location_hint_unverified": metadata.get("location", ""),
-        "source_url": facts.get("requested_url"),
-        "source_domain": domain,
-        "source_evidence": pages,
-        "useful_same_site_links": links,
-        "usable_same_site_images": images,
-        "fetch_errors": facts.get("source_fetch_errors", [])[:2],
+        "site": facts.get("requested_url"),
+        "identity": str(homepage.get("title", ""))[:140],
+        "verified_facts": _verified_facts(homepage),
+        "page_sections": headings,
+        "contact_fields": form_fields,
+        "contact_actions": links,
+        "project_images": images,
     }
     return compact, [image["url"] for image in images]
 
@@ -162,20 +211,17 @@ def main() -> int:
         )
 
     context = render_context()
-    # Apply a deterministic fallback cap while retaining titles, headings, form
-    # evidence, selected links, and imagery before trimming prose excerpts.
-    excerpt_limit = PAGE_TEXT_LIMIT
-    while len(context) > MAX_GENERATION_CONTEXT_CHARS and excerpt_limit > 250:
-        excerpt_limit = max(250, excerpt_limit - 150)
-        for page in prompt_facts["pages_reviewed"]:
-            page["text_excerpt"] = str(page.get("text_excerpt", ""))[:excerpt_limit]
+    # If a site's URLs or labels are unusually verbose, trim optional evidence in
+    # a fixed order while preserving identity, supported facts, and form fields.
+    while len(context) > MAX_GENERATION_CONTEXT_CHARS and prompt_facts["contact_actions"]:
+        prompt_facts["contact_actions"].pop()
         context = render_context()
-    while len(context) > MAX_GENERATION_CONTEXT_CHARS and prompt_facts["navigation_links"]:
-        prompt_facts["navigation_links"].pop()
-        context = render_context()
-    while len(context) > MAX_GENERATION_CONTEXT_CHARS and prompt_facts["source_assets"]:
-        removed = prompt_facts["source_assets"].pop()
+    while len(context) > MAX_GENERATION_CONTEXT_CHARS and prompt_facts["project_images"]:
+        removed = prompt_facts["project_images"].pop()
         source_image_urls.remove(removed["url"])
+        context = render_context()
+    while len(context) > MAX_GENERATION_CONTEXT_CHARS and prompt_facts["page_sections"]:
+        prompt_facts["page_sections"].pop()
         context = render_context()
     if len(context) > MAX_GENERATION_CONTEXT_CHARS:
         raise RuntimeError(
