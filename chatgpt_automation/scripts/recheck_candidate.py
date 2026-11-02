@@ -32,6 +32,20 @@ def recheck(candidate: Path) -> dict:
     if not request_path.is_file():
         raise RuntimeError(f"Candidate is missing {request_path}")
     request = request_path.read_text(encoding="utf-8")
+    normalized = subprocess.run(
+        [sys.executable, str(SCRIPT_DIR / "normalize_cta_arrows.py"), str(candidate / "files" / "index.html")],
+        capture_output=True, text=True, encoding="utf-8",
+    )
+    if normalized.returncode:
+        raise RuntimeError(f"CTA arrow normalization failed: {normalized.stderr or normalized.stdout}")
+    inlined = candidate / "files" / "inlined" / "index.html"
+    if inlined.is_file():
+        normalized_inline = subprocess.run(
+            [sys.executable, str(SCRIPT_DIR / "normalize_cta_arrows.py"), str(inlined)],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+        if normalized_inline.returncode:
+            raise RuntimeError(f"Inlined CTA arrow normalization failed: {normalized_inline.stderr or normalized_inline.stdout}")
     result = subprocess.run(
         [sys.executable, str(SCRIPT_DIR / "check_website.py"), str(candidate), request],
         capture_output=True, text=True, encoding="utf-8",

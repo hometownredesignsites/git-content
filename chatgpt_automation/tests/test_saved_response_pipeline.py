@@ -10,6 +10,7 @@ import unittest
 from pathlib import Path
 
 from chatgpt_automation.scripts.website_chunks import WebsiteTurnError, _part_prompt, run_website_chunks
+from chatgpt_automation.scripts.normalize_cta_arrows import normalize
 from chatgpt_file_playwright_anonymous_ci import inspect_chatgpt_page_state
 from playwright_runner.browser_session import response_generation_active
 
@@ -26,6 +27,24 @@ REQUEST = (
 
 
 class SavedResponsePipelineTest(unittest.TestCase):
+    def test_cta_arrow_normalizer_removes_only_glyphs_inside_ctas(self):
+        source = (
+            '<a class="button" href="/estimate" aria-label="Estimate &rarr;">Get an Estimate →</a>'
+            '<button aria-label="Call us">Call &rarr; now ↓</button>'
+            '<p>Direction: → keep this arrow</p>'
+            '<a href="/story">Story →</a>'
+        )
+        output, removed = normalize(source)
+        self.assertEqual(removed, 4)
+        self.assertEqual(
+            output,
+            '<a class="button" href="/estimate" aria-label="Estimate ">Get an Estimate </a>'
+            '<button aria-label="Call us">Call  now </button>'
+            '<p>Direction: → keep this arrow</p>'
+            '<a href="/story">Story →</a>',
+        )
+        self.assertEqual(normalize(output), (output, 0))
+
     def test_chatgpt_aria_stop_control_is_recognized_as_active_generation(self):
         class Locator:
             def __init__(self, visible):
