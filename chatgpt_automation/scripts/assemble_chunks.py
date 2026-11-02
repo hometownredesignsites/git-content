@@ -1,4 +1,4 @@
-"""Verify three ordered CSS captures and one HTML capture, then assemble website files."""
+"""Verify two ordered CSS captures and two HTML captures, then assemble website files."""
 
 import argparse
 import hashlib
@@ -7,8 +7,8 @@ import re
 from pathlib import Path
 
 
-CSS_PART_COUNT = 3
-HTML_PART_COUNT = 3
+CSS_PART_COUNT = 2
+HTML_PART_COUNT = 2
 EXPECTED = [("css", number) for number in range(1, CSS_PART_COUNT + 1)] + [("html", number) for number in range(1, HTML_PART_COUNT + 1)]
 
 
@@ -33,7 +33,7 @@ def main():
     parts = manifest.get("parts", [])
     actual = [(item.get("kind"), item.get("part")) for item in parts]
     if actual != EXPECTED:
-        fail(f"expected three ordered CSS responses followed by three HTML responses; found {actual}")
+        fail(f"expected two ordered CSS responses followed by two HTML responses; found {actual}")
     css, html = [], []
     seen_hashes = set()
     for entry in parts:

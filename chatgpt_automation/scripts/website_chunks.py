@@ -16,9 +16,9 @@ from typing import Any, Callable
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 CAPTURE_SCRIPT = SCRIPT_DIR / "capture_chunk.py"
-CSS_PART_COUNT = 3
-HTML_PART_COUNT = 3
-SEQUENCE_PLAN = "css-3-html-3-single-chat-v1"
+CSS_PART_COUNT = 2
+HTML_PART_COUNT = 2
+SEQUENCE_PLAN = "css-2-html-2-single-chat-v1"
 PARTS = [("css", number) for number in range(1, CSS_PART_COUNT + 1)] + [("html", number) for number in range(1, HTML_PART_COUNT + 1)]
 TOTALS = {"css": CSS_PART_COUNT, "html": HTML_PART_COUNT}
 
@@ -72,28 +72,22 @@ def _part_prompt(
     if kind == "css" and context_mode == "minimal":
         diagnostic_tasks = {
             1: "Add only compact design tokens, a body rule, a .site-header rule, and a .hero rule.",
-            2: "Add only compact .content-section and .service-list rules for the same fictional workshop.",
-            3: "Add compact .contact form, footer, mobile layout, :focus-visible, and reduced-motion rules.",
+            2: "Add compact .content-section, .service-list, .contact form, footer, mobile layout, :focus-visible, and reduced-motion rules.",
         }
         task = "Return a short, valid diagnostic stylesheet part, not a full website stylesheet. " + diagnostic_tasks[number]
     elif kind == "css":
         css_tasks = {
             1: (
-                "Return CSS part 1 of 3 only: design tokens, reset, body and shared typography, page/container layout, "
-                "header/navigation, reusable buttons, and hero. Define the reusable class names and variables the later "
-                "parts and HTML can use. Do not style later page sections or add responsive overrides yet."
+                "Return CSS part 1 of 2 only: design tokens, reset, body and shared typography, page/container layout, "
+                "header/navigation, reusable buttons, hero, and desktop styles for the primary source-supported content "
+                "sections. Define the reusable class names and variables for the final CSS and HTML. Do not add contact, "
+                "footer, or responsive overrides yet."
             ),
             2: (
-                "Return CSS part 2 of 3 only: desktop styles for the source-supported main content sections between "
-                "the hero and contact area, such as services, process, project/gallery, or about content when present. "
-                "Use the same tokens and naming system established in part 1. Do not repeat resets, typography, header, "
-                "hero, contact, footer, or responsive rules."
-            ),
-            3: (
-                "Return CSS part 3 of 3 only: desktop styles for the primary contact/conversion area, form fields, and "
-                "footer, followed by responsive overrides for all three parts, visible keyboard focus, and reduced-motion "
-                "support. Include only source-supported components; reuse existing tokens and selectors without repeating "
-                "earlier desktop rules. Make navigation and content usable on narrow screens."
+                "Return CSS part 2 of 2 only: desktop styles for the contact/conversion area, form fields, and footer, "
+                "then responsive overrides for all page sections, visible keyboard focus, and reduced-motion support. "
+                "Use the same tokens and naming system established in part 1. Include only source-supported components; "
+                "do not repeat earlier desktop rules. Make navigation and content usable on narrow screens."
             ),
         }
         task = (
@@ -104,9 +98,8 @@ def _part_prompt(
         )
     else:
         html_tasks = {
-            1: "Start the HTML5 document with doctype, metadata, title, stylesheet link, body, semantic header/navigation, main, and complete hero. Do not close main/body/html yet.",
-            2: "Continue inside main with source-supported primary content sections. Do not repeat document setup, header, or hero, and do not add the contact form or close main/body/html.",
-            3: "Continue inside main with any remaining supported content and the complete contact section/form, preserving source contact fields. Then close main, add a substantive source-grounded footer, and close body and html. Do not repeat earlier sections or invent a form handler.",
+            1: "Start the HTML5 document with doctype, metadata, title, stylesheet link, body, semantic header/navigation, main, complete hero, and the primary source-supported content sections. Do not add the contact form or close main/body/html yet.",
+            2: "Continue inside main with any remaining supported content and the complete contact section/form, preserving source contact fields. Then close main, add a substantive source-grounded footer, and close body and html. Do not repeat earlier sections or invent a form handler.",
         }
         task = html_tasks[number] + " Follow the accepted CSS class names. Do not invent a form handler or unsupported content. Keep markup semantic, concise, accessible, and syntactically closed within this section."
     if context_mode == "minimal":
@@ -137,7 +130,7 @@ def _part_prompt(
             "Keep names and custom properties consistent; do not repeat earlier rules.\n\n"
         )
     elif kind == "html":
-        prior = f"The three CSS parts and HTML parts 1 through {number - 1 if number > 1 else 0} were accepted. Continue that same document and naming system.\n\n"
+        prior = f"The two CSS parts and HTML parts 1 through {number - 1 if number > 1 else 0} were accepted. Continue that same document and naming system.\n\n"
     else:
         prior = ""
     return (
@@ -223,7 +216,7 @@ def run_website_chunks(
     stop_after: str | None = None,
     context_mode: str = "source",
 ) -> dict[str, Any]:
-    """Submit three CSS parts, then three HTML parts in one caller-owned chat.
+    """Submit two CSS parts, then two HTML parts in one caller-owned chat.
 
     `exchange` must submit one user turn in the already-open ChatGPT conversation and
     return the existing runner's newest-assistant-response capture (optionally paired

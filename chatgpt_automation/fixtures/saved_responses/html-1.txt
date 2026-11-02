@@ -1,7 +1,7 @@
 RUN TOKEN: fixture-run-token
-HTML PART 1 OF 3
+HTML PART 1 OF 2
 ```text
-<!-- HTML PART 1 OF 3 -->
+<!-- HTML PART 1 OF 2 -->
 <!doctype html>
 <html lang="en">
 <head>

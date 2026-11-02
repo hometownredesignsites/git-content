@@ -27,9 +27,9 @@ REQUEST = (
 
 
 class SavedResponsePipelineTest(unittest.TestCase):
-    def test_css_four_is_not_a_supported_generation_stage(self):
+    def test_css_three_is_not_a_supported_generation_stage(self):
         with tempfile.TemporaryDirectory(prefix="chatgpt-css-stage-") as temporary:
-            with self.assertRaisesRegex(ValueError, "stop_after must be one of css-1, css-2, css-3"):
+            with self.assertRaisesRegex(ValueError, "stop_after must be one of css-1, css-2, html-1, html-2"):
                 run_website_chunks(
                     run_folder=Path(temporary) / "candidate",
                     chat_id=CHAT_ID,
@@ -76,29 +76,29 @@ class SavedResponsePipelineTest(unittest.TestCase):
 
         self.assertTrue(response_generation_active(Page()))
 
-    def test_generation_contract_has_three_css_parts_then_three_html_fragments(self):
+    def test_generation_contract_has_two_css_parts_then_two_html_fragments(self):
         css = _part_prompt("css", 1, RUN_TOKEN, "fixture design brief", None)
-        css3 = _part_prompt("css", 3, RUN_TOKEN, "fixture design brief", ("css", 2))
-        html = _part_prompt("html", 1, RUN_TOKEN, "fixture design brief", ("css", 3), css_reference=".hero { color: black; }")
+        css2 = _part_prompt("css", 2, RUN_TOKEN, "fixture design brief", ("css", 1))
+        html = _part_prompt("html", 1, RUN_TOKEN, "fixture design brief", ("css", 2), css_reference=".hero { color: black; }")
         instructions = (ROOT / "chatgpt_automation" / "website_request.txt").read_text(encoding="utf-8")
-        self.assertIn("CSS PART 1 OF 3", css)
-        self.assertIn("CSS PART 3 OF 3", css3)
-        html3 = _part_prompt("html", 3, RUN_TOKEN, "fixture design brief", ("html", 2))
-        self.assertIn("HTML PART 1 OF 3", html)
-        self.assertIn("HTML PART 3 OF 3", html3)
+        self.assertIn("CSS PART 1 OF 2", css)
+        self.assertIn("CSS PART 2 OF 2", css2)
+        html2 = _part_prompt("html", 2, RUN_TOKEN, "fixture design brief", ("html", 1))
+        self.assertIn("HTML PART 1 OF 2", html)
+        self.assertIn("HTML PART 2 OF 2", html2)
         self.assertIn("ACCEPTED CSS REFERENCE", html)
-        self.assertIn("close body and html", html3)
-        for text in (css, css3, html):
+        self.assertIn("close body and html", html2)
+        for text in (css, css2, html):
             self.assertIn("exactly one fenced code block", text)
-        self.assertIn("three ordered CSS parts", instructions)
+        self.assertIn("two ordered CSS parts", instructions)
         self.assertIn("Define the reusable class names", css)
         self.assertIn("actual selectors and declarations", css)
-        self.assertIn("reduced-motion support", css3)
-        self.assertNotIn("SOURCE FACTS AND DESIGN BRIEF", css3)
+        self.assertIn("reduced-motion support", css2)
+        self.assertNotIn("SOURCE FACTS AND DESIGN BRIEF", css2)
         self.assertIn("Do not produce a source audit", css)
         self.assertIn("do not include research notes, a source audit", instructions)
-        self.assertIn("three CSS parts", html)
-        self.assertIn("three ordered HTML chunks in the same guest conversation", instructions)
+        self.assertIn("two CSS parts", html)
+        self.assertIn("two ordered HTML chunks in the same guest conversation", instructions)
         self.assertNotIn("final acknowledgment", html.lower())
         self.assertNotIn("eight labeled parts", instructions)
         self.assertIn("literal source text inside a `text` code fence", html)
@@ -151,7 +151,7 @@ class SavedResponsePipelineTest(unittest.TestCase):
 
             self.assertEqual(result["accepted_parts"], ["css-1"])
             self.assertEqual(len(prompts), 2)
-            self.assertIn("Now produce exactly CSS PART 1 OF 3", prompts[0])
+            self.assertIn("Now produce exactly CSS PART 1 OF 2", prompts[0])
             self.assertIn("produced no capturable response", prompts[1])
             transcript = [
                 json.loads(line)
@@ -177,7 +177,7 @@ class SavedResponsePipelineTest(unittest.TestCase):
                 }],
             }, indent=2), encoding="utf-8")
 
-            parts = [("css", number) for number in range(1, 4)] + [("html", number) for number in range(1, 4)]
+            parts = [("css", number) for number in range(1, 3)] + [("html", number) for number in range(1, 3)]
             for kind, number in parts:
                 response = FIXTURES / f"{kind}-{number}.txt"
                 self.assertTrue(response.is_file(), f"missing saved fixture {response.name}")
@@ -210,8 +210,8 @@ class SavedResponsePipelineTest(unittest.TestCase):
             ], check=True, capture_output=True, text=True, encoding="utf-8")
             report = json.loads(result.stdout)
             self.assertTrue(report["automated_success"], report["blocking_failures"])
-            self.assertEqual(len(json.loads((run / "chunks" / "capture_manifest.json").read_text(encoding="utf-8"))["parts"]), 6)
-            self.assertEqual(css_file.read_text(encoding="utf-8").count("CSS PART "), 3)
+            self.assertEqual(len(json.loads((run / "chunks" / "capture_manifest.json").read_text(encoding="utf-8"))["parts"]), 4)
+            self.assertEqual(css_file.read_text(encoding="utf-8").count("CSS PART "), 2)
             self.assertTrue(inlined_file.is_file())
             self.assertIn("<style>", inlined_file.read_text(encoding="utf-8"))
             self.assertNotIn('href="styles.css"', inlined_file.read_text(encoding="utf-8"))
@@ -244,13 +244,13 @@ class SavedResponsePipelineTest(unittest.TestCase):
             self.assertEqual(first["accepted_parts"], ["css-1"])
             self.assertEqual(first["staged_until"], "css-1")
 
-            css_done = run_website_chunks(**common, stop_after="css-3")
-            self.assertEqual(css_done["accepted_parts"], ["css-1", "css-2", "css-3"])
-            self.assertEqual(css_done["staged_until"], "css-3")
+            css_done = run_website_chunks(**common, stop_after="css-2")
+            self.assertEqual(css_done["accepted_parts"], ["css-1", "css-2"])
+            self.assertEqual(css_done["staged_until"], "css-2")
 
-            html_done = run_website_chunks(**common, stop_after="html-3")
-            self.assertEqual(html_done["accepted_parts"], ["css-1", "css-2", "css-3", "html-1", "html-2", "html-3"])
-            self.assertEqual(calls, [("css", 1), ("css", 2), ("css", 3), ("html", 1), ("html", 2), ("html", 3)])
+            html_done = run_website_chunks(**common, stop_after="html-2")
+            self.assertEqual(html_done["accepted_parts"], ["css-1", "css-2", "html-1", "html-2"])
+            self.assertEqual(calls, [("css", 1), ("css", 2), ("html", 1), ("html", 2)])
             self.assertEqual(html_done["conversation_url"], "https://chatgpt.com/uc/fixture-conversation")
             self.assertEqual(html_done["css_conversation_url"], html_done["html_conversation_url"])
             self.assertFalse(html_done.get("complete", False))
@@ -258,7 +258,7 @@ class SavedResponsePipelineTest(unittest.TestCase):
             self.assertIn("DIAGNOSTIC CONTEXT", transcript[0]["text"])
 
             with self.assertRaisesRegex(RuntimeError, "context mode differs"):
-                run_website_chunks(**{**common, "context_mode": "source"}, stop_after="html-3")
+                run_website_chunks(**{**common, "context_mode": "source"}, stop_after="html-2")
 
     def test_minimal_context_does_not_require_or_include_csv_business_facts(self):
         with tempfile.TemporaryDirectory(prefix="chatgpt-minimal-context-") as temporary:

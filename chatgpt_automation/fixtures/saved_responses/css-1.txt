@@ -1,7 +1,7 @@
 RUN TOKEN: fixture-run-token
-CSS PART 1 OF 3
+CSS PART 1 OF 2
 ```css
-/* CSS PART 1 OF 3 */
+/* CSS PART 1 OF 2 */
 :root { --ink: #18343a; --paper: #f5f2eb; --accent: #c45e3b; --content: 72rem; }
 * { box-sizing: border-box; }
 body { margin: 0; color: var(--ink); background: var(--paper); font: 16px/1.6 system-ui, sans-serif; }

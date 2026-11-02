@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-PART_TOTALS = {"css": 3, "html": 3}
+PART_TOTALS = {"css": 2, "html": 2}
 EXPECTED = [("css", number) for number in range(1, PART_TOTALS["css"] + 1)] + [("html", number) for number in range(1, PART_TOTALS["html"] + 1)]
 FENCE = re.compile(r"```([A-Za-z0-9_-]+)[ \t]*\r?\n(.*?)\r?\n```", re.DOTALL)
 

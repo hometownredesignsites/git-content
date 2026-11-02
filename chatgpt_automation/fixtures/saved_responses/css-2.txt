@@ -1,7 +1,7 @@
 RUN TOKEN: fixture-run-token
-CSS PART 2 OF 3
+CSS PART 2 OF 2
 ```css
-/* CSS PART 2 OF 3 */
+/* CSS PART 2 OF 2 */
 .content-section { max-width: var(--content); margin-inline: auto; padding: 4rem 5vw; }
 .content-section h2 { max-width: 18ch; font-size: clamp(1.8rem, 3vw, 2.8rem); line-height: 1.1; }
 .service-list, .project-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.5rem; padding: 0; list-style: none; }
@@ -9,4 +9,24 @@ CSS PART 2 OF 3
 .project-card img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
 .project-card h3 { margin-block: 1rem .4rem; }
 .about, .process { border-top: 1px solid color-mix(in srgb, var(--ink), transparent 75%); }
+.contact { background: #e8e3d9; }
+.contact form { display: grid; gap: .75rem; max-width: 42rem; }
+.contact label { font-weight: 650; }
+.contact input, .contact textarea { width: 100%; padding: .8rem; border: 1px solid #657477; border-radius: .25rem; font: inherit; }
+.contact textarea { min-height: 9rem; resize: vertical; }
+.contact button[type="submit"] { justify-self: start; padding: .8rem 1.2rem; border: 0; color: white; background: var(--ink); font: inherit; cursor: pointer; }
+footer { padding: 3rem 8vw; color: white; background: var(--ink); }
+footer a { color: inherit; }
+:where(a, button, input, textarea):focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+@media (max-width: 760px) {
+  .site-header { flex-wrap: wrap; gap: 1rem; }
+  .nav-menu { display: inline-flex; }
+  .primary-nav { flex-wrap: wrap; gap: .75rem 1rem; }
+  .hero { grid-template-columns: 1fr; padding: 3rem 6vw; }
+  .content-section { padding: 3rem 6vw; }
+  .service-list, .project-grid { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
 ```
