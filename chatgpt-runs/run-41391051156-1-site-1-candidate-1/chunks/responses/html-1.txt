@@ -1,0 +1,83 @@
+RUN TOKEN: 2f438db64ca85fd6
+
+HTML PART 1 OF 3
+```text
+<!-- HTML PART 1 OF 3 -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#192d38">
+  <meta name="description" content="Josh Brooks Construction and Renovation Inc. is a licensed general contractor serving Longmont, Colorado, with roofing, remodeling, and hail restoration services.">
+  <title>Josh Brooks Construction & Renovation | Longmont, CO</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="site-shell">
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="brand" href="#home" aria-label="Josh Brooks Construction and Renovation home">
+          <img
+            src="https://joshbrooksconstructionllc.com/wp-content/uploads/2026/04/IMG_20251112_220214_251.webp?w=400&ssl=1"
+            alt=""
+            width="62"
+            height="62"
+          >
+          <span class="brand-copy">
+            <span class="brand-name">Josh Brooks Construction</span>
+            <span class="brand-tagline">Construction &amp; Renovation Inc.</span>
+          </span>
+        </a>
+
+        <nav class="main-nav" aria-label="Main navigation">
+          <a href="#services">Services</a>
+          <a href="#approach">Our Approach</a>
+          <a href="#projects">Recent Projects</a>
+          <a href="#contact">Contact</a>
+          <a class="button button-primary" href="#contact">Get an Estimate <span aria-hidden="true">→</span></a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="home">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-media" aria-hidden="true">
+          <img
+            src="https://joshbrooksconstructionllc.com/wp-content/uploads/2026/09/finished-roof-ridge-thornton-co-768x1024.jpg"
+            alt=""
+            fetchpriority="high"
+          >
+        </div>
+
+        <div class="container">
+          <div class="hero-content">
+            <span class="eyebrow">Licensed General Contractor · Longmont, Colorado</span>
+
+            <h1 id="hero-title">Your Project.<br>One Contractor.<br>Start to Finish.</h1>
+
+            <p class="hero-description">
+              From roofing and hail restoration to home remodeling,
+              Josh Brooks Construction and Renovation Inc. manages
+              your project from beginning to end.
+            </p>
+
+            <div class="hero-actions">
+              <a class="button button-primary" href="/renovation-cost-calculator/">
+                Get a Free Estimate <span aria-hidden="true">→</span>
+              </a>
+              <a class="button button-outline" href="tel:7208287997">
+                Call (720) 828-7997
+              </a>
+            </div>
+
+            <p class="hero-note">
+              Founded in 2014 · 30 years of construction experience
+            </p>
+          </div>
+        </div>
+      </section>
+```
