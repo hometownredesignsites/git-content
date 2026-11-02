@@ -117,7 +117,8 @@ def compact_facts(facts: dict) -> tuple[dict, list[str]]:
                     ) if re.search(pattern, lowered_alt)
                 ), "other")
                 if bucket not in seen_image_buckets:
-                    images.append({"url": image_url, "alt": alt[:100]})
+                    role = "brand_logo" if bucket == "brand" else "project_photo"
+                    images.append({"url": image_url, "alt": alt[:100], "role": role})
                     seen_images.add(image_url)
                     seen_image_buckets.add(bucket)
         if len(images) >= MAX_SOURCE_IMAGES:

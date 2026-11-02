@@ -1127,10 +1127,20 @@ def assess_website(prompt, session_dir):
                         source_forms.extend(fields)
 
             def normalize_form_field(field):
-                raw_label = " ".join(str(field.get(key, "")) for key in ("label", "name", "placeholder"))
+                # Compare the human-facing field label first. Concatenating the
+                # label, name, and placeholder creates a different string for
+                # otherwise-correct fields and caused false failures when
+                # parser inventory contains repeated label text.
+                raw_label = next((
+                    str(field.get(key, "")).strip()
+                    for key in ("label", "aria_label", "name", "placeholder")
+                    if str(field.get(key, "")).strip()
+                ), "")
                 raw_label = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", raw_label)
-                label = raw_label.lower()
-                label = re.sub(r"[^a-z0-9]+", " ", label).strip()
+                label = re.sub(r"[^a-z0-9]+", " ", raw_label.lower()).strip()
+                words = label.split()
+                if len(words) % 2 == 0 and words[:len(words) // 2] == words[len(words) // 2:]:
+                    label = " ".join(words[:len(words) // 2])
                 field_type = str(field.get("type", "")).lower()
                 if field_type == "email" or "email" in label:
                     return "email"
@@ -1140,6 +1150,10 @@ def assess_website(prompt, session_dir):
                     return "name"
                 if field_type in {"textarea"} or re.search(r"\b(message|details|comment|enquiry|inquiry)\b", label):
                     return "message"
+                if re.search(r"\b(address|location|city|postcode|zip)\b", label):
+                    return "property location"
+                if re.search(r"\b(service|project type|what do you need)\b", label):
+                    return "project type"
                 return label or field_type
 
             expected_fields = {normalize_form_field(field) for field in source_forms} - {"", "text"}

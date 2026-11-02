@@ -80,14 +80,18 @@ def _part_prompt(
             1: (
                 "Return CSS part 1 of 2 only: design tokens, reset, body and shared typography, page/container layout, "
                 "header/navigation, reusable buttons, hero, and desktop styles for the primary source-supported content "
-                "sections. Define the reusable class names and variables for the final CSS and HTML. Do not add contact, "
+                "sections. Treat image roles in the source facts as authoritative: use brand_logo only in the brand lockup, "
+                "and use a matching project_photo for prominent project imagery; never enlarge a logo as hero photography. "
+                "Define the reusable class names and variables for the final CSS and HTML. Do not add contact, "
                 "footer, or responsive overrides yet."
             ),
             2: (
                 "Return CSS part 2 of 2 only: desktop styles for the contact/conversion area, form fields, and footer, "
                 "then responsive overrides for all page sections, visible keyboard focus, and reduced-motion support. "
                 "Use the same tokens and naming system established in part 1. Include only source-supported components; "
-                "do not repeat earlier desktop rules. Make navigation and content usable on narrow screens."
+                "do not repeat earlier desktop rules. At mobile widths, hide the desktop link row and show the matching "
+                "accessible menu button; do not let navigation links clip or overflow. Make navigation and content usable "
+                "on narrow screens."
             ),
         }
         task = (
@@ -98,8 +102,8 @@ def _part_prompt(
         )
     else:
         html_tasks = {
-            1: "Start the HTML5 document with doctype, metadata, title, stylesheet link, body, semantic header/navigation, main, complete hero, and the primary source-supported content sections. Do not add the contact form or close main/body/html yet.",
-            2: "Continue inside main with any remaining supported content and the complete contact section/form, preserving source contact fields. Then close main, add a substantive source-grounded footer, and close body and html. Do not repeat earlier sections or invent a form handler.",
+            1: "Start the HTML5 document with doctype, metadata, title, stylesheet link, body, semantic header/navigation, main, complete hero, and the primary source-supported content sections. Include a real mobile menu button in the header: use a native button with an accessible name, aria-controls pointing to the nav id, aria-expanded initially false, a menu/nav class, and exactly three decorative bar spans. Add small inline JavaScript that toggles the nav and aria-expanded on click, closes on Escape, and keeps keyboard operation native. Use a project_photo for prominent project imagery; a brand_logo may appear only in the brand lockup. Do not add the contact form or close main/body/html yet.",
+            2: "Continue inside main with any remaining supported content and the complete contact section/form. Include one labeled control for every source contact_fields entry, preserving each label's wording and required status; keep each label associated with its control and use matching name/placeholder text without duplicating label text. Then close main, add a substantive source-grounded footer, and close body and html. Do not repeat earlier sections or invent a form handler.",
         }
         task = html_tasks[number] + " Follow the accepted CSS class names. Do not invent a form handler or unsupported content. Keep markup semantic, concise, accessible, and syntactically closed within this section."
     if context_mode == "minimal":
