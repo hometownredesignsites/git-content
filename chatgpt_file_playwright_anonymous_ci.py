@@ -17,7 +17,7 @@ from playwright_runner.prompt_contracts import build_prompt_text, extract_json_p
 from playwright_runner.recovery import refresh_chat, start_new_chat_if_available
 from playwright_runner.stage_runner import run_stage_once, write_stage_outputs
 from playwright_runner.browser_session import assistant_turns
-from chatgpt_automation.scripts.website_chunks import CSS_PART_COUNT, WebsiteTurnError, run_website_chunks
+from chatgpt_automation.scripts.website_chunks import CSS_PART_COUNT, HTML_PART_COUNT, WebsiteTurnError, run_website_chunks
 
 
 def ensure_package(module_name: str, pip_name: str | None = None):
@@ -65,8 +65,8 @@ def restore_newest_code_block_fences(page, response_text: str, kind: str, part: 
             "normalization_error": f"Expected a rendered {expected_language} code block.",
         }
     code = code_block.inner_text().strip("\r\n")
-    expected_total = CSS_PART_COUNT if kind == "css" else 1
-    expected_marker = f"/* CSS PART {part} OF {expected_total} */" if kind == "css" else "<!-- HTML PART 1 OF 1 -->"
+    expected_total = CSS_PART_COUNT if kind == "css" else HTML_PART_COUNT
+    expected_marker = f"/* CSS PART {part} OF {expected_total} */" if kind == "css" else f"<!-- HTML PART {part} OF {expected_total} -->"
     marker = re.search(rf"(?m)^[ \t]*{re.escape(expected_marker)}[ \t]*$", code)
     if not marker:
         return response_text, {
@@ -224,7 +224,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--website-stop-after",
-        choices=["css-1", "css-2", "css-3", "css-4", "html-1"],
+        choices=["css-1", "css-2", "css-3", "css-4", "html-1", "html-2", "html-3", "html-4"],
         help="Stop after validating this part and save the conversation checkpoint for the next ladder stage",
     )
     return parser.parse_args()
@@ -332,6 +332,14 @@ def run() -> int:
                         "page_state": after_state,
                     }
 
+                def start_fresh_html_chat():
+                    old_url = page.url
+                    old_turn_count = assistant_turns(page).count()
+                    started = start_new_chat_if_available(page, args.timeout_ms)
+                    if not started:
+                        return False
+                    return page.url != old_url or assistant_turns(page).count() < old_turn_count
+
                 website_brief = "\n\n".join(part for part in (instructions_text, prompt_text) if part).strip()
                 if args.website_context_mode == "minimal":
                     website_brief = prompt_text.strip()
@@ -345,6 +353,7 @@ def run() -> int:
                     source_facts_and_design_brief=website_brief,
                     exchange=exchange_website_turn,
                     conversation_url=lambda: page.url,
+                    start_html_conversation=start_fresh_html_chat,
                     run_token=args.website_run_token,
                     quality_request=quality_request,
                     stop_after=args.website_stop_after,

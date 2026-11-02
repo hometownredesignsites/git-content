@@ -46,14 +46,16 @@ class SavedResponsePipelineTest(unittest.TestCase):
 
         self.assertTrue(response_generation_active(Page()))
 
-    def test_generation_contract_has_three_css_parts_then_one_html_document(self):
+    def test_generation_contract_has_three_css_parts_then_four_html_fragments(self):
         css = _part_prompt("css", 1, RUN_TOKEN, "fixture design brief", None)
         css3 = _part_prompt("css", 3, RUN_TOKEN, "fixture design brief", ("css", 2))
         html = _part_prompt("html", 1, RUN_TOKEN, "fixture design brief", ("css", 3))
         instructions = (ROOT / "chatgpt_automation" / "website_request.txt").read_text(encoding="utf-8")
         self.assertIn("CSS PART 1 OF 3", css)
         self.assertIn("CSS PART 3 OF 3", css3)
-        self.assertIn("HTML PART 1 OF 1", html)
+        html4 = _part_prompt("html", 4, RUN_TOKEN, "fixture design brief", ("html", 3))
+        self.assertIn("HTML PART 1 OF 4", html)
+        self.assertIn("HTML PART 4 OF 4", html4)
         for text in (css, css3, html):
             self.assertIn("exactly one fenced code block", text)
         self.assertIn("three ordered CSS parts", instructions)
@@ -63,10 +65,11 @@ class SavedResponsePipelineTest(unittest.TestCase):
         self.assertNotIn("SOURCE FACTS AND DESIGN BRIEF", css3)
         self.assertIn("Do not produce a source audit", css)
         self.assertIn("do not include research notes, a source audit", instructions)
-        self.assertIn("All three CSS parts were accepted", html)
+        self.assertIn("three CSS parts", html)
         self.assertNotIn("final acknowledgment", html.lower())
         self.assertNotIn("eight labeled parts", instructions)
-        self.assertIn("text` fence", html)
+        self.assertIn("literal source text inside a `text` code fence", html)
+        self.assertIn("Do not use an HTML/rendered preview", html)
 
     def test_html_preview_fence_is_rejected(self):
         with tempfile.TemporaryDirectory(prefix="chatgpt-html-fence-") as temporary:
@@ -75,8 +78,8 @@ class SavedResponsePipelineTest(unittest.TestCase):
             run.mkdir()
             response = root / "response.txt"
             response.write_text(
-                "RUN TOKEN: fixture-run-token\nHTML PART 1 OF 1\n"
-                "```html\n<!-- HTML PART 1 OF 1 -->\n<p>complete document</p>\n```\n",
+                "RUN TOKEN: fixture-run-token\nHTML PART 1 OF 4\n"
+                "```html\n<!-- HTML PART 1 OF 4 -->\n<p>partial document</p>\n```\n",
                 encoding="utf-8",
             )
             result = subprocess.run([
@@ -106,7 +109,7 @@ class SavedResponsePipelineTest(unittest.TestCase):
                 }],
             }, indent=2), encoding="utf-8")
 
-            parts = [("css", number) for number in range(1, 4)] + [("html", 1)]
+            parts = [("css", number) for number in range(1, 4)] + [("html", number) for number in range(1, 5)]
             for kind, number in parts:
                 response = FIXTURES / f"{kind}-{number}.txt"
                 self.assertTrue(response.is_file(), f"missing saved fixture {response.name}")
@@ -139,13 +142,13 @@ class SavedResponsePipelineTest(unittest.TestCase):
             ], check=True, capture_output=True, text=True, encoding="utf-8")
             report = json.loads(result.stdout)
             self.assertTrue(report["automated_success"], report["blocking_failures"])
-            self.assertEqual(len(json.loads((run / "chunks" / "capture_manifest.json").read_text(encoding="utf-8"))["parts"]), 4)
+            self.assertEqual(len(json.loads((run / "chunks" / "capture_manifest.json").read_text(encoding="utf-8"))["parts"]), 7)
             self.assertEqual(css_file.read_text(encoding="utf-8").count("CSS PART "), 3)
             self.assertTrue(inlined_file.is_file())
             self.assertIn("<style>", inlined_file.read_text(encoding="utf-8"))
             self.assertNotIn('href="styles.css"', inlined_file.read_text(encoding="utf-8"))
 
-    def test_incremental_ladder_keeps_one_checkpoint_and_conversation(self):
+    def test_incremental_ladder_keeps_checkpoint_and_starts_html_chat(self):
         with tempfile.TemporaryDirectory(prefix="chatgpt-ladder-") as temporary:
             run = Path(temporary) / "candidate"
             brief = "Bounded synthetic source facts and design brief."
@@ -166,6 +169,7 @@ class SavedResponsePipelineTest(unittest.TestCase):
                 "source_facts_and_design_brief": brief,
                 "exchange": exchange,
                 "conversation_url": lambda: "https://chatgpt.com/uc/fixture-conversation",
+                "start_html_conversation": lambda: True,
                 "run_token": RUN_TOKEN,
                 "context_mode": "minimal",
             }
@@ -177,16 +181,16 @@ class SavedResponsePipelineTest(unittest.TestCase):
             self.assertEqual(css_done["accepted_parts"], ["css-1", "css-2", "css-3"])
             self.assertEqual(css_done["staged_until"], "css-3")
 
-            html_done = run_website_chunks(**common, stop_after="html-1")
-            self.assertEqual(html_done["accepted_parts"], ["css-1", "css-2", "css-3", "html-1"])
-            self.assertEqual(calls, [("css", 1), ("css", 2), ("css", 3), ("html", 1)])
+            html_done = run_website_chunks(**common, stop_after="html-4")
+            self.assertEqual(html_done["accepted_parts"], ["css-1", "css-2", "css-3", "html-1", "html-2", "html-3", "html-4"])
+            self.assertEqual(calls, [("css", 1), ("css", 2), ("css", 3), ("html", 1), ("html", 2), ("html", 3), ("html", 4)])
             self.assertEqual(html_done["conversation_url"], "https://chatgpt.com/uc/fixture-conversation")
             self.assertFalse(html_done.get("complete", False))
             transcript = [json.loads(line) for line in (run / "conversation_transcript.jsonl").read_text(encoding="utf-8").splitlines()]
             self.assertIn("DIAGNOSTIC CONTEXT", transcript[0]["text"])
 
             with self.assertRaisesRegex(RuntimeError, "context mode differs"):
-                run_website_chunks(**{**common, "context_mode": "source"}, stop_after="html-1")
+                run_website_chunks(**{**common, "context_mode": "source"}, stop_after="html-4")
 
     def test_minimal_context_does_not_require_or_include_csv_business_facts(self):
         with tempfile.TemporaryDirectory(prefix="chatgpt-minimal-context-") as temporary:

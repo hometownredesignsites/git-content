@@ -8,8 +8,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-PART_TOTALS = {"css": 3, "html": 1}
-EXPECTED = [("css", number) for number in range(1, PART_TOTALS["css"] + 1)] + [("html", 1)]
+PART_TOTALS = {"css": 3, "html": 4}
+EXPECTED = [("css", number) for number in range(1, PART_TOTALS["css"] + 1)] + [("html", number) for number in range(1, PART_TOTALS["html"] + 1)]
 FENCE = re.compile(r"```([A-Za-z0-9_-]+)[ \t]*\r?\n(.*?)\r?\n```", re.DOTALL)
 
 
@@ -47,7 +47,7 @@ def main():
         fail(f"expected a {expected_language} fence, found {language!r}")
     code = code.strip("\r\n") + "\n"
     expected_marker = (f"/* CSS PART {args.part} OF {total} */" if args.kind == "css"
-                       else "<!-- HTML PART 1 OF 1 -->")
+                       else f"<!-- HTML PART {args.part} OF {total} -->")
     first_nonblank = next((line.strip() for line in code.splitlines() if line.strip()), "")
     if first_nonblank != expected_marker:
         fail("in-code part marker is missing or mismatched; likely stale or mislabeled response")
