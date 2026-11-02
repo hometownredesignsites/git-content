@@ -1,0 +1,16 @@
+{
+  "stage_name": "website",
+  "expect_json": false,
+  "parsed_json": false,
+  "response_mode": "text",
+  "response_chars": 282,
+  "attempt": 1,
+  "retry_count": 0,
+  "thread_reused": true,
+  "new_chat_started": false,
+  "website_chunks": true,
+  "accepted_parts": 7,
+  "website_stage": null,
+  "context_mode": "source",
+  "final_url": "https://chatgpt.com/uc/6ae7ffc5-ec04-83ea-a3df-ab34a3c82e83"
+}
