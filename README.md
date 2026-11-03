@@ -1,6 +1,6 @@
 # Git Content
 
-Git Content holds shared prompts and tooling for rebuilding business websites with Duck.ai. The current branch contents contain no target CSV or generated customer-site output; private input data and current generated results live in [`git-content-private`](https://github.com/hometownredesignsites/git-content-private). Earlier public CSVs and generated run files remain accessible in Git history because history has not been rewritten. Earlier public Actions run records may also remain visible.
+Git Content holds shared prompts and tooling for rebuilding business websites with Duck.ai and ChatGPT. This branch contains no live target rows or newly generated customer-site output; private input data and current results live in [`git-content-private`](https://github.com/hometownredesignsites/git-content-private). The public history cleanup removed legacy Duck.ai run files, Duck.ai source URL snapshots, and Duck.ai queue markers from all public branch histories. Legacy ChatGPT run files remain reachable in the public `chatgpt` history, and public Actions run records, GitHub caches, and fork copies are outside the cleanup.
 
 ## Branches
 
