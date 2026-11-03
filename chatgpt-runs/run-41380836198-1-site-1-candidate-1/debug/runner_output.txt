@@ -1,1 +1,0 @@
-{"website_chunks_complete": true, "accepted_parts": 7, "website_stage": null, "context_mode": "source", "conversation_url": "https://chatgpt.com/uc/6ae7ffc5-ec04-83ea-a3df-ab34a3c82e83", "run_folder": "/__w/git-content/git-content/chatgpt-runs/run-41380836198-1-site-1-candidate-1"}

@@ -1,6 +1,0 @@
-{
-  "exit_code": 0,
-  "duration_seconds": 0.034,
-  "stdout": "{\"assembled\": true, \"chat_id\": \"site-1-candidate-3\", \"css_parts\": 2, \"html_parts\": 2, \"index_html_bytes\": 21705, \"styles_css_bytes\": 26111}\n",
-  "stderr": ""
-}

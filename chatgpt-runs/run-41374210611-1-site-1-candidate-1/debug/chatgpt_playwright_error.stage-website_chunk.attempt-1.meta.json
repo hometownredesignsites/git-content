@@ -1,6 +1,0 @@
-{
-  "stage_name": "website_chunk",
-  "attempt": 1,
-  "failure_reason": "Could not find composer for stage execution.",
-  "captured_at_epoch": 1793585218.9062755
-}
