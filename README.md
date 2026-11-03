@@ -2,6 +2,14 @@
 
 The CSV-driven ChatGPT website redesign workflow, chunk protocol, checkpoints, and quality gates are documented in [`chatgpt_automation/README.md`](chatgpt_automation/README.md).
 
+## Website-generation workflow and privacy boundary
+
+The `chatgpt` branch contains the ChatGPT website worker and its workflow. The workflow starts only when the private coordinator pushes an opaque marker under `.private-queue/start/`; ordinary code pushes and manual URL dispatches do not start a production run. The coordinator keeps target rows and job records on `git-content-private/main`, supplies the active row through temporary Actions secrets, and removes those secrets after the run. The public worker uses an anonymous ChatGPT browser session under Xvfb and writes candidate evidence and HTML to `git-content-private/chatgpt`.
+
+Each target is processed as complete candidates, each generated in a fresh guest conversation. The worker seeks three automated passes within ten candidate attempts. The private results branch stores the candidate evidence and the inlined HTML; the public Action exposes run status, timing, and sanitized progress only.
+
+The current branch-tip `chatgpt_automation/source_urls.csv` is header-only. The public history cleanup removed legacy Duck.ai run files, Duck.ai source URL snapshots, and Duck.ai queue markers from all public branches. It did not remove legacy ChatGPT run files from the public ChatGPT history, nor does a Git history rewrite remove old Actions logs, GitHub caches, or copies in forks. Treat old ChatGPT runs in public history as public; migrated copies in the private repository do not revoke those copies.
+
 This is a V1 prototype for the architecture you described:
 
 1. Client calls an Ollama-like `/api/chat` endpoint.
