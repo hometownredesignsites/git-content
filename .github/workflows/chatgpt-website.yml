@@ -68,9 +68,19 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: hometownredesignsites/git-content-private
-          ref: main
+          ref: chatgpt
           token: ${{ secrets.PRIVATE_RESULTS_TOKEN }}
           path: private-source
+          fetch-depth: 1
+
+      - name: Check out legacy private input records
+        if: steps.validate_marker.outcome == 'success'
+        uses: actions/checkout@v5
+        with:
+          repository: hometownredesignsites/git-content-private
+          ref: main
+          token: ${{ secrets.PRIVATE_RESULTS_TOKEN }}
+          path: private-source-main
           fetch-depth: 1
 
       - name: Check out private ChatGPT results
@@ -98,6 +108,10 @@ jobs:
 
           job_id = os.environ.get("JOB_ID", "")
           job_path = Path("private-source/private_automation/queue/jobs") / f"{job_id}.json"
+          source_root = Path("private-source")
+          if not job_path.is_file():
+              source_root = Path("private-source-main")
+              job_path = source_root / "private_automation/queue/jobs" / f"{job_id}.json"
           job = json.loads(job_path.read_text(encoding="utf-8"))
           if job.get("job_id") != job_id or job.get("provider") != "chatgpt":
               raise SystemExit("The private job record is invalid for this provider.")
@@ -129,6 +143,7 @@ jobs:
               "LOCATION": normalized.get("LOCATION", ""),
           }
           aliases.update({f"CSV_FIELD_{key}": value for key, value in normalized.items()})
+          aliases["PRIVATE_SOURCE_ROOT"] = str(source_root)
           continuation = job.get("continuation", {})
           if not isinstance(continuation, dict):
               continuation = {}
@@ -333,11 +348,12 @@ jobs:
           PRIOR_JOB_ID: ${{ env.PRIOR_JOB_ID }}
           PRIOR_RUN_ID: ${{ env.PRIOR_RUN_ID }}
           TARGET_BRANCH: chatgpt
+          PRIVATE_SOURCE_ROOT: ${{ env.PRIVATE_SOURCE_ROOT }}
         run: |
           set -euo pipefail
           result_slug="$(python - "$JOB_ID" <<'PY'
-          import json, pathlib, re, sys
-          path = pathlib.Path("private-source/private_automation/queue/jobs") / f"{sys.argv[1]}.json"
+          import json, os, pathlib, re, sys
+          path = pathlib.Path(os.environ.get("PRIVATE_SOURCE_ROOT", "private-source")) / "private_automation/queue/jobs" / f"{sys.argv[1]}.json"
           job = json.loads(path.read_text(encoding="utf-8"))
           slug = job.get("result_slug", "")
           if job.get("provider") != "chatgpt" or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", slug):
@@ -346,7 +362,7 @@ jobs:
           PY
           )"
           mkdir -p "private-results/private_automation/queue/jobs"
-          cp "private-source/private_automation/queue/jobs/${JOB_ID}.json" "private-results/private_automation/queue/jobs/${JOB_ID}.json"
+          cp "$PRIVATE_SOURCE_ROOT/private_automation/queue/jobs/${JOB_ID}.json" "private-results/private_automation/queue/jobs/${JOB_ID}.json"
           result_dir="private-results/results/${result_slug}/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           mkdir -p "$result_dir/candidates"
           shopt -s nullglob
