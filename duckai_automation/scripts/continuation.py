@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 from pathlib import Path
 from typing import Any
@@ -33,12 +34,15 @@ def read_json(path: Path) -> dict[str, Any] | None:
 
 
 def candidate_indices(prior_attempts: int, max_attempts: int = MAX_ATTEMPTS_PER_BATCH) -> list[int]:
-    """Return this batch's global candidate numbers, enforcing the 20-attempt cap."""
+    """Return one complete batch of global candidate numbers, enforcing the 20-attempt cap."""
     if not 0 <= prior_attempts <= MAX_ATTEMPTS_PER_BATCH:
         raise ValueError("prior_attempts must be between zero and ten")
     if not 1 <= max_attempts <= MAX_ATTEMPTS_PER_BATCH:
         raise ValueError("max_attempts must be between one and ten")
-    return list(range(prior_attempts + 1, prior_attempts + max_attempts + 1))
+    last_index = prior_attempts + max_attempts
+    if last_index > 2 * MAX_ATTEMPTS_PER_BATCH:
+        raise ValueError("candidate indices cannot exceed the 20-attempt total cap")
+    return list(range(prior_attempts + 1, last_index + 1))
 
 
 def access_gate_evidence(candidates_dir: Path) -> list[str]:
@@ -72,6 +76,23 @@ def continuation_is_eligible(
         and attempts == MAX_ATTEMPTS_PER_BATCH
         and not access_gate_evidence(candidates_dir)
     )
+
+
+def observed_candidate_counts(candidates_dir: Path) -> tuple[int, int]:
+    """Count passes and generated attempt folders from persisted candidate evidence."""
+    successful = 0
+    attempts = 0
+    if not candidates_dir.is_dir():
+        return successful, attempts
+    for candidate_dir in candidates_dir.glob("run-*-site-1-candidate-*"):
+        if not candidate_dir.is_dir():
+            continue
+        if re.search(r"-candidate-\d+$", candidate_dir.name):
+            attempts += 1
+        notes = read_json(candidate_dir / "run_notes.json")
+        if notes and notes.get("automated_success") is True:
+            successful += 1
+    return successful, attempts
 
 
 def find_parent_run(results_root: Path, parent_job_id: str, parent_run_id: int) -> tuple[Path, dict[str, Any]]:
@@ -136,7 +157,12 @@ def write_batch_status(
     candidates_dir: Path,
     continued_from: str = "",
     parent_run_id: str = "",
+    derive_candidate_counts: bool = False,
+    prior_attempts: int = 0,
 ) -> dict[str, Any]:
+    if derive_candidate_counts:
+        successful_candidates, new_attempts = observed_candidate_counts(candidates_dir)
+        attempts = prior_attempts + new_attempts
     if successful_candidates < 0 or not 0 <= new_attempts <= MAX_ATTEMPTS_PER_BATCH:
         raise ValueError("Candidate and new-attempt counts are outside their valid bounds")
     if not new_attempts <= attempts <= 2 * MAX_ATTEMPTS_PER_BATCH:
@@ -185,6 +211,8 @@ def main() -> None:
     status.add_argument("--public-workflow-run", type=int, required=True)
     status.add_argument("--continued-from", default="")
     status.add_argument("--parent-run-id", default="")
+    status.add_argument("--derive-candidate-counts", action="store_true")
+    status.add_argument("--prior-attempts", type=int, default=0)
     args = parser.parse_args()
 
     if args.command == "indices":
@@ -210,6 +238,8 @@ def main() -> None:
             args.candidates_dir,
             args.continued_from,
             args.parent_run_id,
+            args.derive_candidate_counts,
+            args.prior_attempts,
         )
 
 

@@ -9,6 +9,7 @@ from duckai_automation.scripts.continuation import (
     candidate_indices,
     continuation_is_eligible,
     inherit_passing_candidates,
+    observed_candidate_counts,
     write_batch_status,
 )
 
@@ -48,12 +49,18 @@ class ContinuationPolicyTests(unittest.TestCase):
         self.assertFalse(continuation_is_eligible(1, 10, self.candidates))
 
     def test_indices_are_global_and_enforce_ten_attempt_batches(self) -> None:
-        self.assertEqual(candidate_indices(0), list(range(1, 11)))
-        self.assertEqual(candidate_indices(10), list(range(11, 21)))
+        first_batch = candidate_indices(0)
+        second_batch = candidate_indices(10)
+        self.assertEqual(first_batch, list(range(1, 11)))
+        self.assertEqual(second_batch, list(range(11, 21)))
+        self.assertEqual([first_batch[offset] for offset in range(10)], list(range(1, 11)))
+        self.assertEqual([second_batch[offset] for offset in range(10)], list(range(11, 21)))
         with self.assertRaises(ValueError):
             candidate_indices(11)
         with self.assertRaises(ValueError):
             candidate_indices(0, 11)
+        with self.assertRaises(ValueError):
+            candidate_indices(10, 11)
 
     def _parent_evidence(self, passes: int = 1) -> tuple[Path, Path]:
         parent = self.root / "results" / "site" / "run-123-1"
@@ -115,6 +122,24 @@ class ContinuationPolicyTests(unittest.TestCase):
         self.assertEqual(child["continued_from"], {"job_id": "job", "run_id": "456"})
         with self.assertRaises(ValueError):
             write_batch_status(self.root / "bad.json", "bad", 1, 21, 10, 1, self.candidates)
+
+    def test_persisted_candidate_folders_recover_counts_after_interrupted_step(self) -> None:
+        for name, passed in (("run-777-1-site-1-candidate-11", True),
+                             ("run-777-1-site-1-candidate-12", False),
+                             ("run-777-1-site-1-candidate-inherited-1", True)):
+            folder = self.candidates / name
+            folder.mkdir()
+            (folder / "run_notes.json").write_text(
+                json.dumps({"automated_success": passed}), encoding="utf-8"
+            )
+        self.assertEqual(observed_candidate_counts(self.candidates), (2, 2))
+        status = write_batch_status(
+            self.root / "recovered-status.json", "job", 0, 0, 0, 777,
+            self.candidates, derive_candidate_counts=True, prior_attempts=10
+        )
+        self.assertEqual(status["successful_candidates"], 2)
+        self.assertEqual(status["attempts"], 12)
+        self.assertEqual(status["new_attempts"], 2)
 
 
 if __name__ == "__main__":

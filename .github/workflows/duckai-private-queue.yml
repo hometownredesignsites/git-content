@@ -164,11 +164,13 @@ jobs:
         run: |
           set -euo pipefail
           successful=0
-          attempt="${PRIOR_ATTEMPTS:-0}"
+          prior_attempts="${PRIOR_ATTEMPTS:-0}"
+          attempt="$prior_attempts"
           new_attempts=0
           target=3
           max_attempts=10
           candidate_dirs=()
+          mapfile -t candidate_indices < <(python duckai_automation/scripts/continuation.py indices --prior-attempts "$prior_attempts" --max-attempts "$max_attempts")
           if [[ -n "${PRIOR_JOB_ID:-}" ]]; then
             python duckai_automation/scripts/continuation.py inherit \
               --results-root private-results/results \
@@ -181,7 +183,6 @@ jobs:
             candidate_dirs+=("${inherited_dirs[@]}")
           fi
           while [[ "$successful" -lt "$target" && "$new_attempts" -lt "$max_attempts" ]]; do
-            mapfile -t candidate_indices < <(python duckai_automation/scripts/continuation.py indices --prior-attempts "$attempt" --max-attempts "$max_attempts")
             attempt="${candidate_indices[$new_attempts]}"
             new_attempts=$((new_attempts + 1))
             run_dir="duckai-runs/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-site-1-candidate-${attempt}"
@@ -228,6 +229,7 @@ jobs:
           NEW_ATTEMPT_COUNT: ${{ steps.generate.outputs.new_attempt_count }}
           PRIOR_JOB_ID: ${{ env.PRIOR_JOB_ID }}
           PRIOR_RUN_ID: ${{ env.PRIOR_RUN_ID }}
+          PRIOR_ATTEMPTS: ${{ env.PRIOR_ATTEMPTS }}
         run: |
           set -euo pipefail
           result_slug="$(python - "$JOB_ID" <<'PY'
@@ -260,7 +262,8 @@ jobs:
             --job-id "$JOB_ID" --successful "${SUCCESSFUL_COUNT:-0}" \
             --attempts "${ATTEMPT_COUNT:-0}" --new-attempts "${NEW_ATTEMPT_COUNT:-0}" \
             --public-workflow-run "$GITHUB_RUN_ID" \
-            --continued-from "$PRIOR_JOB_ID" --parent-run-id "$PRIOR_RUN_ID"
+            --continued-from "$PRIOR_JOB_ID" --parent-run-id "$PRIOR_RUN_ID" \
+            --derive-candidate-counts --prior-attempts "${PRIOR_ATTEMPTS:-0}"
           python private-results/private_automation/scripts/build_results_index.py
           cd private-results
           git config --global --add safe.directory "$GITHUB_WORKSPACE/private-results"
