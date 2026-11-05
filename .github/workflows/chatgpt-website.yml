@@ -132,11 +132,15 @@ jobs:
           continuation = job.get("continuation", {})
           if not isinstance(continuation, dict):
               continuation = {}
+          prior_passes = int(continuation.get("successful_candidates", 0) or 0)
+          prior_attempts = int(continuation.get("attempts", 0) or 0)
+          if continuation.get("parent_job_id") and (prior_attempts != 10 or not 0 <= prior_passes < 3):
+              raise SystemExit("The ChatGPT continuation record is outside the ten-attempt bounds.")
           aliases.update({
               "PRIOR_JOB_ID": str(continuation.get("parent_job_id", "")),
               "PRIOR_RUN_ID": str(continuation.get("parent_run_id", "")),
-              "PRIOR_SUCCESSFUL_CANDIDATES": str(int(continuation.get("successful_candidates", 0) or 0)),
-              "PRIOR_ATTEMPTS": str(int(continuation.get("attempts", 0) or 0)),
+              "PRIOR_SUCCESSFUL_CANDIDATES": str(prior_passes),
+              "PRIOR_ATTEMPTS": str(prior_attempts),
           })
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as handle:
               for name, value in aliases.items():
