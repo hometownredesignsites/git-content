@@ -69,9 +69,19 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: hometownredesignsites/git-content-private
-          ref: main
+          ref: duckai
           token: ${{ secrets.PRIVATE_RESULTS_TOKEN }}
           path: private-source
+          fetch-depth: 1
+
+      - name: Check out legacy private input records
+        if: steps.validate_marker.outcome == 'success'
+        uses: actions/checkout@v4
+        with:
+          repository: hometownredesignsites/git-content-private
+          ref: main
+          token: ${{ secrets.PRIVATE_RESULTS_TOKEN }}
+          path: private-source-main
           fetch-depth: 1
 
       - name: Load and mask private target fields
@@ -81,6 +91,7 @@ jobs:
           set -euo pipefail
           python - <<'PY'
           import json, os, re, uuid
+          from pathlib import Path
           from urllib.parse import urlparse
           raw = os.environ.get("PRIVATE_TARGET_ROW_JSON", "")
           row = json.loads(raw)
@@ -110,7 +121,11 @@ jobs:
               "INDUSTRY_CATEGORY": normalized["CATEGORY"],
               "LOCATION": normalized.get("LOCATION", ""),
           }
-          job_path = __import__("pathlib").Path("private-source/private_automation/queue/jobs") / f"{os.environ.get('PRIVATE_TARGET_JOB_ID', '')}.json"
+          job_path = Path("private-source/private_automation/queue/jobs") / f"{os.environ.get('PRIVATE_TARGET_JOB_ID', '')}.json"
+          source_root = Path("private-source")
+          if not job_path.is_file():
+              source_root = Path("private-source-main")
+              job_path = source_root / "private_automation/queue/jobs" / f"{os.environ.get('PRIVATE_TARGET_JOB_ID', '')}.json"
           job = json.loads(job_path.read_text(encoding="utf-8"))
           if job.get("job_id") != os.environ.get("PRIVATE_TARGET_JOB_ID") or job.get("provider") != "duckai" or job.get("row") != row:
               raise SystemExit("The private Duck.ai job record does not match the active target.")
@@ -128,6 +143,7 @@ jobs:
               "PRIOR_ATTEMPTS": str(prior_attempts),
           })
           aliases.update({f"CSV_FIELD_{key}": value for key, value in normalized.items()})
+          aliases["PRIVATE_SOURCE_ROOT"] = str(source_root)
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as handle:
               for name, value in aliases.items():
                   delimiter = "GIT_CONTENT_" + uuid.uuid4().hex
@@ -230,11 +246,12 @@ jobs:
           PRIOR_JOB_ID: ${{ env.PRIOR_JOB_ID }}
           PRIOR_RUN_ID: ${{ env.PRIOR_RUN_ID }}
           PRIOR_ATTEMPTS: ${{ env.PRIOR_ATTEMPTS }}
+          PRIVATE_SOURCE_ROOT: ${{ env.PRIVATE_SOURCE_ROOT }}
         run: |
           set -euo pipefail
           result_slug="$(python - "$JOB_ID" <<'PY'
-          import json, pathlib, re, sys
-          job_path = pathlib.Path("private-source/private_automation/queue/jobs") / f"{sys.argv[1]}.json"
+          import json, os, pathlib, re, sys
+          job_path = pathlib.Path(os.environ.get("PRIVATE_SOURCE_ROOT", "private-source")) / "private_automation/queue/jobs" / f"{sys.argv[1]}.json"
           job = json.loads(job_path.read_text(encoding="utf-8"))
           slug = job.get("result_slug", "")
           if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", slug):
@@ -243,7 +260,7 @@ jobs:
           PY
           )"
           mkdir -p "private-results/private_automation/queue/jobs"
-          cp "private-source/private_automation/queue/jobs/${JOB_ID}.json" "private-results/private_automation/queue/jobs/${JOB_ID}.json"
+          cp "$PRIVATE_SOURCE_ROOT/private_automation/queue/jobs/${JOB_ID}.json" "private-results/private_automation/queue/jobs/${JOB_ID}.json"
           result_dir="private-results/results/${result_slug}/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           mkdir -p "$result_dir/candidates"
           shopt -s nullglob
