@@ -144,6 +144,19 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r .github/workflows/requirements-playwright.txt
 
+      - name: Validate Duck.ai retry policy
+        run: python -m unittest discover -s duckai_automation/tests -v
+
+      - name: Check out Duck.ai results branch
+        if: steps.validate_marker.outcome == 'success'
+        uses: actions/checkout@v4
+        with:
+          repository: hometownredesignsites/git-content-private
+          ref: duckai
+          token: ${{ secrets.PRIVATE_RESULTS_TOKEN }}
+          path: private-results
+          fetch-depth: 0
+
       - name: Generate candidate sites
         id: generate
         env:
@@ -157,40 +170,19 @@ jobs:
           max_attempts=10
           candidate_dirs=()
           if [[ -n "${PRIOR_JOB_ID:-}" ]]; then
-            python - "${PRIOR_JOB_ID}" "${PRIOR_RUN_ID:-}" "${PRIOR_SUCCESSFUL_CANDIDATES:-0}" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" <<'PY'
-          import json, pathlib, shutil, sys
-          parent_job_id, parent_run_id, expected, run_id, run_attempt = sys.argv[1:]
-          expected = int(expected)
-          matches = []
-          for status_path in pathlib.Path("private-results/results").glob("*/run-*/status.json"):
-              try:
-                  status = json.loads(status_path.read_text(encoding="utf-8"))
-              except (OSError, json.JSONDecodeError):
-                  continue
-              if status.get("job_id") == parent_job_id and str(status.get("public_workflow_run")) == parent_run_id:
-                  matches.append((status_path.parent, status))
-          if len(matches) != 1:
-              raise SystemExit("The parent Duck.ai run evidence could not be located uniquely.")
-          parent_dir, parent_status = matches[0]
-          copied = 0
-          destination = pathlib.Path(f"duckai-runs/run-{run_id}-{run_attempt}-site-1-candidate-inherited")
-          for candidate in sorted((parent_dir / "candidates").glob("run-*-site-1-candidate-*")):
-              try:
-                  notes = json.loads((candidate / "run_notes.json").read_text(encoding="utf-8"))
-              except (OSError, json.JSONDecodeError):
-                  continue
-              if notes.get("automated_success") is True:
-                  shutil.copytree(candidate, destination.with_name(destination.name + f"-{copied + 1}"))
-                  copied += 1
-          if copied != expected or copied != int(parent_status.get("successful_candidates", -1)):
-              raise SystemExit("The inherited Duck.ai passing-candidate count does not match the saved parent status.")
-          PY
+            python duckai_automation/scripts/continuation.py inherit \
+              --results-root private-results/results \
+              --destination-root duckai-runs \
+              --parent-job-id "$PRIOR_JOB_ID" --parent-run-id "${PRIOR_RUN_ID:-0}" \
+              --expected-passes "${PRIOR_SUCCESSFUL_CANDIDATES:-0}" \
+              --current-run-id "$GITHUB_RUN_ID" --current-run-attempt "$GITHUB_RUN_ATTEMPT"
             successful="${PRIOR_SUCCESSFUL_CANDIDATES:-0}"
             mapfile -t inherited_dirs < <(find "duckai-runs/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-site-1-candidate-inherited"* -maxdepth 0 -type d 2>/dev/null | sort)
             candidate_dirs+=("${inherited_dirs[@]}")
           fi
           while [[ "$successful" -lt "$target" && "$new_attempts" -lt "$max_attempts" ]]; do
-            attempt=$((attempt + 1))
+            mapfile -t candidate_indices < <(python duckai_automation/scripts/continuation.py indices --prior-attempts "$attempt" --max-attempts "$max_attempts")
+            attempt="${candidate_indices[$new_attempts]}"
             new_attempts=$((new_attempts + 1))
             run_dir="duckai-runs/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-site-1-candidate-${attempt}"
             candidate_dirs+=("$run_dir")
@@ -226,16 +218,6 @@ jobs:
           if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
             printf '## Private Duck.ai candidate batch\n\n- Automated passes: **%s/%s**\n- Attempts: **%s** total, **%s** in this run\n- Candidate files are stored in the private repository.\n' "$successful" "$target" "$attempt" "$new_attempts" >> "$GITHUB_STEP_SUMMARY"
           fi
-
-      - name: Check out Duck.ai results branch
-        if: always() && steps.validate_marker.outcome == 'success'
-        uses: actions/checkout@v4
-        with:
-          repository: hometownredesignsites/git-content-private
-          ref: duckai
-          token: ${{ secrets.PRIVATE_RESULTS_TOKEN }}
-          path: private-results
-          fetch-depth: 0
 
       - name: Commit candidate evidence to the private repository
         if: always() && steps.validate_marker.outcome == 'success'
@@ -273,38 +255,12 @@ jobs:
           if [[ -f "duckai-runs/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-site-1-batch-summary.json" ]]; then
             cp "duckai-runs/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-site-1-batch-summary.json" "$result_dir/batch-summary.json"
           fi
-          python - "$result_dir/status.json" "$JOB_ID" "$status" "${SUCCESSFUL_COUNT:-0}" "${ATTEMPT_COUNT:-0}" "${NEW_ATTEMPT_COUNT:-0}" "$PRIOR_JOB_ID" "$PRIOR_RUN_ID" <<'PY'
-          import json, os, pathlib, sys
-          path = pathlib.Path(sys.argv[1])
-          path.parent.mkdir(parents=True, exist_ok=True)
-          blocked_text = ("verify you are human", "verify that you are human", "captcha", "sign in to continue", "usage limit reached", "temporarily unavailable", "guest chat is gated or unavailable", "could not confirm it accessed the source site")
-          blocked = False
-          for failure_path in path.parent.joinpath("candidates").rglob("failure.txt"):
-              try:
-                  content = failure_path.read_text(encoding="utf-8", errors="replace").lower()
-              except OSError:
-                  continue
-              blocked = blocked or any(marker in content for marker in blocked_text)
-          for assessment_path in path.parent.joinpath("candidates").rglob("source_assessment.json"):
-              try:
-                  assessment = json.loads(assessment_path.read_text(encoding="utf-8"))
-              except (OSError, json.JSONDecodeError):
-                  continue
-              blocked = blocked or assessment.get("access_status") != "accessed"
-          successful = int(sys.argv[4])
-          attempts = int(sys.argv[5])
-          path.write_text(json.dumps({
-              "job_id": sys.argv[2],
-              "status": sys.argv[3],
-              "successful_candidates": successful,
-              "attempts": attempts,
-              "new_attempts": int(sys.argv[6]),
-              "continuation_eligible": successful < 3 and attempts == 10 and not blocked and not sys.argv[7],
-              "access_gate_detected": blocked,
-              "continued_from": {"job_id": sys.argv[7], "run_id": sys.argv[8]} if sys.argv[7] else None,
-              "public_workflow_run": int(os.environ["GITHUB_RUN_ID"]),
-          }, indent=2) + "\n", encoding="utf-8")
-          PY
+          python duckai_automation/scripts/continuation.py status \
+            --output "$result_dir/status.json" --candidates-dir "$result_dir/candidates" \
+            --job-id "$JOB_ID" --successful "${SUCCESSFUL_COUNT:-0}" \
+            --attempts "${ATTEMPT_COUNT:-0}" --new-attempts "${NEW_ATTEMPT_COUNT:-0}" \
+            --public-workflow-run "$GITHUB_RUN_ID" \
+            --continued-from "$PRIOR_JOB_ID" --parent-run-id "$PRIOR_RUN_ID"
           python private-results/private_automation/scripts/build_results_index.py
           cd private-results
           git config --global --add safe.directory "$GITHUB_WORKSPACE/private-results"
