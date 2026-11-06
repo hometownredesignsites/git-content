@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 from chatgpt_automation.scripts.website_chunks import WebsiteTurnError, _part_prompt, run_website_chunks
 from chatgpt_automation.scripts.normalize_cta_arrows import normalize
-from chatgpt_automation.scripts.prepare_candidate_context import _fallback_pool, compact_facts
+from chatgpt_automation.scripts.prepare_candidate_context import _fallback_pool, _is_source_image_host_allowed, compact_facts
 from chatgpt_file_playwright_anonymous_ci import inspect_chatgpt_page_state
 from playwright_runner.browser_session import response_generation_active
 from playwright_runner.recovery import start_new_chat_from_login_gate
@@ -38,7 +38,13 @@ class SavedResponsePipelineTest(unittest.TestCase):
             "pages_reviewed": [
                 {"url": "https://fixture.invalid/", "title": "Fence Company", "headings": [], "text": "", "forms": []},
             ],
-            "source_assets": [{"url": "https://fixture.invalid/fence.jpg", "alt": "wood privacy fence"}],
+            "source_assets": [
+                {"url": "https://static.wixstatic.com/media/fenceguylogo.png", "alt": "fenceguylogo.png"},
+                {"url": "https://static.wixstatic.com/media/facebook.png", "alt": "facebook"},
+                {"url": "https://fixture.invalid/fence.jpg", "alt": "wood privacy fence"},
+                {"url": "https://static.wixstatic.com/media/fence-photo.jpg", "alt": "fence project"},
+                {"url": "https://unrelated.example/fence-photo.jpg", "alt": "unrelated image"},
+            ],
             "navigation_links": [],
         }
 
@@ -50,6 +56,19 @@ class SavedResponsePipelineTest(unittest.TestCase):
 
         self.assertEqual(compact["visual_category_hint_unverified"], "Fence Companies")
         self.assertEqual(compact["project_images"][0]["source"], "verified_source")
+        self.assertIn(
+            "https://static.wixstatic.com/media/fence-photo.jpg",
+            [image["url"] for image in compact["project_images"] if image["source"] == "verified_source"],
+        )
+        self.assertNotIn(
+            "https://static.wixstatic.com/media/fenceguylogo.png",
+            [image["url"] for image in compact["project_images"]],
+        )
+        self.assertNotIn(
+            "https://static.wixstatic.com/media/facebook.png",
+            [image["url"] for image in compact["project_images"]],
+        )
+        self.assertFalse(_is_source_image_host_allowed("https://unrelated.example/fence-photo.jpg", "fixture.invalid"))
         self.assertTrue(compact["category_fallback_hero"])
         hero = next(image for image in compact["project_images"] if image["url"] == compact["category_fallback_hero"])
         self.assertEqual(hero["alt"], "wooden backyard fence with a gate")

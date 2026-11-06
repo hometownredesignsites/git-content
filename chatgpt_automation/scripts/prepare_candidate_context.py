@@ -18,6 +18,16 @@ MAX_CONTACT_FIELDS = 16
 MAX_CONTENT_PAGES = 2
 MAX_GENERATION_CONTEXT_CHARS = 4300
 MAX_VERIFIED_FACT_CHARS = 500
+SOURCE_IMAGE_CDN_SUFFIXES = (
+    "wixstatic.com",
+    "squarespace-cdn.com",
+    "shopifycdn.net",
+    "website-files.com",
+    "cloudinary.com",
+    "imgix.net",
+    "ctfassets.net",
+    "wsimg.com",
+)
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
@@ -82,6 +92,27 @@ def _fallback_pool(category: str) -> tuple[tuple[str, str], ...]:
     if re.search(r"home|roof|siding|window|remodel|renovat|contractor|construction", lowered):
         return FALLBACK_IMAGES["home"]
     return ()
+
+
+def _is_source_image_host_allowed(image_url: str, source_domain: str) -> bool:
+    """Allow source-host photos and URLs served by common first-party image CDNs."""
+    host = (urlsplit(image_url).hostname or "").lower().removeprefix("www.")
+    if not host:
+        return False
+    if host == source_domain or host.endswith("." + source_domain):
+        return True
+    return any(host == suffix or host.endswith("." + suffix) for suffix in SOURCE_IMAGE_CDN_SUFFIXES)
+
+
+def _canonical_source_image_url(image_url: str) -> str:
+    """Drop Wix resize transforms so the prompt carries a compact original asset URL."""
+    parsed = urlsplit(image_url)
+    host = (parsed.hostname or "").lower()
+    if host == "static.wixstatic.com" and "/media/" in parsed.path:
+        media_path = parsed.path.split("/media/", 1)[1].split("/", 1)[0]
+        if media_path:
+            return f"{parsed.scheme}://{parsed.netloc}/media/{media_path}"
+    return image_url
 
 
 def _retry_guidance(previous_candidate: Path | None) -> str:
@@ -271,13 +302,12 @@ def compact_facts(facts: dict) -> tuple[dict, list[str]]:
 
     candidates = []
     for image in facts.get("source_assets", []):
-        image_url = str(image.get("url", "")).strip()
-        image_host = (urlsplit(image_url).hostname or "").lower().removeprefix("www.")
+        image_url = _canonical_source_image_url(str(image.get("url", "")).strip())
         key = _url_key(image_url)
-        if image_url and image_host == domain and key:
+        if image_url and _is_source_image_host_allowed(image_url, domain) and key:
             alt = " ".join(str(image.get("alt", "")).split())
             image_hint = alt + " " + urlsplit(image_url).path
-            if not re.search(r"\b(?:logo|icon|favicon|social)\b", image_hint, re.IGNORECASE):
+            if not re.search(r"(?:logo|icon|favicon|social|facebook|instagram|twitter|linkedin|youtube|tiktok|pinterest|whatsapp)", image_hint, re.IGNORECASE):
                 candidates.append((key, image_url, alt or "Project photograph from the source website"))
 
     # Validate source assets before including them. This avoids asking the
