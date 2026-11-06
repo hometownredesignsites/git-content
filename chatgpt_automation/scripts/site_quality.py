@@ -460,6 +460,21 @@ def _url_key(url, base_url=None):
 
 
 def _source_image_urls_from_prompt(prompt):
+    # Current source context stores provenance alongside each compact image
+    # record. Keep reading the older marker format for saved runs/fixtures.
+    context = re.search(r"^DESIGN INPUT[^\n]*\n(\{[\s\S]*?\})\n\nVISUAL AND UX DIRECTION:", prompt, re.MULTILINE)
+    if context:
+        try:
+            facts = json.loads(context.group(1))
+            urls = [
+                html_module.unescape(str(image.get("url", "")))
+                for image in facts.get("project_images", [])
+                if image.get("source") == "verified_source" and image.get("url")
+            ]
+            if urls:
+                return urls
+        except (json.JSONDecodeError, AttributeError, TypeError):
+            pass
     marker = re.search(r"VERIFIED_SOURCE_IMAGE_URLS:\s*\n([\s\S]*?)(?:\n\s*\n|$)", prompt)
     if not marker:
         return []
@@ -469,6 +484,42 @@ def _source_image_urls_from_prompt(prompt):
         if match:
             urls.append(html_module.unescape(match.group(1)))
     return urls
+
+
+def _category_fallback_image_urls_from_prompt(prompt):
+    context = re.search(r"^DESIGN INPUT[^\n]*\n(\{[\s\S]*?\})\n\nVISUAL AND UX DIRECTION:", prompt, re.MULTILINE)
+    if not context:
+        return []
+    try:
+        facts = json.loads(context.group(1))
+    except (json.JSONDecodeError, AttributeError, TypeError):
+        return []
+    return [
+        html_module.unescape(str(image.get("url", "")))
+        for image in facts.get("project_images", [])
+        if image.get("source") == "validated_fallback" and image.get("url")
+    ]
+
+
+def _image_source_checks(image_urls, hero_urls, approved_urls, base_url=None):
+    approved_keys = {
+        key for url in approved_urls
+        if (key := _url_key(url, base_url)) is not None
+    }
+
+    def external_keys(urls):
+        return {
+            key for url in urls
+            if urllib.parse.urlsplit(html_module.unescape(url)).scheme.lower() != "data"
+            if (key := _url_key(url, base_url)) is not None
+        }
+
+    page_keys = external_keys(image_urls)
+    hero_keys = external_keys(hero_urls)
+    return {
+        "images_use_source_or_category_assets": bool(page_keys) and page_keys.issubset(approved_keys),
+        "hero_uses_source_or_category_asset": bool(hero_keys) and hero_keys.issubset(approved_keys),
+    }
 
 
 class _PageInventory(HTMLParser):
@@ -1096,6 +1147,7 @@ def assess_website(prompt, session_dir):
     )
     checks["visual_design_review_passed"] = visual_design_review_status == "pass"
     source_image_urls = _source_image_urls_from_prompt(context_text)
+    category_fallback_urls = _category_fallback_image_urls_from_prompt(context_text)
     browser_qa_status, browser_qa_checks, browser_qa_report = _browser_qa_result(session_dir)
     browser_check_names = (
         "rendered_sections_visible_desktop_and_mobile",
@@ -1130,6 +1182,10 @@ def assess_website(prompt, session_dir):
             for url in parser.all_image_urls
             if (key := _url_key(url, base_url)) in source_keys
         )
+
+    approved_image_urls = source_image_urls + category_fallback_urls
+    if approved_image_urls:
+        checks.update(_image_source_checks(image_urls, parser.hero_image_urls, approved_image_urls, base_url))
 
     explicit_form_request = re.sub(
         r"[^.!?\n]*\b(?:if|when)\b[^.!?\n]*[.!?]?",
@@ -1233,7 +1289,10 @@ def assess_website(prompt, session_dir):
     advisory_check_names = {
         name for name in checks
         if (name.startswith("browser_") and name not in blocking_browser_checks) or name in {
-            "all_images_load_ok"
+            "all_images_load_ok",
+            "source_site_hero_photo_used",
+            "source_site_photos_used",
+            "source_site_photos_load_ok",
         }
     }
     automated_checks = {
@@ -1278,12 +1337,18 @@ def assess_website(prompt, session_dir):
     if visual_design_review_status != "pass":
         missing_sections.append("screenshot-backed desktop/mobile visual design review")
     if source_image_urls and not checks.get("source_site_hero_photo_used"):
-        missing_sections.append("verified source-site photo in hero")
+        advisory_findings = ["source photos were available but none was used in the hero"]
+    else:
+        advisory_findings = []
     if source_image_urls and not checks.get("source_site_photos_used"):
-        missing_sections.append("at least two verified source-site photos")
+        advisory_findings.append("source photos were available but category fallback photos were used instead")
     if source_image_urls and not checks.get("source_site_photos_load_ok"):
-        missing_sections.append("verified source-site photos that load successfully")
-    advisory_findings = [name for name in sorted(advisory_check_names) if not checks[name]]
+        advisory_findings.append("one or more selected source photos did not load")
+    if approved_image_urls and not checks.get("images_use_source_or_category_assets"):
+        missing_sections.append("all imagery from source-site photos or validated category assets")
+    if approved_image_urls and not checks.get("hero_uses_source_or_category_asset"):
+        missing_sections.append("hero imagery from a source-site photo or validated category asset")
+    advisory_findings.extend(name for name in sorted(advisory_check_names) if not checks[name])
     if browser_qa_status != "pass":
         advisory_findings.append("browser QA did not pass; see debug/browser_qa.json")
 

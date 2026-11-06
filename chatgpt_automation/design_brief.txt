@@ -1,6 +1,6 @@
 Base the visual direction on the source site's verified identity, services, audience, and brand cues. Treat CSV category and location as unverified hints; they must not override source facts or become stereotypes.
 
-Use suitable existing site photos first, matching each subject to its section. If none fits, use a validated fallback for the verified service; if no fallback is supplied, choose a stable, public direct image URL for that service. Match the hero to the main offering and every supporting image to nearby content. Never force an unrelated photo or use indoor imagery for outdoor work. Use distinct photos and accurate alt text.
+Prefer validated photos embedded on the source business website; their provenance makes them relevant to the business/category even when filenames or alt text do not identify the subject. Use page context and available metadata to place them, and exclude logos, icons, social graphics, broken assets, and duplicates. Use validated category/industry fallback images only when no usable source photos exist or more distinct photos are needed. Match the hero and supporting photos to the service and nearby content. Never use indoor imagery for outdoor work. Use distinct photos and accurate alt text; when the exact subject is unknown, use a truthful general label rather than inventing details.
 
 Use a coherent palette, type pairing, spacing, image treatment, and relevant motifs. Build purposeful section layouts around the conversion path. Keep the full-width hero readable with its CTA visible on desktop and mobile.
 

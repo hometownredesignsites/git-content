@@ -24,6 +24,22 @@ def _clean(value: str) -> str:
     return re.sub(r"\s+", " ", html.unescape(value or "")).strip()
 
 
+def _urls_from_srcset(value: str) -> list[str]:
+    candidates = []
+    for part in (value or "").split(","):
+        match = re.match(r"\s*(\S+)(?:\s+(\d+(?:\.\d+)?)(w|x))?", part)
+        if match:
+            weight = float(match.group(2) or 0)
+            candidates.append((weight, match.group(1)))
+    return [url for _, url in sorted(candidates, reverse=True)]
+
+
+def _urls_from_css(value: str) -> list[str]:
+    return [html.unescape(match.group(2).strip(" \\\"'")) for match in re.finditer(
+        r"url\(\s*(['\"]?)(.*?)\1\s*\)", value or "", re.IGNORECASE
+    ) if match.group(2).strip()]
+
+
 def _assert_public_http_url(url: str) -> urllib.parse.SplitResult:
     parsed = urllib.parse.urlsplit(url)
     if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
@@ -54,6 +70,8 @@ class _PageParser(HTMLParser):
         self.headings: list[dict[str, str]] = []
         self.links: list[dict[str, str]] = []
         self.images: list[dict[str, str]] = []
+        self.image_meta: list[dict[str, str]] = []
+        self.background_images: list[dict[str, str]] = []
         self.forms: list[dict] = []
         self.stylesheets: list[str] = []
         self.labels: dict[str, str] = {}
@@ -78,7 +96,41 @@ class _PageParser(HTMLParser):
             if values.get("href"):
                 self.stylesheets.append(values["href"])
         if tag == "img":
-            self.images.append({"src": values.get("src") or values.get("data-src", ""), "alt": values.get("alt", "")})
+            candidates = []
+            for name in ("src", "data-src", "data-lazy-src", "data-original", "data-image", "data-image-url"):
+                if values.get(name):
+                    candidates.append((values[name], name))
+            for name in ("srcset", "data-srcset", "data-lazy-srcset"):
+                for src in _urls_from_srcset(values.get(name, "")):
+                    candidates.append((src, name))
+            seen = set()
+            for src, discovery in candidates:
+                src = src.strip()
+                if src and src not in seen:
+                    seen.add(src)
+                    self.images.append({
+                        "src": src,
+                        "alt": values.get("alt", ""),
+                        "title": values.get("title", ""),
+                        "width": values.get("width", ""),
+                        "height": values.get("height", ""),
+                        "discovery_method": discovery,
+                    })
+        if tag == "source" and (values.get("type", "").startswith("image/") or values.get("srcset") or values.get("data-srcset")):
+            for name in ("src", "data-src"):
+                if values.get(name):
+                    self.images.append({"src": values[name], "alt": "", "discovery_method": name})
+            for name in ("srcset", "data-srcset"):
+                for src in _urls_from_srcset(values.get(name, "")):
+                    self.images.append({"src": src, "alt": "", "discovery_method": name})
+        if tag == "video" and values.get("poster"):
+            self.images.append({"src": values["poster"], "alt": values.get("aria-label", ""), "discovery_method": "video_poster"})
+        if tag == "meta":
+            key = (values.get("property") or values.get("name") or "").strip().lower()
+            if key in {"og:image", "og:image:url", "twitter:image", "twitter:image:src"} and values.get("content"):
+                self.image_meta.append({"src": values["content"], "alt": values.get("alt", ""), "discovery_method": key})
+        for image_url in _urls_from_css(values.get("style", "")):
+            self.background_images.append({"src": image_url, "alt": values.get("aria-label", ""), "discovery_method": "inline_background"})
         if tag == "form":
             self._form = {"action": values.get("action", ""), "method": values.get("method", "get").lower(), "fields": []}
             self.forms.append(self._form)
@@ -139,7 +191,7 @@ class _PageParser(HTMLParser):
             "headings": self.headings,
             "text": _clean(" ".join(self.text_parts))[:16000],
             "links": self.links,
-            "images": self.images,
+            "images": self.images + self.image_meta + self.background_images,
             "forms": self.forms,
             "stylesheets": self.stylesheets,
         }
@@ -201,7 +253,16 @@ def collect_source_facts(source_url: str, *, business: str = "", category: str =
         for image in page["images"]:
             url = urllib.parse.urljoin(page["url"], image.get("src", ""))
             if urllib.parse.urlsplit(url).scheme in {"http", "https"}:
-                all_images.append({"url": url, "alt": image.get("alt", ""), "source_page": page["url"]})
+                all_images.append({
+                    "url": url,
+                    "alt": image.get("alt", ""),
+                    "title": image.get("title", ""),
+                    "width": image.get("width", ""),
+                    "height": image.get("height", ""),
+                    "discovery_method": image.get("discovery_method", "img_src"),
+                    "source_page": page["url"],
+                    "source_provenance": "embedded_on_requested_site",
+                })
     return {
         "requested_url": source_url,
         "business_metadata_unverified": {"business": business, "category": category, "location": location},
