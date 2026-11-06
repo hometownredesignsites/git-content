@@ -18,6 +18,11 @@ from urllib.parse import urlparse
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
+try:
+    from .scripts.source_images import _allowed_image_host, collect_source_images
+except ImportError:  # direct runner execution
+    from scripts.source_images import _allowed_image_host, collect_source_images
+
 
 ROOT = Path(__file__).resolve().parent
 REPO = ROOT.parent
@@ -593,6 +598,7 @@ def build_initial_prompt(
     industry_category: str = "",
     location: str = "",
     source_assessment: dict | None = None,
+    source_image_records: list[dict] | None = None,
 ) -> str:
     source_context = (
         f"The source website {source_url} was assessed earlier in this same conversation. "
@@ -625,11 +631,15 @@ def build_initial_prompt(
     )
     category_fallbacks = category_image_fallbacks(industry_category)
     source_photo_records = []
+    asset_sources = [(source_image_records or [], True)]
     if isinstance(source_assessment, dict):
-        for asset in source_assessment.get("source_assets", []):
+        asset_sources.append((source_assessment.get("source_assets", []), False))
+    source_host = (urlparse(source_url).hostname or "").lower().removeprefix("www.")
+    for source_assets, directly_extracted in asset_sources:
+        for asset in source_assets:
             if not isinstance(asset, dict):
                 continue
-            asset_type = str(asset.get("type", "")).strip().lower()
+            asset_type = str(asset.get("type", "photo" if asset.get("discovery_method") else "")).strip().lower()
             if not any(word in asset_type for word in ("photo", "image", "picture")):
                 continue
             if any(word in asset_type for word in ("logo", "icon", "wordmark", "favicon")):
@@ -638,6 +648,10 @@ def build_initial_prompt(
             parsed = urlparse(url)
             if parsed.scheme not in {"http", "https"} or not parsed.hostname:
                 continue
+            if not directly_extracted and source_host and not _allowed_image_host(url, source_host):
+                continue
+            if any(existing["url"] == url for existing in source_photo_records):
+                continue
             source_photo_records.append({
                 "url": url,
                 "visible_subject": str(asset.get("visible_subject", asset.get("subject", "unknown"))).strip() or "unknown",
@@ -645,6 +659,8 @@ def build_initial_prompt(
             })
             if len(source_photo_records) >= 12:
                 break
+        if len(source_photo_records) >= 12:
+            break
     source_asset_context = ""
     if source_photo_records:
         source_asset_context = (
@@ -810,6 +826,34 @@ def run() -> None:
         ) + "\n",
         encoding="utf-8",
     )
+    source_image_report = {"requested_url": source_url, "source_assets": [], "errors": []}
+    if source_url:
+        source_cache_path = REPO / "duckai-runs" / (
+            f"run-{RUN_ID}-{RUN_ATTEMPT}-site-{SITE_INDEX}-source-images.json"
+        )
+        source_cache_loaded = False
+        if source_cache_path.is_file():
+            try:
+                cached_report = json.loads(source_cache_path.read_text(encoding="utf-8"))
+                if cached_report.get("requested_url") == source_url:
+                    source_image_report = cached_report
+                    source_cache_loaded = True
+            except (OSError, json.JSONDecodeError):
+                pass
+        if not source_cache_loaded or source_image_report.get("errors"):
+            try:
+                source_image_report = collect_source_images(source_url)
+                if source_image_report.get("source_assets") or not source_image_report.get("errors"):
+                    source_cache_path.parent.mkdir(parents=True, exist_ok=True)
+                    source_cache_path.write_text(
+                        json.dumps(source_image_report, indent=2, ensure_ascii=False) + "\n",
+                        encoding="utf-8",
+                    )
+            except Exception as error:
+                source_image_report["errors"] = [{"error": str(error)[:500]}]
+        (RUN_DIR / "debug" / "source_images.json").write_text(
+            json.dumps(source_image_report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
     turn_log = {"chat_url": "", "turns": []}
     initial_generation_prompt = ""
     with tempfile.TemporaryDirectory(prefix="duckai-website-profile-") as profile_dir:
@@ -860,6 +904,7 @@ def run() -> None:
                             industry_category,
                             location,
                             assessment if source_url else None,
+                            source_image_report.get("source_assets", []) if source_url else None,
                         )
                         if not turn_log["turns"] or turn_log["turns"][-1].get("type") == "source_site_assessment"
                         else build_next_prompt(kind, part)
@@ -895,6 +940,8 @@ def run() -> None:
         "chat_url": chat_url,
         "source_url": source_url or None,
         "source_assessment_status": "pass" if source_url else "not_requested",
+        "validated_source_photo_count": len(source_image_report.get("source_assets", [])),
+        "source_photo_extraction_errors": len(source_image_report.get("errors", [])),
         "design_reference": (
             json.loads((RUN_DIR / "debug" / "source_assessment.json").read_text(encoding="utf-8")).get("design_reference")
             if source_url
