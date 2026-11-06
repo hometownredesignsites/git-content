@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import unittest
 
-from duckai_automation.run_duckai import build_initial_prompt
+from duckai_automation.run_duckai import build_initial_prompt, build_quality_prompt
 from duckai_automation.scripts.site_quality import (
     _PageInventory,
     _category_fallback_image_urls_from_prompt,
     _image_asset_approval,
+    _required_sections,
     _source_image_urls_from_prompt,
     _urls_from_srcset,
 )
@@ -47,6 +48,30 @@ Rest of prompt"""
             _category_fallback_image_urls_from_prompt(prompt),
             ["https://images.example/fallback.jpg"],
         )
+
+    def test_quality_prompt_carries_allowlists_without_generation_contract(self):
+        generation_prompt = """VERIFIED_SOURCE_IMAGE_URLS:
+- https://source.example/fence.jpg
+
+CATEGORY_FALLBACK_IMAGE_URLS:
+- https://images.example/fence.jpg
+
+Long generation-only design contract"""
+        quality_prompt = build_quality_prompt("Rebuild the fence contractor site.", generation_prompt)
+        self.assertEqual(
+            _source_image_urls_from_prompt(quality_prompt),
+            ["https://source.example/fence.jpg"],
+        )
+        self.assertEqual(
+            _category_fallback_image_urls_from_prompt(quality_prompt),
+            ["https://images.example/fence.jpg"],
+        )
+        self.assertNotIn("Long generation-only", quality_prompt)
+
+    def test_image_sourcing_mentions_do_not_require_a_gallery_section(self):
+        request = "Use distinct photos from the existing site and category-matched imagery where needed."
+        self.assertNotIn("gallery", _required_sections(request))
+        self.assertIn("gallery", _required_sections("Include a portfolio/gallery section of completed work."))
 
     def test_all_images_must_be_approved_and_hero_must_use_approved_photo(self):
         approved = [

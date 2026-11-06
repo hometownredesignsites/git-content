@@ -747,7 +747,9 @@ def _required_sections(prompt):
         "faq": r"\b(?:faq|frequently asked questions)\b",
         "pricing": r"\b(?:pricing|prices|cost|rates)\b",
         "team": r"\b(?:team|staff)\b",
-        "gallery": r"\b(?:gallery|portfolio|photos)\b",
+        # A reference to photos in the sourcing/image brief does not require a
+        # dedicated gallery section; require one only when explicitly requested.
+        "gallery": r"\b(?:gallery|portfolio)\b",
     }
     for section, pattern in trigger_terms.items():
         if re.search(pattern, text, re.IGNORECASE):

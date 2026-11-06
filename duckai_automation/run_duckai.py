@@ -731,9 +731,26 @@ def run_browser_qa(website_request: str) -> None:
     )
 
 
-def run_checker(website_request: str) -> dict:
+def build_quality_prompt(website_request: str, generation_prompt: str = "") -> str:
+    """Pass only the image-asset allowlists to QA alongside the actual request."""
+    context_blocks = []
+    for marker in ("VERIFIED_SOURCE_IMAGE_URLS", "CATEGORY_FALLBACK_IMAGE_URLS"):
+        match = re.search(
+            rf"{marker}:\s*\n([\s\S]*?)(?:\n\s*\n|$)",
+            generation_prompt,
+        )
+        if match:
+            context_blocks.append(f"{marker}:\n{match.group(1).strip()}")
+    return "\n\n".join([website_request.strip(), *context_blocks]).strip()
+
+
+def run_checker(website_request: str, generation_prompt: str = "") -> dict:
+    quality_prompt = build_quality_prompt(website_request, generation_prompt)
+    debug_dir = RUN_DIR / "debug"
+    debug_dir.mkdir(parents=True, exist_ok=True)
+    (debug_dir / "quality_prompt.txt").write_text(quality_prompt, encoding="utf-8")
     result = subprocess.run(
-        [sys.executable, str(CHECK_SCRIPT), str(RUN_DIR), website_request],
+        [sys.executable, str(CHECK_SCRIPT), str(RUN_DIR), quality_prompt],
         cwd=REPO,
         capture_output=True,
         text=True,
@@ -794,6 +811,7 @@ def run() -> None:
         encoding="utf-8",
     )
     turn_log = {"chat_url": "", "turns": []}
+    initial_generation_prompt = ""
     with tempfile.TemporaryDirectory(prefix="duckai-website-profile-") as profile_dir:
         with sync_playwright() as playwright:
             context = playwright.chromium.launch_persistent_context(
@@ -846,6 +864,8 @@ def run() -> None:
                         if not turn_log["turns"] or turn_log["turns"][-1].get("type") == "source_site_assessment"
                         else build_next_prompt(kind, part)
                     )
+                    if kind == "css" and part == 1:
+                        initial_generation_prompt = prompt
                     response, current_url = send_and_capture(page, prompt, kind, part)
                     if chat_url and current_url != chat_url:
                         fail("Duck.ai conversation URL changed during capture; refusing to mix chats.")
@@ -859,7 +879,7 @@ def run() -> None:
 
     subprocess.run([sys.executable, str(ASSEMBLE_SCRIPT), str(RUN_DIR)], check=True, cwd=REPO)
     run_browser_qa(website_request)
-    report = run_checker(website_request)
+    report = run_checker(website_request, initial_generation_prompt)
     notes = {
         "candidate_index": int(CANDIDATE_INDEX),
         "site_index": int(SITE_INDEX),
