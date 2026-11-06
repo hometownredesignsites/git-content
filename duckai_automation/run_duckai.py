@@ -36,13 +36,71 @@ INLINE_SCRIPT = ROOT / "scripts" / "inline_css.py"
 BROWSER_QA_SCRIPT = ROOT / "scripts" / "browser_qa.py"
 CHECK_SCRIPT = ROOT / "scripts" / "check_website.py"
 
-BASE_CONTRACT = """Follow the supplied facts and design brief. Build a polished, responsive, organization-specific website. Use exactly three CSS responses followed by exactly three HTML responses, one complete code block per response. CSS responses use a css fence; HTML responses use a text fence containing raw HTML. Each response must state its exact part label. The first nonblank line inside its code block must be exactly `/* CSS PART n OF 3 */` or `<!-- HTML PART n OF 3 -->` for that part. Keep the CSS and HTML coherent and link styles.css exactly once from the HTML document head. HTML PART 1 must be the beginning of a complete page: after its required marker, include `<!doctype html>`, `<html>`, a complete `<head>` with charset, viewport, title, and the styles.css link, then `<body>`, site header/navigation, and the full hero section with its primary CTA. Do not begin with a middle-page section. HTML PART 2 must continue the body with new sections only; HTML PART 3 must continue with the remaining sections, footer, any required script, then close with `</body></html>`. Never repeat the document shell or hero in later parts. Use CSS variables for core colors, typography, spacing, and container width. Include at least three distinct image files, represented by at least three unique image URLs and at least three HTML `<img>` elements with accurate alt text. Do not reuse the same photo with different crop parameters to meet the count. Use varied compositions and meaningful, relevant imagery. Do not invent organization facts, metrics, reviews, credentials, contact details, or hours.
+BASE_CONTRACT = """Follow the supplied facts and design brief. Build a polished, responsive, organization-specific website. Use exactly three CSS responses followed by exactly three HTML responses, one complete code block per response. CSS responses use a css fence; HTML responses use a text fence containing raw HTML. Each response must state its exact part label. The first nonblank line inside its code block must be exactly `/* CSS PART n OF 3 */` or `<!-- HTML PART n OF 3 -->` for that part. Keep the CSS and HTML coherent and link styles.css exactly once from the HTML document head. HTML PART 1 must be the beginning of a complete page: after its required marker, include `<!doctype html>`, `<html>`, a complete `<head>` with charset, viewport, title, and the styles.css link, then `<body>`, site header/navigation, and the full hero section with its primary CTA. Do not begin with a middle-page section. HTML PART 2 must continue the body with new sections only; HTML PART 3 must continue with the remaining sections, footer, any required script, then close with `</body></html>`. Never repeat the document shell or hero in later parts. Use CSS variables for core colors, typography, spacing, and container width. Include at least three distinct image files, represented by at least three unique image URLs and at least three HTML `<img>` elements with accurate alt text. Do not reuse the same photo with different crop parameters to meet the count. For every image, first use a suitable photograph from the source site when its observed subject fits that section. If no source photo fits, use a stable, publicly reachable image matching the verified offering/category and the section. Match the hero to the primary verified offering and each supporting image to its nearby service or content; do not force unrelated source photos or choose randomly. Treat CSV category as an unverified cue and defer to source-verified offerings when they conflict. Do not use indoor imagery for outdoor services. Use varied compositions and meaningful, relevant imagery. Do not invent organization facts, metrics, reviews, credentials, contact details, or hours.
 
 The hero photo must be edge-to-edge across the full hero region, cover-cropped behind readable overlay copy on desktop and mobile. Keep the primary CTA visible in the first viewport on desktop and mobile; use the source-appropriate primary action; use click-to-call only when calling is appropriate and the phone number is verified. Include every requested section. If hours are requested but the source is unclear or conflicting, include an "Hours & availability" section that asks visitors to contact the organization to confirm, without stating unsupported times. Include a complete, visibly designed semantic footer after main content, with the organization or brand name, at least two useful links, accurate available contact/location information, and copyright. On mobile, use a keyboard-accessible three-bar hamburger button with a programmatic name, `aria-controls` matching the navigation id, and `aria-expanded` state; implement the three visible bars as exactly three separate child `<span>` elements. Do not show a Menu text label. Keep CTA buttons and button-style links free of arrow glyphs and arrow icons, including chevrons; use action-oriented text only. Only use source-site asset URLs explicitly listed in the source assessment when they resolve directly to image files; do not guess or reconstruct source asset URLs. If source assets are unavailable, choose stable publicly reachable image URLs that return image files and fit the organization and section. The final browser-loaded page must load every image and font successfully. If the design brief names an HTML5 UP template, adapt its structure into an original organization-specific design, preserve its name/source/CC BY 3.0 attribution in an HTML comment, and keep template credits out of visible page content. The final HTML response must close with </body></html>.
 
 If the source website has a contact form, preserve its purpose and relevant fields. Ask for image choices that match the real business and section; do not invent alt-text claims. Avoid repeated generic card grids, decorative gradients/blobs without purpose, filler copy, and unsupported testimonials, statistics, awards, or credentials.
 
 Return only the requested part and a short part label outside its code block. Do not add another code block or combine parts."""
+
+CATEGORY_IMAGE_FALLBACKS = {
+    "fence": (
+        ("https://images.unsplash.com/photo-1769831190663-95fe8454d8c9?auto=format&fit=crop&w=1800&q=85", "wooden backyard fence with a gate"),
+        ("https://images.unsplash.com/photo-1792628953895-5d46f431b402?auto=format&fit=crop&w=1800&q=85", "backyard with wooden privacy fence and patio"),
+        ("https://images.unsplash.com/photo-1769690177043-c28ce822a4f7?auto=format&fit=crop&w=1800&q=85", "wooden gate and fence among garden plants"),
+    ),
+    "deck": (
+        ("https://images.unsplash.com/photo-1773979638724-c6ffed7fe0de?auto=format&fit=crop&w=1800&q=85", "wooden deck and steps leading to a grassy yard"),
+        ("https://images.unsplash.com/photo-1716904519810-349244919824?auto=format&fit=crop&w=1800&q=85", "wooden outdoor deck with table and chairs"),
+        ("https://images.unsplash.com/photo-1741277031817-146e7ed13f8d?auto=format&fit=crop&w=1800&q=85", "sunny backyard pool and wooden deck"),
+    ),
+    "landscap": (
+        ("https://images.unsplash.com/photo-1416879595882-3373a0480b5b?auto=format&fit=crop&w=1800&q=85", "garden planting and landscape work"),
+        ("https://images.unsplash.com/photo-1585320806297-9794b3e4eeae?auto=format&fit=crop&w=1800&q=85", "garden plants and outdoor design"),
+        ("https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=1800&q=85", "plants and garden detail"),
+    ),
+    "kitchen": (
+        ("https://images.unsplash.com/photo-1770063817031-f3b98dff347f?auto=format&fit=crop&w=1800&q=85", "modern kitchen with white cabinets and stainless appliances"),
+        ("https://images.unsplash.com/photo-1761656630581-69a58e4e1c09?auto=format&fit=crop&w=1800&q=85", "modern kitchen with wooden cabinets and stainless appliances"),
+        ("https://images.unsplash.com/photo-1764526624453-db32c24eca55?auto=format&fit=crop&w=1800&q=85", "modern kitchen with wooden cabinets and island"),
+    ),
+    "bathroom": (
+        ("https://images.unsplash.com/photo-1771239048293-72abf673adb2?auto=format&fit=crop&w=1800&q=85", "modern bathroom with glass shower and vanity"),
+        ("https://images.unsplash.com/photo-1758239873506-82d0e76244f6?auto=format&fit=crop&w=1800&q=85", "modern bathroom with a vanity and tiled floor"),
+        ("https://images.unsplash.com/photo-1690603935238-b60582bcb273?auto=format&fit=crop&w=1800&q=85", "bathroom with tiled walls and a shower"),
+    ),
+    "carpent": (
+        ("https://images.unsplash.com/photo-1769353086138-19ee65291a04?auto=format&fit=crop&w=1800&q=85", "carpenter working with wood in a workshop"),
+        ("https://images.unsplash.com/photo-1722411927625-0e478acf502b?auto=format&fit=crop&w=1800&q=85", "woodworker shaping a piece of wood in a workshop"),
+        ("https://images.unsplash.com/photo-1759756480941-7230dedf5fc9?auto=format&fit=crop&w=1800&q=85", "woodworking shop with tools and machinery"),
+    ),
+    "home": (
+        ("https://images.unsplash.com/photo-1600585154340-be6161a56c0?auto=format&fit=crop&w=1800&q=85", "residential exterior and home improvement"),
+        ("https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1800&q=85", "finished home interior and renovation"),
+        ("https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=1800&q=85", "residential construction work"),
+    ),
+}
+
+
+def category_image_fallbacks(category: str) -> tuple[tuple[str, str], ...]:
+    """Return curated category fallbacks; unknown categories stay unforced."""
+    lowered = category.lower()
+    if re.search(r"fenc|gate", lowered):
+        return CATEGORY_IMAGE_FALLBACKS["fence"]
+    if re.search(r"deck|patio", lowered):
+        return CATEGORY_IMAGE_FALLBACKS["deck"]
+    if re.search(r"landscap|garden", lowered):
+        return CATEGORY_IMAGE_FALLBACKS["landscap"]
+    if "kitchen" in lowered:
+        return CATEGORY_IMAGE_FALLBACKS["kitchen"]
+    if "bath" in lowered:
+        return CATEGORY_IMAGE_FALLBACKS["bathroom"]
+    if re.search(r"carpent|woodwork", lowered):
+        return CATEGORY_IMAGE_FALLBACKS["carpent"]
+    if re.search(r"home|roof|siding|window|remodel|renovat|contractor|construction", lowered):
+        return CATEGORY_IMAGE_FALLBACKS["home"]
+    return ()
 
 
 def fail(message: str) -> None:
@@ -337,7 +395,7 @@ def send_source_assessment(
 - `organization_facts`: concise, neutral facts visible on those pages; do not copy paragraphs verbatim.
 - `audience_and_goals`: likely audience and primary contact/conversion path, separating evidence from inference.
 - `brand_and_visual_observations`: visible brand colors, typography, layout, tone, and image subjects; distinguish observations from design opinions.
-- `source_assets`: an array of publicly displayed logo/photo/brand asset URLs, each with its type and where it appears; use an empty array if none can be identified.
+- `source_assets`: an array of publicly displayed logo/photo/brand asset URLs, each with its type and where it appears; for each photo, describe its visible subject and list the section/service it appears to support only when observed evidence makes that fit clear. Use `unknown` when the image itself could not be inspected; do not infer the subject from a filename or alt text alone. Use an empty array if no assets can be identified.
 - `content_structure`: the important sections/pages a redesign should retain.
 - `unknown_or_verify`: details that are unclear, inconsistent, or should be confirmed with the organization.
 - `design_reference`: recommend one specific HTML5 UP template only if it genuinely fits and you can inspect its official demo; include `name`, `url`, `license_url`, and `patterns_to_adapt`. If none fits or you cannot verify its demo and license, use `null`.
@@ -564,10 +622,32 @@ def build_initial_prompt(
         if business_name or industry_category
         else ""
     )
+    category_fallbacks = category_image_fallbacks(industry_category)
+    if category_fallbacks:
+        image_context = (
+            "CATEGORY-MATCHED FALLBACK IMAGE OPTIONS (use only when the source has no suitable photo for a section; "
+            "select by visible subject, not randomly):\n"
+            + json.dumps(
+                [{"url": url, "subject": subject} for url, subject in category_fallbacks],
+                ensure_ascii=False,
+            )
+            + "\nUse a source photo first when its observed subject fits the section. Use these fallback photos only "
+            "where source imagery does not fit; match every chosen image to its section and use accurate alt text. "
+            "Treat CSV category as an unverified cue and defer to source-verified offerings.\n\n"
+        )
+    elif industry_category:
+        image_context = (
+            "No curated fallback set is available for this category. Prefer suitable source photos; for any section "
+            "without one, choose a stable, publicly reachable direct image URL that matches the verified offering and "
+            "section. The final browser check must confirm that every image loads.\n\n"
+        )
+    else:
+        image_context = ""
     return (
         f"Website request:\n{website_request.strip()}\n\n"
         f"Design guidance:\n{design_brief.strip()}\n\n"
         f"{target_metadata}"
+        f"{image_context}"
         f"{source_context}"
         f"{template_context}"
         f"{BASE_CONTRACT}\n\n"
