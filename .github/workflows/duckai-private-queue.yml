@@ -132,6 +132,9 @@ jobs:
           continuation = job.get("continuation", {})
           if not isinstance(continuation, dict):
               continuation = {}
+          candidate_attempt_limit = int(job.get("candidate_attempt_limit", 10) or 10)
+          if not 1 <= candidate_attempt_limit <= 10:
+              raise SystemExit("The private Duck.ai candidate attempt limit is outside the ten-attempt bounds.")
           prior_passes = int(continuation.get("successful_candidates", 0) or 0)
           prior_attempts = int(continuation.get("attempts", 0) or 0)
           if continuation.get("parent_job_id") and (prior_attempts != 10 or not 0 <= prior_passes < 3):
@@ -141,6 +144,7 @@ jobs:
               "PRIOR_RUN_ID": str(continuation.get("parent_run_id", "")),
               "PRIOR_SUCCESSFUL_CANDIDATES": str(prior_passes),
               "PRIOR_ATTEMPTS": str(prior_attempts),
+              "CANDIDATE_ATTEMPT_LIMIT": str(candidate_attempt_limit),
           })
           aliases.update({f"CSV_FIELD_{key}": value for key, value in normalized.items()})
           aliases["PRIVATE_SOURCE_ROOT"] = str(source_root)
@@ -184,7 +188,7 @@ jobs:
           attempt="$prior_attempts"
           new_attempts=0
           target=3
-          max_attempts=10
+          max_attempts="${CANDIDATE_ATTEMPT_LIMIT:-10}"
           candidate_dirs=()
           mapfile -t candidate_indices < <(python duckai_automation/scripts/continuation.py indices --prior-attempts "$prior_attempts" --max-attempts "$max_attempts")
           if [[ -n "${PRIOR_JOB_ID:-}" ]]; then
