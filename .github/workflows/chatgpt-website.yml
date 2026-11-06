@@ -209,7 +209,6 @@ jobs:
         if: steps.context.outcome == 'success'
         env:
           SOURCE_FACTS: ${{ steps.context.outputs.source_facts }}
-          CANDIDATE_ATTEMPT_LIMIT: ${{ env.CANDIDATE_ATTEMPT_LIMIT }}
         run: |
           set -uo pipefail
           mkdir -p tmp/playwright-profiles "${RUNNER_TEMP}/chatgpt-private"
