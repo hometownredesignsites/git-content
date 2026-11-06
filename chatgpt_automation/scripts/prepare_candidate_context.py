@@ -11,12 +11,13 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 
-MAX_SOURCE_IMAGES = 4
+MAX_SOURCE_IMAGES = 3
+MAX_FALLBACK_IMAGES = 3
 MAX_NAVIGATION_LINKS = 3
 MAX_CONTACT_FIELDS = 16
 MAX_CONTENT_PAGES = 2
 MAX_GENERATION_CONTEXT_CHARS = 4300
-MAX_VERIFIED_FACT_CHARS = 620
+MAX_VERIFIED_FACT_CHARS = 500
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
@@ -36,12 +37,51 @@ FALLBACK_IMAGES = {
         ("https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=1800&q=85", "residential construction work"),
         ("https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?auto=format&fit=crop&w=1800&q=85", "home renovation interior"),
     ),
+    "fence": (
+        ("https://images.unsplash.com/photo-1769831190663-95fe8454d8c9?auto=format&fit=crop&w=1800&q=85", "wooden backyard fence with a gate"),
+        ("https://images.unsplash.com/photo-1792628953895-5d46f431b402?auto=format&fit=crop&w=1800&q=85", "backyard with wooden privacy fence and patio"),
+        ("https://images.unsplash.com/photo-1769690177043-c28ce822a4f7?auto=format&fit=crop&w=1800&q=85", "wooden gate and fence among garden plants"),
+    ),
+    "deck": (
+        ("https://images.unsplash.com/photo-1773979638724-c6ffed7fe0de?auto=format&fit=crop&w=1800&q=85", "wooden deck and steps leading to a grassy yard"),
+        ("https://images.unsplash.com/photo-1716904519810-349244919824?auto=format&fit=crop&w=1800&q=85", "wooden outdoor deck with table and chairs"),
+        ("https://images.unsplash.com/photo-1741277031817-146e7ed13f8d?auto=format&fit=crop&w=1800&q=85", "sunny backyard pool and wooden deck"),
+    ),
+    "kitchen": (
+        ("https://images.unsplash.com/photo-1770063817031-f3b98dff347f?auto=format&fit=crop&w=1800&q=85", "modern kitchen with white cabinets and stainless appliances"),
+        ("https://images.unsplash.com/photo-1761656630581-69a58e4e1c09?auto=format&fit=crop&w=1800&q=85", "modern kitchen with wooden cabinets and stainless appliances"),
+        ("https://images.unsplash.com/photo-1764526624453-db32c24eca55?auto=format&fit=crop&w=1800&q=85", "modern kitchen with wooden cabinets and island"),
+    ),
+    "bathroom": (
+        ("https://images.unsplash.com/photo-1771239048293-72abf673adb2?auto=format&fit=crop&w=1800&q=85", "modern bathroom with glass shower and vanity"),
+        ("https://images.unsplash.com/photo-1758239873506-82d0e76244f6?auto=format&fit=crop&w=1800&q=85", "modern bathroom with a vanity and tiled floor"),
+        ("https://images.unsplash.com/photo-1690603935238-b60582bcb273?auto=format&fit=crop&w=1800&q=85", "bathroom with tiled walls and a shower"),
+    ),
+    "carpentry": (
+        ("https://images.unsplash.com/photo-1769353086138-19ee65291a04?auto=format&fit=crop&w=1800&q=85", "carpenter working with wood in a workshop"),
+        ("https://images.unsplash.com/photo-1722411927625-0e478acf502b?auto=format&fit=crop&w=1800&q=85", "woodworker shaping a piece of wood in a workshop"),
+        ("https://images.unsplash.com/photo-1759756480941-7230dedf5fc9?auto=format&fit=crop&w=1800&q=85", "woodworking shop with tools and machinery"),
+    ),
 }
 
 
 def _fallback_pool(category: str) -> tuple[tuple[str, str], ...]:
     lowered = category.lower()
-    return FALLBACK_IMAGES["landscap"] if "landscap" in lowered else FALLBACK_IMAGES["home"]
+    if re.search(r"fenc|gate", lowered):
+        return FALLBACK_IMAGES["fence"]
+    if re.search(r"deck|patio", lowered):
+        return FALLBACK_IMAGES["deck"]
+    if "landscap" in lowered or "garden" in lowered:
+        return FALLBACK_IMAGES["landscap"]
+    if "kitchen" in lowered:
+        return FALLBACK_IMAGES["kitchen"]
+    if "bath" in lowered:
+        return FALLBACK_IMAGES["bathroom"]
+    if re.search(r"carpent|woodwork", lowered):
+        return FALLBACK_IMAGES["carpentry"]
+    if re.search(r"home|roof|siding|window|remodel|renovat|contractor|construction", lowered):
+        return FALLBACK_IMAGES["home"]
+    return ()
 
 
 def _retry_guidance(previous_candidate: Path | None) -> str:
@@ -251,30 +291,31 @@ def compact_facts(facts: dict) -> tuple[dict, list[str]]:
     for (key, image_url, alt), is_valid in zip(validation_candidates, valid_flags):
         if not is_valid or key in seen_images:
             continue
-        images.append({"url": image_url, "alt": alt[:100], "role": "project_photo", "source": "verified_source"})
+        images.append({"url": image_url, "alt": alt[:100] or "subject not identified in source metadata", "role": "project_photo", "source": "verified_source"})
         source_image_urls.append(image_url)
         seen_images.add(key)
         if len(images) >= MAX_SOURCE_IMAGES:
             break
 
-    source_photo_count = len(images)
     category = str(facts.get("business_metadata_unverified", {}).get("category", ""))
     fallback_images = []
-    if source_photo_count < 3:
-        pool = [item for item in _fallback_pool(category) if _url_key(item[0]) not in seen_images]
-        with ThreadPoolExecutor(max_workers=min(4, max(1, len(pool)))) as executor:
-            valid_fallbacks = list(executor.map(lambda item: _image_loads_ok(item[0]), pool))
-        for (image_url, alt), is_valid in zip(pool, valid_fallbacks):
-            if not is_valid:
-                continue
-            item = {"url": image_url, "alt": alt, "role": "project_photo", "source": "validated_fallback"}
-            images.append(item)
-            fallback_images.append(item)
-            seen_images.add(_url_key(image_url))
-            if len(images) >= 3:
-                break
+    # Always include a category-matched option, even when the source has three
+    # or more photos. The prompt can then use source photos where they fit and
+    # fall back for sections the source imagery does not cover.
+    pool = [item for item in _fallback_pool(category) if _url_key(item[0]) not in seen_images]
+    with ThreadPoolExecutor(max_workers=min(4, max(1, len(pool)))) as executor:
+        valid_fallbacks = list(executor.map(lambda item: _image_loads_ok(item[0]), pool))
+    for (image_url, alt), is_valid in zip(pool, valid_fallbacks):
+        if not is_valid:
+            continue
+        item = {"url": image_url, "alt": alt, "role": "project_photo", "source": "validated_fallback"}
+        images.append(item)
+        fallback_images.append(item)
+        seen_images.add(_url_key(image_url))
+        if len(fallback_images) >= MAX_FALLBACK_IMAGES:
+            break
 
-    images = images[:MAX_SOURCE_IMAGES]
+    images = images[:MAX_SOURCE_IMAGES + MAX_FALLBACK_IMAGES]
 
     links = []
     seen_links = set()
@@ -298,11 +339,13 @@ def compact_facts(facts: dict) -> tuple[dict, list[str]]:
     compact = {
         "site": facts.get("requested_url"),
         "identity": str(homepage.get("title", ""))[:140],
+        "visual_category_hint_unverified": str(facts.get("business_metadata_unverified", {}).get("category", ""))[:100],
         "verified_facts": verified_facts,
         "page_sections": headings,
         "contact_fields": form_fields,
         "contact_actions": links,
         "project_images": images,
+        "category_fallback_hero": fallback_images[0]["url"] if fallback_images else "",
     }
     return compact, source_image_urls
 
@@ -358,7 +401,7 @@ def main() -> int:
     prompt_facts, source_image_urls = compact_facts(facts)
     def render_context() -> str:
         image_rules = (
-            "\n\nIMAGE ASSETS: Use relevant validated source project photos where available. Use the supplied validated fallback photos as needed to reach three distinct assets. Use a loaded photo as the full-width hero media."
+            "\n\nIMAGE ASSETS: Use suitable original-site photos first, matching each to a section by its supplied subject. Treat a source photo with no identified subject as unverified; do not force it into a section. If a section has no suitable source photo, use a validated category-matched fallback. If no fallback is supplied for this category, choose a publicly reachable direct image file that matches the verified service and section. Use `category_fallback_hero` only when no source photo suits the main service. Match every image to the verified service and section; never use an unrelated interior for outdoor work."
         )
         source_marker = "\n\nVERIFIED_SOURCE_IMAGE_URLS:\n" + "\n".join(
             f"- {url}" for url in source_image_urls
