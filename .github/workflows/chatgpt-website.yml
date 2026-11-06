@@ -115,6 +115,9 @@ jobs:
           job = json.loads(job_path.read_text(encoding="utf-8"))
           if job.get("job_id") != job_id or job.get("provider") != "chatgpt":
               raise SystemExit("The private job record is invalid for this provider.")
+          candidate_attempt_limit = job.get("candidate_attempt_limit", 10)
+          if isinstance(candidate_attempt_limit, bool) or not isinstance(candidate_attempt_limit, int) or not 1 <= candidate_attempt_limit <= 10:
+              raise SystemExit("The private candidate attempt limit must be an integer from 1 to 10.")
           expected = job.get("row")
           row = json.loads(os.environ.get("PRIVATE_TARGET_ROW_JSON", ""))
           if not isinstance(row, dict) or row != expected:
@@ -141,6 +144,7 @@ jobs:
               "BUSINESS_NAME": normalized["BUSINESS"],
               "INDUSTRY_CATEGORY": normalized["CATEGORY"],
               "LOCATION": normalized.get("LOCATION", ""),
+              "CANDIDATE_ATTEMPT_LIMIT": str(candidate_attempt_limit),
           }
           aliases.update({f"CSV_FIELD_{key}": value for key, value in normalized.items()})
           aliases["PRIVATE_SOURCE_ROOT"] = str(source_root)
@@ -205,6 +209,7 @@ jobs:
         if: steps.context.outcome == 'success'
         env:
           SOURCE_FACTS: ${{ steps.context.outputs.source_facts }}
+          CANDIDATE_ATTEMPT_LIMIT: ${{ env.CANDIDATE_ATTEMPT_LIMIT }}
         run: |
           set -uo pipefail
           mkdir -p tmp/playwright-profiles "${RUNNER_TEMP}/chatgpt-private"
@@ -213,7 +218,7 @@ jobs:
           attempt="$prior_attempts"
           new_attempts=0
           target=3
-          max_attempts=10
+          max_attempts="${CANDIDATE_ATTEMPT_LIMIT:-10}"
           candidate_dirs=()
           previous_candidate_dir=""
           mapfile -t candidate_indices < <(python chatgpt_automation/scripts/continuation.py indices --prior-attempts "$prior_attempts" --max-attempts "$max_attempts")
