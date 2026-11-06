@@ -13,8 +13,10 @@ from urllib.parse import urlsplit
 
 MAX_SOURCE_IMAGES = 4
 MAX_NAVIGATION_LINKS = 3
+MAX_CONTACT_FIELDS = 16
+MAX_CONTENT_PAGES = 2
 MAX_GENERATION_CONTEXT_CHARS = 4300
-MAX_VERIFIED_FACT_CHARS = 720
+MAX_VERIFIED_FACT_CHARS = 620
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
@@ -80,7 +82,7 @@ def _retry_guidance(previous_candidate: Path | None) -> str:
         corrections.append("Correct the previous candidate's automated quality failures and keep the required HTML/CSS part markers exact.")
     return "\n\nRETRY GUIDANCE (specific automated failures from the previous candidate):\n- " + "\n- ".join(corrections)
 def _select_context_pages(facts: dict) -> list[dict]:
-    """Keep the homepage and, only if needed, one page containing a contact form."""
+    """Keep the homepage, a few relevant content pages, and the contact form page."""
     reviewed = facts.get("pages_reviewed", [])
     if not reviewed:
         return []
@@ -93,7 +95,19 @@ def _select_context_pages(facts: dict) -> list[dict]:
             homepage = page
         if form_page is None and page.get("forms"):
             form_page = page
-    chosen = [homepage or reviewed[0]]
+    homepage = homepage or reviewed[0]
+    chosen = [homepage]
+    content_pages = []
+    relevant_page = re.compile(r"about|service|repair|style|gate|product|work|project|gallery|testimonial|review", re.I)
+    for page in reviewed:
+        if page is homepage or page is form_page:
+            continue
+        page_hint = " ".join((str(page.get("url", "")), str(page.get("title", ""))))
+        if relevant_page.search(page_hint):
+            content_pages.append(page)
+        if len(content_pages) >= MAX_CONTENT_PAGES:
+            break
+    chosen.extend(content_pages)
     if form_page is not None and form_page is not chosen[0]:
         chosen.append(form_page)
     return chosen
@@ -115,10 +129,12 @@ def _verified_facts(page: dict, limit: int = MAX_VERIFIED_FACT_CHARS) -> list[st
         if len(sentence) < 35 or key in seen:
             continue
         # Discard menu/page-title fragments and recurring scrape boilerplate.
-        if re.match(r"^(?:home|about|services|contact|menu|skip to content)\b", sentence, re.I):
+        if re.match(r"^(?:home|about|services|contact|menu|skip to content|getting it done|call us now|welcome)\b", sentence, re.I) or re.search(
+            r"top of page|use tab to navigate", sentence, re.I
+        ):
             continue
-        if len(sentence) > 280:
-            sentence = sentence[:277].rsplit(" ", 1)[0].rstrip(" ,;:") + "…"
+        if len(sentence) > 180:
+            sentence = sentence[:177].rsplit(" ", 1)[0].rstrip(" ,;:") + "…"
         if used + len(sentence) > limit:
             continue
         chosen.append(sentence)
@@ -147,18 +163,68 @@ def compact_facts(facts: dict) -> tuple[dict, list[str]]:
         if len(headings) >= 5:
             break
 
+    for page in pages[1:]:
+        page_title = " ".join(str(page.get("title", "")).split())
+        for heading in page.get("headings", []):
+            if isinstance(heading, dict) and heading.get("tag") not in {"h1", "h2"}:
+                continue
+            value = " ".join(str(heading.get("text", "") if isinstance(heading, dict) else heading).split())
+            if not value:
+                continue
+            if page_title and value.casefold() != page_title.casefold():
+                value = f"{page_title}: {value}"
+            key = value.casefold()
+            if key in seen_headings:
+                continue
+            seen_headings.add(key)
+            headings.append(value[:110])
+            if len(headings) >= 8:
+                break
+        if len(headings) >= 8:
+            break
+
+    verified_facts = []
+    seen_facts = set()
+    for page_index, page in enumerate(pages):
+        per_page_limit = (220, 150, 180)[page_index] if page_index < 3 else 0
+        for fact in _verified_facts(page, per_page_limit):
+            title = " ".join(str(page.get("title", "")).split())
+            value = fact if page_index == 0 or not title else f"{title}: {fact}"
+            key = re.sub(r"\W+", " ", value).strip().lower()
+            if key in seen_facts:
+                continue
+            if sum(map(len, verified_facts)) + len(value) > MAX_VERIFIED_FACT_CHARS:
+                continue
+            verified_facts.append(value)
+            seen_facts.add(key)
+            if sum(map(len, verified_facts)) >= MAX_VERIFIED_FACT_CHARS:
+                break
+        if sum(map(len, verified_facts)) >= MAX_VERIFIED_FACT_CHARS:
+            break
+
     form_fields = []
     for page in pages:
         for form in page.get("forms", [])[:1]:
             for field in form.get("fields", []):
-                label = " ".join(str(field.get("label") or field.get("name") or "").split())
+                field_type = str(field.get("type") or field.get("tag") or "").strip().lower()
+                placeholder = " ".join(str(field.get("placeholder", "")).split())
+                label = " ".join(str(
+                    field.get("label") or field.get("aria_label") or
+                    ("" if field_type == "textarea" else placeholder) or field.get("name") or ""
+                ).split())
                 label = re.sub(r"\s*[(*]required[*)]\s*", " ", label, flags=re.IGNORECASE).strip()
+                if not label and field_type == "textarea":
+                    label = "Message"
+                elif not label:
+                    label = placeholder
                 if not label or str(field.get("name", "")).lower().startswith(("ak_hp", "honeypot")):
                     continue
                 item = {"label": label[:70], "required": bool(field.get("required"))}
+                if placeholder and placeholder.casefold() != label.casefold():
+                    item["placeholder"] = placeholder[:110]
                 if item not in form_fields:
                     form_fields.append(item)
-                if len(form_fields) >= 8:
+                if len(form_fields) >= MAX_CONTACT_FIELDS:
                     break
             if form_fields:
                 break
@@ -232,7 +298,7 @@ def compact_facts(facts: dict) -> tuple[dict, list[str]]:
     compact = {
         "site": facts.get("requested_url"),
         "identity": str(homepage.get("title", ""))[:140],
-        "verified_facts": _verified_facts(homepage),
+        "verified_facts": verified_facts,
         "page_sections": headings,
         "contact_fields": form_fields,
         "contact_actions": links,
