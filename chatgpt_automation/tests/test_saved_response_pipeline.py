@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 from chatgpt_automation.scripts.website_chunks import WebsiteTurnError, _part_prompt, run_website_chunks
 from chatgpt_automation.scripts.normalize_cta_arrows import normalize
-from chatgpt_automation.scripts.prepare_candidate_context import _fallback_pool, _is_source_image_host_allowed, compact_facts
+from chatgpt_automation.scripts.prepare_candidate_context import MAX_GENERATION_CONTEXT_CHARS, _fallback_pool, _is_source_image_host_allowed, _render_source_context, compact_facts
 from chatgpt_automation.scripts.fetch_source_facts import _PageParser
 from chatgpt_automation.scripts.site_quality import _category_fallback_image_urls_from_prompt, _image_source_checks, _source_image_urls_from_prompt
 from chatgpt_file_playwright_anonymous_ci import inspect_chatgpt_page_state
@@ -102,8 +102,10 @@ class SavedResponsePipelineTest(unittest.TestCase):
         self.assertNotIn("finished home interior and renovation", [alt for _, alt in fence_pool])
         with patch("chatgpt_automation.scripts.prepare_candidate_context._image_loads_ok", return_value=True):
             compact, _ = compact_facts(facts)
+        context = _render_source_context(compact, "A concise responsive site design brief.")
 
         self.assertEqual(compact["visual_category_hint_unverified"], "Fence Companies")
+        self.assertLessEqual(len(context), MAX_GENERATION_CONTEXT_CHARS)
         self.assertEqual(compact["project_images"][0]["source"], "verified_source")
         self.assertIn(
             "https://static.wixstatic.com/media/fence-photo.jpg",
