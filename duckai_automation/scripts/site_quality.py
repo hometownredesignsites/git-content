@@ -80,13 +80,17 @@ def _hero_has_css_background_image(css, hero_selectors):
 
 
 def _urls_from_srcset(value):
-    """Return URL tokens from a srcset attribute, ignoring density descriptors."""
-    urls = []
+    """Return srcset URL tokens from largest declared resource to smallest."""
+    candidates = []
     for candidate in (value or "").split(","):
         fields = candidate.strip().split()
         if fields:
-            urls.append(fields[0])
-    return urls
+            descriptor = fields[1] if len(fields) > 1 else "1x"
+            match = re.fullmatch(r"(\d+(?:\.\d+)?)(w|x)", descriptor)
+            priority = float(match.group(1)) if match else 0.0
+            candidates.append((match.group(2) if match else "x", priority, fields[0]))
+    candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    return [url for _, _, url in candidates]
 
 
 def _image_urls_from_css(css, hero_selectors):
@@ -423,6 +427,25 @@ def _source_image_urls_from_prompt(prompt):
     return urls
 
 
+def _category_fallback_image_urls_from_prompt(prompt):
+    marker = re.search(r"CATEGORY_FALLBACK_IMAGE_URLS:\s*\n([\s\S]*?)(?:\n\s*\n|$)", prompt)
+    if not marker:
+        return []
+    urls = []
+    for line in marker.group(1).splitlines():
+        match = re.match(r"\s*-\s*(https?://\S+)", line)
+        if match:
+            urls.append(html_module.unescape(match.group(1)))
+    return urls
+
+
+def _image_asset_approval(image_urls, hero_urls, approved_urls, base_url=None):
+    approved = {key for url in approved_urls if (key := _url_key(url, base_url))}
+    used = {key for url in image_urls if (key := _url_key(url, base_url))}
+    hero = {key for url in hero_urls if (key := _url_key(url, base_url))}
+    return bool(used) and used.issubset(approved), bool(hero) and bool(hero & approved)
+
+
 class _PageInventory(HTMLParser):
     def __init__(self):
         super().__init__(convert_charrefs=True)
@@ -501,18 +524,28 @@ class _PageInventory(HTMLParser):
             or tag == "source"
             and (
                 (values.get("type") or "").lower().startswith("image/")
-                or bool(values.get("srcset") or values.get("data-srcset"))
+                or any(values.get(attribute) for attribute in (
+                    "srcset", "data-srcset", "data-lazy-srcset", "data-original-srcset"
+                ))
             )
         )
         if tag == "img" and "alt" not in values:
             self.images_missing_alt = True
         if is_image_source:
-            for attribute in ("src", "data-src", "data-lazy-src", "data-original", "data-image-url"):
+            for attribute in (
+                "src", "data-src", "data-lazy-src", "data-original", "data-image-url",
+                "data-image", "data-lazy", "data-original-src",
+            ):
                 value = (values.get(attribute) or "").strip()
                 if value:
                     self.all_image_urls.append(value)
-            for attribute in ("srcset", "data-srcset"):
+            for attribute in ("srcset", "data-srcset", "data-lazy-srcset", "data-original-srcset"):
                 self.all_image_urls.extend(_urls_from_srcset(values.get(attribute, "")))
+        self.all_image_urls.extend(re.findall(
+            r"(?:url|image-set)\(\s*['\"]?([^)\s'\"]+)",
+            values.get("style", ""),
+            re.IGNORECASE,
+        ))
         if tag == "video" and values.get("poster", "").strip():
             self.all_image_urls.append(values["poster"].strip())
         if values.get("id"):
@@ -539,18 +572,21 @@ class _PageInventory(HTMLParser):
 
             image_sources = (
                 values.get("src"), values.get("data-src"), values.get("data-lazy-src"),
+                values.get("data-original-src"), values.get("data-image-url"),
             )
             if tag == "img" and (
                 any(source and source.strip() for source in image_sources)
                 or values.get("srcset", "").strip()
                 or values.get("data-srcset", "").strip()
+                or values.get("data-lazy-srcset", "").strip()
+                or values.get("data-original-srcset", "").strip()
             ):
                 self.hero_image_present = True
                 self.hero_image_urls.extend(
                     source.strip() for source in image_sources if source and source.strip()
                 )
             if tag in {"img", "source"}:
-                for attribute in ("srcset", "data-srcset"):
+                for attribute in ("srcset", "data-srcset", "data-lazy-srcset", "data-original-srcset"):
                     self.hero_image_urls.extend(_urls_from_srcset(values.get(attribute, "")))
                 if tag == "source" and values.get("src", "").strip():
                     self.hero_image_urls.append(values["src"].strip())
@@ -851,16 +887,23 @@ def assess_website(prompt, session_dir):
         checks[f"browser_{name}"] = browser_qa_status in {"pass", "fail"} and browser_qa_checks.get(name) is True
 
     source_image_urls = _source_image_urls_from_prompt(prompt)
+    category_fallback_urls = _category_fallback_image_urls_from_prompt(prompt)
+    approved_image_urls = source_image_urls + category_fallback_urls
+    if approved_image_urls:
+        all_approved, hero_approved = _image_asset_approval(
+            image_urls, parser.hero_image_urls, approved_image_urls, base_url
+        )
+        checks["images_use_source_or_category_assets"] = all_approved
+        checks["hero_uses_source_or_category_asset"] = hero_approved
     if source_image_urls:
         source_keys = {key for url in source_image_urls if (key := _url_key(url, base_url))}
         used_keys = {key for url in parser.all_image_urls if (key := _url_key(url, base_url))}
         hero_keys = {key for url in parser.hero_image_urls if (key := _url_key(url, base_url))}
         source_used = source_keys & used_keys
         source_hero_used = bool(source_keys & hero_keys)
-        required_source_count = min(2, len(source_keys))
         checks["source_site_hero_photo_used"] = source_hero_used
-        checks["source_site_photos_used"] = len(source_used) >= required_source_count
-        checks["source_site_photos_load_ok"] = bool(source_used) and all(
+        checks["source_site_photos_used"] = bool(source_used)
+        checks["source_site_photos_load_ok"] = not source_used or all(
             _image_loads_ok(url, base_url=base_url)
             for url in parser.all_image_urls
             if (key := _url_key(url, base_url)) in source_keys
@@ -875,9 +918,18 @@ def assess_website(prompt, session_dir):
     if re.search(r"\b(?:form|booking form|contact form|request form)\b", explicit_form_request, re.IGNORECASE):
         checks["requested_form_present"] = parser.forms > 0
 
-    passed = sum(checks.values())
-    total = len(checks)
-    automated_checks = {name: value for name, value in checks.items() if name != "visual_design_review_passed"}
+    advisory_checks = {
+        "source_site_hero_photo_used",
+        "source_site_photos_used",
+        "source_site_photos_load_ok",
+    }
+    scored_checks = {name: value for name, value in checks.items() if name not in advisory_checks}
+    passed = sum(scored_checks.values())
+    total = len(scored_checks)
+    automated_checks = {
+        name: value for name, value in checks.items()
+        if name != "visual_design_review_passed" and name not in advisory_checks
+    }
     automated_success = bool(html and css and all(automated_checks.values()))
     missing_sections = [name for name, present in section_results.items() if not present]
     if not hero_image_present:
@@ -915,12 +967,10 @@ def assess_website(prompt, session_dir):
         for name, label in browser_labels.items():
             if browser_qa_checks.get(name) is not True:
                 missing_sections.append(label)
-    if source_image_urls and not checks.get("source_site_hero_photo_used"):
-        missing_sections.append("verified source-site photo in hero")
-    if source_image_urls and not checks.get("source_site_photos_used"):
-        missing_sections.append("at least two verified source-site photos")
-    if source_image_urls and not checks.get("source_site_photos_load_ok"):
-        missing_sections.append("verified source-site photos load")
+    if approved_image_urls and not checks.get("images_use_source_or_category_assets"):
+        missing_sections.append("all photos use verified source or category-matched assets")
+    if approved_image_urls and not checks.get("hero_uses_source_or_category_asset"):
+        missing_sections.append("hero photo uses a verified source or category-matched asset")
 
     return {
         "session_folder": session_dir.name,
@@ -950,6 +1000,7 @@ def assess_website(prompt, session_dir):
         "browser_qa_status": browser_qa_status,
         "browser_qa": browser_qa_report,
         "source_image_urls_available": source_image_urls,
+        "category_fallback_image_urls_available": category_fallback_urls,
         "source_image_urls_used": sorted(source_used) if source_image_urls else [],
         "parse_diagnostic": parse_error,
         "html_bytes": len(html.encode("utf-8")),
@@ -957,7 +1008,7 @@ def assess_website(prompt, session_dir):
         "footer_text": " ".join(parser.footer_text),
         "footer_links": parser.footer_links,
         "cta_arrow_issues": parser.cta_arrow_issues,
-        "complete": bool(html and css and all(checks.values())),
+        "complete": bool(html and css and all(scored_checks.values())),
         "final_success": bool(
             automated_success and checks["visual_design_review_passed"]
             and (not visual_review_required or visual_review_status == "pass")

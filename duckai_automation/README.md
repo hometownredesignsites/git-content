@@ -28,7 +28,7 @@ The private coordinator passes all columns to the worker. The standard prompt us
 
 ## Candidate process and checks
 
-Each candidate uses a fresh logged-out Duck.ai chat. The runner requests a sourced site assessment, then CSS parts 1–3, an acknowledgment turn, and HTML parts 1–3 in the same chat. It validates the captured chunks, assembles the page, inlines CSS, and checks the exact inlined page in Playwright at desktop and mobile sizes. The structural and browser checks cover required page sections, hero and CTA behavior, mobile navigation, overflow, fonts, and images.
+Each candidate uses a fresh logged-out Duck.ai chat. The runner requests a sourced site assessment, then CSS parts 1–3, an acknowledgment turn, and HTML parts 1–3 in the same chat. It passes exact source-photo URLs and category fallback URLs from the assessment into the generation prompt. QA requires used images to come from those approved sources, checks that the hero uses an approved image, and confirms that images load in the browser. The structural and browser checks also cover required page sections, hero and CTA behavior, mobile navigation, overflow, and fonts.
 
 Automated passes are provisional: checks do not establish visual polish, image relevance, or factual accuracy. Review the screenshots and source-derived content in private results before using a page. If Duck.ai requires sign-in or presents a human-verification or usage gate, the candidate stops and records available failure evidence; the workflow does not bypass that gate.
 
