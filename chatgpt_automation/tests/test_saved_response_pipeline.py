@@ -8,11 +8,13 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from chatgpt_automation.scripts.website_chunks import WebsiteTurnError, _part_prompt, run_website_chunks
 from chatgpt_automation.scripts.normalize_cta_arrows import normalize
 from chatgpt_file_playwright_anonymous_ci import inspect_chatgpt_page_state
 from playwright_runner.browser_session import response_generation_active
+from playwright_runner.recovery import start_new_chat_from_login_gate
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -450,6 +452,72 @@ class ChatGPTPageStateTest(unittest.TestCase):
         self.assertEqual(auth["classification"], "login_required")
         self.assertEqual(captcha["classification"], "captcha_required")
         self.assertEqual(ready["classification"], "ready")
+
+    def test_sign_in_card_in_page_body_is_classified_without_dialog_role(self):
+        page = _FakePage()
+        page.body = _FakeLocator(text="Where should we begin? Sign in to continue New chat")
+
+        observation = inspect_chatgpt_page_state(page)
+
+        self.assertEqual(observation["classification"], "login_required")
+        self.assertIn("visible sign-in screen", observation["signals"][0])
+
+    def test_new_chat_recovery_clicks_auth_card_action_and_requires_composer(self):
+        class Button:
+            def __init__(self, page):
+                self.page = page
+
+            def is_visible(self):
+                return True
+
+            def is_enabled(self):
+                return True
+
+            def click(self, timeout=None):
+                self.page.clicked = True
+
+        class Buttons:
+            def __init__(self, page):
+                self.page = page
+                self.button = Button(page)
+
+            def count(self):
+                return 1
+
+            def nth(self, _index):
+                return self.button
+
+        class Page:
+            def __init__(self, body_text):
+                self.body_text = body_text
+                self.clicked = False
+
+            def locator(self, selector):
+                if selector == "body":
+                    return _FakeLocator(text=self.body_text)
+                return Buttons(self)
+
+            def wait_for_timeout(self, _timeout):
+                pass
+
+        page = Page("Sign in to continue")
+        with patch(
+            "playwright_runner.recovery.find_chat_composer",
+            side_effect=lambda _page, timeout_ms: object() if page.clicked else None,
+        ):
+            self.assertTrue(start_new_chat_from_login_gate(page, timeout_ms=1000))
+        self.assertTrue(page.clicked)
+
+    def test_new_chat_recovery_does_not_click_without_sign_in_gate(self):
+        class Page:
+            clicked = False
+
+            def locator(self, selector):
+                return _FakeLocator(text="A normal chat page")
+
+        page = Page()
+        self.assertFalse(start_new_chat_from_login_gate(page, timeout_ms=1000))
+        self.assertFalse(page.clicked)
 
     def test_chatgpt_connection_failure_text_in_page_body_is_classified(self):
         page = _FakePage()

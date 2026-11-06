@@ -64,6 +64,37 @@ def start_new_chat_if_available(page, timeout_ms: int) -> bool:
     return False
 
 
+def start_new_chat_from_login_gate(page, timeout_ms: int) -> bool:
+    """Use the visible login-screen New chat action only when it restores a composer."""
+    try:
+        body_text = page.locator("body").inner_text(timeout=2500)
+    except Exception:
+        return False
+    lowered = body_text.casefold()
+    if "sign in to continue" not in lowered and "log in or sign up" not in lowered:
+        return False
+
+    # Prefer the centered sign-in card's action over the sidebar's New chat link.
+    for selector in (
+        "[role='dialog'] button:has-text('New chat')",
+        "main button:has-text('New chat')",
+        "button:has-text('New chat')",
+        "a:has-text('New chat')",
+    ):
+        try:
+            candidates = page.locator(selector)
+            for index in reversed(range(min(candidates.count(), 6))):
+                candidate = candidates.nth(index)
+                if not candidate.is_visible() or not candidate.is_enabled():
+                    continue
+                candidate.click(timeout=3000)
+                page.wait_for_timeout(1200)
+                return find_chat_composer(page, timeout_ms=timeout_ms) is not None
+        except Exception:
+            continue
+    return False
+
+
 def refresh_chat(page, timeout_ms: int) -> None:
     try:
         page.reload(wait_until="domcontentloaded", timeout=timeout_ms)

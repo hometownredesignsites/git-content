@@ -14,7 +14,7 @@ from pathlib import Path
 from playwright_runner.chunk_orchestrator import run_chunk_plan
 from playwright_runner.diagnostics import enable_network_logging, save_failure_diagnostics
 from playwright_runner.prompt_contracts import build_prompt_text, extract_json_payload
-from playwright_runner.recovery import refresh_chat, start_new_chat_if_available
+from playwright_runner.recovery import refresh_chat, start_new_chat_from_login_gate, start_new_chat_if_available
 from playwright_runner.stage_runner import EmptyAssistantResponseError, run_stage_once, write_stage_outputs
 from playwright_runner.browser_session import assistant_turns, find_chat_composer
 from chatgpt_automation.scripts.website_chunks import CSS_PART_COUNT, HTML_PART_COUNT, WebsiteTurnError, run_website_chunks
@@ -154,9 +154,9 @@ def inspect_chatgpt_page_state(page) -> dict:
     elif conversation_gated:
         classification = "conversation_gated"
         signals.append("ChatGPT page marks the conversation as gated")
-    elif re.search(r"log in or sign up|sign in to continue", dialog_text, re.IGNORECASE):
+    elif re.search(r"log in or sign up|sign in to continue", combined_text, re.IGNORECASE):
         classification = "login_required"
-        signals.append("visible login dialog blocks the conversation")
+        signals.append("visible sign-in screen blocks the conversation")
     elif re.search(
         r"something went wrong|error generating response|failed to load conversation|"
         r"chat stopped unexpectedly|unable to connect|no internet|"
@@ -278,16 +278,36 @@ def run() -> int:
                 if not args.website_chat_id:
                     raise RuntimeError("--website-chat-id is required with --website-run-folder.")
 
+                def recover_login_gate(observation: dict) -> tuple[dict, bool]:
+                    nonlocal started_new_chat
+                    if observation.get("classification") != "login_required":
+                        return observation, False
+                    checkpoint_path = Path(args.website_run_folder) / "chunks" / "sequence_checkpoint.json"
+                    try:
+                        checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+                        accepted_parts = checkpoint.get("accepted_parts", [])
+                    except (OSError, json.JSONDecodeError):
+                        # If saved conversational context is uncertain, preserve the current tab.
+                        return observation, False
+                    if accepted_parts:
+                        return observation, False
+                    if not start_new_chat_from_login_gate(page, args.timeout_ms):
+                        return inspect_chatgpt_page_state(page), False
+                    started_new_chat = True
+                    return inspect_chatgpt_page_state(page), True
+
                 def exchange_website_turn(turn_text: str):
                     # Reuse the existing newest-assistant-response capture on this same page.
                     before_state = inspect_chatgpt_page_state(page)
+                    before_state, _ = recover_login_gate(before_state)
                     if before_state["classification"] != "ready":
                         raise WebsiteTurnError(
                             before_state["classification"],
                             f"ChatGPT page is unavailable for a website turn: {before_state['classification']}",
                             before_state,
                         )
-                    try:
+
+                    def submit_turn():
                         response_text, response_metadata = run_stage_once(
                             page=page,
                             timeout_ms=args.timeout_ms,
@@ -300,21 +320,46 @@ def run() -> int:
                             stage_name="website_chunk",
                             error_screenshot=error_screenshot,
                         )
+                        return response_text, response_metadata
+
+                    try:
+                        response_text, response_metadata = submit_turn()
                     except Exception as error:
                         after_error = inspect_chatgpt_page_state(page)
-                        if after_error["classification"] != "ready":
+                        after_error, recovered_login_gate = recover_login_gate(after_error)
+                        if recovered_login_gate and after_error["classification"] == "ready":
+                            # No response was captured, so retry this exact prompt in the fresh chat.
+                            try:
+                                response_text, response_metadata = submit_turn()
+                            except Exception as retry_error:
+                                retry_state = inspect_chatgpt_page_state(page)
+                                if retry_state["classification"] != "ready":
+                                    raise WebsiteTurnError(
+                                        retry_state["classification"],
+                                        f"ChatGPT page became unavailable after starting a new chat: {retry_state['classification']}; {retry_error}",
+                                        retry_state,
+                                    ) from retry_error
+                                if isinstance(retry_error, EmptyAssistantResponseError):
+                                    raise WebsiteTurnError(
+                                        "empty_response",
+                                        "The assistant response was empty after starting a new chat.",
+                                        retry_state,
+                                    ) from retry_error
+                                raise
+                        elif after_error["classification"] != "ready":
                             raise WebsiteTurnError(
                                 after_error["classification"],
                                 f"ChatGPT page became unavailable during the turn: {after_error['classification']}; {error}",
                                 after_error,
                             ) from error
-                        if isinstance(error, EmptyAssistantResponseError):
+                        elif isinstance(error, EmptyAssistantResponseError):
                             raise WebsiteTurnError(
                                 "empty_response",
                                 "The assistant response was empty while the ChatGPT page remained available.",
                                 after_error,
                             ) from error
-                        raise
+                        else:
+                            raise
                     after_state = inspect_chatgpt_page_state(page)
                     if after_state["classification"] != "ready":
                         raise WebsiteTurnError(
