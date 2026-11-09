@@ -1,0 +1,124 @@
+name: Queue completed High sites for ChatGPT
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+      timezone: America/New_York
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chatgpt-high-site-poller
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      job_ids: ${{ steps.queue.outputs.job_ids }}
+    steps:
+      - name: Check out ChatGPT code
+        uses: actions/checkout@v4
+        with:
+          ref: chatgpt
+      - name: Read the High candidates CSV
+        uses: actions/checkout@v4
+        with:
+          repository: hometownredesignsites/website-lead-hunting-operations
+          ref: git-chatgpt
+          path: lead-operations
+          token: ${{ secrets.LEAD_OPERATIONS_TOKEN }}
+      - name: Read the private ChatGPT queue
+        uses: actions/checkout@v4
+        with:
+          repository: hometownredesignsites/git-content-private
+          ref: chatgpt
+          path: private-chatgpt
+          token: ${{ secrets.PRIVATE_RESULTS_TOKEN }}
+          fetch-depth: 0
+      - name: Queue eligible sites
+        id: queue
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import csv, hashlib, json, os, re, subprocess, uuid
+          from datetime import datetime, timezone
+          from pathlib import Path
+          from urllib.parse import urlsplit
+          csv_path = Path("lead-operations/scores/HIGH_MEDIUM_CANDIDATES.csv")
+          root = Path("private-chatgpt/private_automation/queue")
+          jobs_dir, batch_dir = root / "jobs", root / "batches"
+          slug_path = root / "result-slugs.json"
+          def host(value):
+              value = (value or "").strip()
+              parsed = urlsplit(value if "://" in value else "https://" + value)
+              return (parsed.hostname or "").lower().removeprefix("www.").rstrip(".")
+          seen = set()
+          for path in jobs_dir.glob("*.json") if jobs_dir.exists() else []:
+              record = json.loads(path.read_text(encoding="utf-8"))
+              if record.get("provider") == "chatgpt":
+                  seen.add(host((record.get("row") or {}).get("website", "")))
+          candidates = []
+          with csv_path.open(encoding="utf-8-sig", newline="") as stream:
+              for row in csv.DictReader(stream):
+                  if (row.get("final_outcome") or "").strip().lower() != "high": continue
+                  if (row.get("assessment_state") or "").strip().lower() != "complete": continue
+                  if (row.get("confidence_level") or "").strip() != "3": continue
+                  website, business = (row.get("website_url") or "").strip(), (row.get("business_name") or "").strip()
+                  site_host = host(website); parsed = urlsplit(website)
+                  if not site_host or site_host in seen or not business or parsed.scheme not in {"http", "https"} or not parsed.hostname: continue
+                  target = {"website": website, "business": business, "category": (row.get("category") or "").strip() or "Local business"}
+                  if row.get("location"): target["location"] = row["location"].strip()
+                  candidates.append((site_host, target, row.get("score", "")))
+          def score_value(value):
+              try: return float(value or 0)
+              except (TypeError, ValueError): return 0.0
+          candidates.sort(key=lambda item: (-score_value(item[2]), item[0]))
+          candidates = candidates[:24]
+          if not candidates:
+              print("No unprocessed completed confidence-3 High sites found.")
+              open(os.environ["GITHUB_OUTPUT"], "a").write("job_ids=[]\n")
+              raise SystemExit(0)
+          jobs_dir.mkdir(parents=True, exist_ok=True); batch_dir.mkdir(parents=True, exist_ok=True)
+          try: slug_map = json.loads(slug_path.read_text(encoding="utf-8"))
+          except (OSError, json.JSONDecodeError): slug_map = {}
+          if not isinstance(slug_map, dict): slug_map = {}
+          used = {v for v in slug_map.values() if isinstance(v, str)}
+          batch_id, job_ids = str(uuid.uuid4()), []
+          for site_host, target, _ in candidates:
+              job_id = str(uuid.uuid4()); slug = slug_map.get(site_host)
+              if not isinstance(slug, str):
+                  base = re.sub(r"[^a-z0-9]+", "-", site_host).strip("-") or "site"
+                  slug = base if base not in used else f"{base}-{hashlib.sha256(site_host.encode()).hexdigest()[:6]}"
+                  slug_map[site_host] = slug; used.add(slug)
+              job = {"job_id": job_id, "batch_id": batch_id, "provider": "chatgpt", "result_slug": slug, "candidate_attempt_limit": 10, "row": target}
+              (jobs_dir / f"{job_id}.json").write_text(json.dumps(job, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+              job_ids.append(job_id)
+          batch = {"schema_version": 1, "batch_id": batch_id, "created_at": datetime.now(timezone.utc).isoformat(), "source": "website-lead-hunting-operations/scores/HIGH_MEDIUM_CANDIDATES.csv", "selection": "final_outcome=high, assessment_state=complete, confidence_level=3", "job_ids": job_ids, "target_count": len(job_ids)}
+          (batch_dir / f"{batch_id}.json").write_text(json.dumps(batch, indent=2) + "\n", encoding="utf-8")
+          slug_path.parent.mkdir(parents=True, exist_ok=True); slug_path.write_text(json.dumps(slug_map, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          repo = "private-chatgpt"
+          subprocess.run(["git", "-C", repo, "config", "user.name", "github-actions[bot]"], check=True)
+          subprocess.run(["git", "-C", repo, "config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com"], check=True)
+          files = [str(p.relative_to(repo)) for p in jobs_dir.glob("*.json") if p.stem in job_ids]
+          files += [str(Path("private_automation/queue/batches") / f"{batch_id}.json"), "private_automation/queue/result-slugs.json"]
+          subprocess.run(["git", "-C", repo, "add", "--", *files], check=True)
+          subprocess.run(["git", "-C", repo, "commit", "-m", f"private: queue ChatGPT High batch {batch_id}"], check=True)
+          subprocess.run(["git", "-C", repo, "push", "origin", "HEAD:refs/heads/chatgpt"], check=True)
+          open(os.environ["GITHUB_OUTPUT"], "a").write("job_ids=" + json.dumps(job_ids) + "\n")
+          print(f"Queued {len(job_ids)} eligible sites privately.")
+          PY
+  process:
+    needs: prepare
+    if: needs.prepare.outputs.job_ids != '[]'
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        job_id: ${{ fromJson(needs.prepare.outputs.job_ids) }}
+    uses: ./.github/workflows/chatgpt-website.yml
+    with:
+      job_id: ${{ matrix.job_id }}
+    secrets: inherit
