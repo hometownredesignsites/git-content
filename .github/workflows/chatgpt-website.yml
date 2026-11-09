@@ -5,6 +5,11 @@ on:
     branches: [chatgpt]
     paths:
       - ".private-queue/start/*.json"
+  workflow_call:
+    inputs:
+      job_id:
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -26,7 +31,8 @@ jobs:
         shell: bash
         working-directory: ${{ github.workspace }}
     env:
-      PRIVATE_TARGET_JOB_ID: ${{ secrets.CHATGPT_TARGET_JOB_ID }}
+      PRIVATE_TARGET_JOB_ID: ${{ inputs.job_id || secrets.CHATGPT_TARGET_JOB_ID }}
+      INPUT_JOB_ID: ${{ inputs.job_id }}
       PRIVATE_TARGET_ROW_JSON: ${{ secrets.CHATGPT_TARGET_ROW_JSON }}
       PYTHONUNBUFFERED: "1"
     steps:
@@ -43,6 +49,15 @@ jobs:
         run: |
           set -euo pipefail
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          if [[ -n "${INPUT_JOB_ID:-}" ]]; then
+            job_id="$INPUT_JOB_ID"
+            if [[ ! "$job_id" =~ ^[0-9a-f-]{36}$ ]]; then echo "The private job ID is invalid."; exit 1; fi
+            echo "::add-mask::$job_id"
+            echo "JOB_ID=$job_id" >> "$GITHUB_ENV"
+            echo "SITE_INDEX=1" >> "$GITHUB_ENV"
+            echo "Validated the private job ID for the scheduled call."
+            exit 0
+          fi
           if [[ ! "$PRIVATE_TARGET_JOB_ID" =~ ^[0-9a-f-]{36}$ ]]; then
             echo "The active private job ID is missing or invalid."
             exit 1
@@ -98,7 +113,8 @@ jobs:
         id: private_target
         if: steps.private_source.outcome == 'success'
         env:
-          JOB_ID: ${{ secrets.CHATGPT_TARGET_JOB_ID }}
+          JOB_ID: ${{ inputs.job_id || secrets.CHATGPT_TARGET_JOB_ID }}
+          INPUT_JOB_ID: ${{ inputs.job_id }}
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -119,9 +135,12 @@ jobs:
           if isinstance(candidate_attempt_limit, bool) or not isinstance(candidate_attempt_limit, int) or not 1 <= candidate_attempt_limit <= 10:
               raise SystemExit("The private candidate attempt limit must be an integer from 1 to 10.")
           expected = job.get("row")
-          row = json.loads(os.environ.get("PRIVATE_TARGET_ROW_JSON", ""))
-          if not isinstance(row, dict) or row != expected:
-              raise SystemExit("The active private target does not match its private job record.")
+          if os.environ.get("INPUT_JOB_ID"):
+              row = expected
+          else:
+              row = json.loads(os.environ.get("PRIVATE_TARGET_ROW_JSON", ""))
+              if not isinstance(row, dict) or row != expected:
+                  raise SystemExit("The active private target does not match its private job record.")
           normalized = {}
           for key, value in row.items():
               name = re.sub(r"[^A-Za-z0-9_]", "_", str(key).strip()).upper()
