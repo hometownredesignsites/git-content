@@ -5,6 +5,12 @@ on:
     - cron: "17 6 * * *"
       timezone: America/New_York
   workflow_dispatch:
+    inputs:
+      max_sites:
+        description: Maximum sites for this manual run (use 1 for a test)
+        required: false
+        default: "1"
+        type: string
 
 permissions:
   contents: read
@@ -40,6 +46,8 @@ jobs:
           fetch-depth: 0
       - name: Queue eligible sites
         id: queue
+        env:
+          MAX_SITES: ${{ github.event_name == 'workflow_dispatch' && inputs.max_sites || '24' }}
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -66,6 +74,8 @@ jobs:
                   if (row.get("final_outcome") or "").strip().lower() != "high": continue
                   if (row.get("assessment_state") or "").strip().lower() != "complete": continue
                   if (row.get("confidence_level") or "").strip() != "3": continue
+                  previews = (row.get("Preview_URLs_json") or "").strip()
+                  if previews and previews not in {"[]", "null"}: continue
                   website, business = (row.get("website_url") or "").strip(), (row.get("business_name") or "").strip()
                   site_host = host(website); parsed = urlsplit(website)
                   if not site_host or site_host in seen or not business or parsed.scheme not in {"http", "https"} or not parsed.hostname: continue
@@ -76,7 +86,9 @@ jobs:
               try: return float(value or 0)
               except (TypeError, ValueError): return 0.0
           candidates.sort(key=lambda item: (-score_value(item[2]), item[0]))
-          candidates = candidates[:24]
+          limit = int(os.environ.get("MAX_SITES", "24"))
+          if not 1 <= limit <= 24: raise SystemExit("MAX_SITES must be between 1 and 24")
+          candidates = candidates[:limit]
           if not candidates:
               print("No unprocessed completed confidence-3 High sites found.")
               open(os.environ["GITHUB_OUTPUT"], "a").write("job_ids=[]\n")
