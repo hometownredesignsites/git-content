@@ -30,6 +30,7 @@ BLOCKED_CLASSIFICATIONS = {
 }
 TARGET_PASSES = 3
 MAX_ATTEMPTS_PER_BATCH = 10
+NON_BLOCKING_LOGIN_EVIDENCE = {"login_required", "sign in to continue"}
 
 
 def read_json(path: Path) -> dict[str, Any] | None:
@@ -92,11 +93,13 @@ def continuation_is_eligible(
     candidates_dir: Path,
     continued_from: str = "",
 ) -> bool:
+    evidence = access_gate_evidence(candidates_dir)
+    blocking_evidence = set(evidence) - NON_BLOCKING_LOGIN_EVIDENCE
     return (
         0 <= successful_candidates < TARGET_PASSES
         and attempts == MAX_ATTEMPTS_PER_BATCH
         and not continued_from
-        and not access_gate_evidence(candidates_dir)
+        and not blocking_evidence
     )
 
 
@@ -187,6 +190,7 @@ def write_batch_status(
     if not new_attempts <= attempts <= 2 * MAX_ATTEMPTS_PER_BATCH:
         raise ValueError("Total attempts must include this batch and stay within the 20-attempt cap")
     evidence = access_gate_evidence(candidates_dir)
+    non_retryable_evidence = sorted(set(evidence) - NON_BLOCKING_LOGIN_EVIDENCE)
     status = {
         "job_id": job_id,
         "status": "passed" if successful_candidates >= TARGET_PASSES else "failed",
@@ -198,7 +202,7 @@ def write_batch_status(
         ),
         "access_gate_evidence": evidence,
         "access_gate_detected": bool(evidence),
-        "non_retryable_access_classifications": evidence,
+        "non_retryable_access_classifications": non_retryable_evidence,
         "continued_from": {"job_id": continued_from, "run_id": parent_run_id} if continued_from else None,
         "public_workflow_run": public_workflow_run,
     }
