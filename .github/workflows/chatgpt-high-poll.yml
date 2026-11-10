@@ -74,8 +74,9 @@ jobs:
                   if (row.get("final_outcome") or "").strip().lower() != "high": continue
                   if (row.get("assessment_state") or "").strip().lower() != "complete": continue
                   if (row.get("confidence_level") or "").strip() != "3": continue
-                  previews = (row.get("Preview_URLs_json") or "").strip()
-                  if previews and previews not in {"[]", "null"}: continue
+                  preview_url = (row.get("PreviewURL") or "").strip()
+                  legacy_previews = (row.get("Preview_URLs_json") or "").strip()
+                  if preview_url or (legacy_previews and legacy_previews not in {"[]", "null"}): continue
                   website, business = (row.get("website_url") or "").strip(), (row.get("business_name") or "").strip()
                   site_host = host(website); parsed = urlsplit(website)
                   if not site_host or site_host in seen or not business or parsed.scheme not in {"http", "https"} or not parsed.hostname: continue
