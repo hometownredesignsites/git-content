@@ -185,7 +185,7 @@ def write_batch_status(
     if derive_candidate_counts:
         successful_candidates, new_attempts = observed_candidate_counts(candidates_dir)
         attempts = prior_attempts + new_attempts
-    if successful_candidates < 0 or not 0 <= new_attempts <= MAX_ATTEMPTS_PER_BATCH:
+    if successful_candidates < 0 or not 0 <= new_attempts <= 2 * MAX_ATTEMPTS_PER_BATCH:
         raise ValueError("Candidate and new-attempt counts are outside their valid bounds")
     if not new_attempts <= attempts <= 2 * MAX_ATTEMPTS_PER_BATCH:
         raise ValueError("Total attempts must include this batch and stay within the 20-attempt cap")
