@@ -288,6 +288,15 @@ jobs:
                 previous_candidate_dir="$run_dir"
                 continue
               fi
+              if [[ "$candidate_index" -eq $((prior_attempts + 1)) ]]; then
+                python - "$run_dir/debug/inputs.json" <<'PY'
+          import json, sys
+          from pathlib import Path
+          inputs = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          if inputs.get("source_capture_quality") == "sparse":
+              print("::warning title=Sparse source evidence::No verified facts, service sections, or original photos were captured. Generation will continue, but concepts may be generic.")
+          PY
+              fi
               cp "$SOURCE_FACTS" "$run_dir/debug/source_facts.json"
               cp chatgpt_automation/website_request.txt "$run_dir/debug/website_request.txt"
               chat_id="$(python -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["chat_id"])' "$run_dir/debug/inputs.json")"
