@@ -372,10 +372,11 @@ jobs:
           PY
           echo "Generation finished: ${successful}/${target} automated passes after ${attempt} attempt(s)."
           if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
-            printf '## Private ChatGPT candidate batch\n\n- Automated passes: **%s/%s**\n- Attempts: **%s** total, **%s** in this run\n- Candidate files are stored in the private repository.\n' "$successful" "$target" "$attempt" "$new_attempts" >> "$GITHUB_STEP_SUMMARY"
+            printf '## Private ChatGPT candidate batch\n\n- Automated passes: **%s/%s**\n- Attempts: **%s** total, **%s** in this run\n- Candidate files are intended for private storage; check the save step below for confirmation.\n' "$successful" "$target" "$attempt" "$new_attempts" >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Save all candidate evidence to the private repository
+        id: save_evidence
         if: always() && steps.validate_marker.outcome == 'success' && steps.private_source.outcome == 'success' && steps.private_results.outcome == 'success'
         env:
           SUCCESSFUL_COUNT: ${{ steps.generate.outputs.successful_count || '0' }}
@@ -447,9 +448,10 @@ jobs:
         env:
           SUCCESSFUL_COUNT: ${{ steps.generate.outputs.successful_count || '0' }}
           ATTEMPT_COUNT: ${{ steps.generate.outputs.attempt_count || '0' }}
+          PRIVATE_EVIDENCE_SAVE_OUTCOME: ${{ steps.save_evidence.outcome || 'not_run' }}
         run: |
           if [[ "${SUCCESSFUL_COUNT:-0}" -lt 3 ]]; then
-            echo "Only ${SUCCESSFUL_COUNT:-0}/3 complete candidates passed after ${ATTEMPT_COUNT:-0} attempts. Evidence was saved privately."
+            echo "Only ${SUCCESSFUL_COUNT:-0}/3 complete candidates passed after ${ATTEMPT_COUNT:-0} attempts. Private evidence save step: ${PRIVATE_EVIDENCE_SAVE_OUTCOME:-unknown}."
             exit 1
           fi
           echo "Three complete candidates passed the automated gate. Human visual and image review remain pending."
