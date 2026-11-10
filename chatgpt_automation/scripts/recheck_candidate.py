@@ -32,6 +32,12 @@ def recheck(candidate: Path) -> dict:
     if not request_path.is_file():
         raise RuntimeError(f"Candidate is missing {request_path}")
     request = request_path.read_text(encoding="utf-8")
+    repaired = subprocess.run(
+        [sys.executable, str(SCRIPT_DIR / "repair_contact_form.py"), str(candidate)],
+        capture_output=True, text=True, encoding="utf-8",
+    )
+    if repaired.returncode:
+        raise RuntimeError(f"Source contact-form repair failed: {repaired.stderr or repaired.stdout}")
     normalized = subprocess.run(
         [sys.executable, str(SCRIPT_DIR / "normalize_cta_arrows.py"), str(candidate / "files" / "index.html"),
          "--css-file", str(candidate / "files" / "styles.css")],

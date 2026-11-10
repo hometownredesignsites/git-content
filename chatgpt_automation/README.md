@@ -8,7 +8,7 @@ flowchart LR
   B --> C[Guest conversation: two CSS parts]
   C --> D[Same guest conversation: two HTML chunks with CSS context]
   D --> E[Validate and save each chunk]
-  E --> F[Assemble and inline CSS]
+  E --> F[Assemble, repair source form fields, and inline CSS]
   F --> G[Python structural code gate]
   F --> H[Browser QA evidence and screenshots]
   G --> I[Save candidate and evidence]
@@ -32,7 +32,7 @@ Production jobs use source context and a full run. The private coordinator submi
 
 ## Assembly and quality gates
 
-After all four validated responses, the workflow assembles the two CSS and two HTML chunks, writes `files/index.html` and `files/styles.css`, and embeds the CSS into `files/inlined/index.html`. The manifest hashes, order, and first-line markers are checked again before assembly.
+After all four validated responses, the workflow assembles the two CSS and two HTML chunks, writes `files/index.html` and `files/styles.css`, repairs missing source contact-form controls when the source facts and contact section identify them unambiguously, and embeds the CSS into `files/inlined/index.html`. Repair output is recorded at `debug/contact_form_repair.json`. The normal structural checker and desktop/mobile browser QA then run against the repaired page; repairs do not bypass either gate. Unsupported controls or an unclear contact target remain failures for manual review. The manifest hashes, order, and first-line markers are checked again before assembly.
 
 `site_quality.py` is the blocking Python code gate; it inspects the assembled HTML and CSS without launching a browser. It checks for one `main`, one nonempty `h1`, a declared document language, a nonempty title, a viewport meta tag, closed document markup, a linked stylesheet, balanced CSS blocks, unique IDs, resolvable same-page links, named buttons and labeled form controls. Required sections must have a named semantic/container element, a heading, and substantive child content; a keyword elsewhere in the page no longer satisfies a section check. It also checks image markup and alt text, CTA labeling, the accessible mobile-navigation structure, substantive footer links, requested forms, and source contact-form field parity.
 

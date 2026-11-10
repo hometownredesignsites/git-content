@@ -1270,6 +1270,13 @@ def assess_website(prompt, session_dir):
 
     passed = sum(checks.values())
     total = len(checks)
+    contact_form_repair = {}
+    repair_report_path = session_dir / "debug" / "contact_form_repair.json"
+    if repair_report_path.is_file():
+        try:
+            contact_form_repair = json.loads(repair_report_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            contact_form_repair = {"status": "unavailable", "reason": "Repair report could not be read."}
     # Rendered layout, loaded visible imagery, and CTA output are blocking
     # requirements because they directly affect the page people see.
     blocking_browser_checks = {
@@ -1403,6 +1410,7 @@ def assess_website(prompt, session_dir):
         "generated_form_fields": parser.form_fields,
         "source_form_fields_missing": missing_form_fields,
         "source_form_required_fields_missing": missing_required_fields,
+        "contact_form_repair": contact_form_repair,
         "cta_arrow_issues": parser.cta_arrow_issues,
         "complete": bool(html and css and all(checks.values())),
         "final_success": bool(
