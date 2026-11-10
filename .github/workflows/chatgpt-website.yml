@@ -312,6 +312,7 @@ jobs:
                   --metadata-output-file "$run_dir/debug/runner_metadata.json" \
                   --website-run-folder "$run_dir" \
                   --website-chat-id "$chat_id" \
+                  --website-design-reference-file "${RUNNER_TEMP}/chatgpt-private/site-1-design-reference.json" \
                   --website-quality-request "Include only sections supported by the source pages. Preserve the source contact form's purpose and fields when present. Use relevant imagery. The hero must use a full-bleed image spanning the full viewport width, not a half-width split column. Place the headline and calls to action over the image with a contrast treatment that keeps text readable, and use a deliberate crop. Keep this full-width image treatment on mobile." \
                   --url "https://chatgpt.com/" \
                   --user-data-dir "$profile" \
