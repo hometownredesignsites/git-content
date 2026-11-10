@@ -5,6 +5,12 @@ on:
     branches: [chatgpt]
     paths:
       - ".private-queue/start/*.json"
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: Private ChatGPT job ID to run or continue
+        required: true
+        type: string
   workflow_call:
     inputs:
       job_id:
