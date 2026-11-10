@@ -5,22 +5,23 @@ The `chatgpt` branch now has a CSV-driven website workflow that follows this seq
 ```mermaid
 flowchart LR
   A[CSV target] --> B[Source facts and design brief]
-  B --> C[Guest conversation: two CSS parts]
-  C --> D[Same guest conversation: two HTML chunks with CSS context]
-  D --> E[Validate and save each chunk]
-  E --> F[Assemble, repair source form fields, and inline CSS]
-  F --> G[Python structural code gate]
-  F --> H[Browser QA evidence and screenshots]
-  G --> I[Save candidate and evidence]
-  H --> I
-  I --> J[Desktop and mobile visual review]
+  B --> C[ChatGPT: one HTML5 UP reference search per site]
+  C --> D[Same guest conversation: two CSS parts]
+  D --> E[Same guest conversation: two HTML chunks with CSS context]
+  E --> F[Validate and save each chunk]
+  F --> G[Assemble, repair source form fields, and inline CSS]
+  G --> H[Python structural code gate]
+  G --> I[Browser QA evidence and screenshots]
+  H --> J[Save candidate and evidence]
+  I --> J
+  J --> K[Desktop and mobile visual review]
 ```
 
 ## CSV and source context
 
 The live target CSV is maintained privately on `git-content-private/main`; this public branch contains no target rows. The worker receives one target through a temporary, provider-specific Actions secret, masks its fields, and checks the private job record before generation. `fetch_source_facts.py` fetches the homepage and up to seven same-domain pages linked for services, about, products, work, contact, location, or related topics. It records page text, headings, links, image assets, and contact-form controls. When static capture has little text or no images, a bounded Playwright supplement reads the rendered homepage and same-site frames, including text, forms, `<img>` assets, and computed CSS backgrounds; requests are restricted to public HTTP(S) hosts and top-level documents stay on the requested site. The complete audit stays in `debug/source_facts.json`; `prepare_candidate_context.py` sends a compact brief with the homepage identity, a few verified facts and section headings, labeled contact fields, conversion links, validated same-site images, and the design brief. Source and fallback image URLs are checked for image bytes before being included; category-matched fallbacks fill gaps when valid source photos are insufficient. Raw page excerpts, duplicated navigation, and unverified CSV hints are excluded from the prompt. The generated context is capped at 4,300 characters; its exact size and source coverage counts are recorded in `inputs.json`. The first candidate also emits a workflow warning when it has no verified facts, service sections, or validated source photos. Page content remains reference data, not instructions. A failed candidate's recognized quality-check names become short correction guidance for the next candidate.
 
-The source facts and design brief are sent with the first CSS turn. Both CSS parts and both HTML parts stay in one guest conversation. The first HTML prompt includes the accepted CSS as reference context. The optional website mode in `chatgpt_file_playwright_anonymous_ci.py` calls the existing `run_stage_once` response capture on that page, then reconstructs Markdown fence delimiters from the one rendered code block in that newest assistant message because DOM `inner_text()` omits the literal backticks. It rejects missing, multiple, or wrong-language code blocks and preview output. Before and after each turn, it records whether ChatGPT reports a login gate, CAPTCHA, rate limit, conversation gate, or service error. Those states stop generation with a classified checkpoint and captured diagnostics; the runner does not interact with verification or login controls. The persistent Chromium launch settings, newest-assistant-message extraction, and `.github/workflows/process-requests.yml` are unchanged. The new website workflow also uses the same headed Chromium under `xvfb-run`.
+Before code generation, ChatGPT is asked to search the official HTML5 UP catalog and inspect a matching template page, demo, and license. It selects a template only when it fits the verified business and supports the required full-bleed hero, first-screen CTA, source sections, and responsive design; otherwise it records why no reference was selected. The workflow validates the official URLs and license format. It does not download template files: the selected template is a structural anchor, and ChatGPT writes fresh markup and CSS around the business's own content and assets. Its name, URLs, fit notes, demo observations, and license are saved in `debug/design_reference.json`; the selected license attribution must appear in a non-rendering HTML comment and is checked by QA. One reference result is shared across candidate attempts for that site, so retries do not spend another research turn or drift to a different template. Generation receives only a compact anchor note; source facts and design context remain capped at 4,300 characters. Both CSS parts and both HTML parts stay in one guest conversation. The first HTML prompt includes the accepted CSS as reference context. The optional website mode in `chatgpt_file_playwright_anonymous_ci.py` calls the existing `run_stage_once` response capture on that page, then reconstructs Markdown fence delimiters from the one rendered code block in that newest assistant message because DOM `inner_text()` omits the literal backticks. It rejects missing, multiple, or wrong-language code blocks and preview output. Before and after each turn, it records whether ChatGPT reports a login gate, CAPTCHA, rate limit, conversation gate, or service error. Those states stop generation with a classified checkpoint and captured diagnostics; the runner does not interact with verification or login controls. The persistent Chromium launch settings, newest-assistant-message extraction, and `.github/workflows/process-requests.yml` are unchanged. The new website workflow also uses the same headed Chromium under `xvfb-run`.
 
 ## Chunk sequence and recovery
 

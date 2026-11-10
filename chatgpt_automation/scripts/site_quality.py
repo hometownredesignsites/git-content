@@ -1042,10 +1042,37 @@ def assess_website(prompt, session_dir):
         re.search(r"\bhtml5\s*up\b|\bdesign reference\b|\bmassively\b", visible_content, re.IGNORECASE)
         or re.search(r"html5up\.net", visible_links, re.IGNORECASE)
     )
+    template_attribution_ok = True
+    design_reference_path = session_dir / "debug" / "design_reference.json"
+    if design_reference_path.is_file():
+        try:
+            design_reference_audit = json.loads(design_reference_path.read_text(encoding="utf-8"))
+            if not isinstance(design_reference_audit, dict):
+                raise ValueError("design reference audit must be an object")
+            design_reference = design_reference_audit.get("design_reference") or {}
+            if not isinstance(design_reference, dict):
+                raise ValueError("design reference must be an object")
+            if design_reference_audit.get("status") == "selected":
+                comments = "\n".join(re.findall(r"<!--[\s\S]*?-->", html))
+                attribution_text = comments.lower()
+                required_attribution = (
+                    str(design_reference.get("name", "")).strip().lower(),
+                    str(design_reference.get("template_url", "")).strip().lower(),
+                    str(design_reference.get("license_url", "")).strip().lower(),
+                )
+                template_attribution_ok = bool(
+                    all(value and value in attribution_text for value in required_attribution)
+                    and re.search(r"\b(adapted|adaptation)\b", attribution_text)
+                )
+            elif design_reference_audit.get("status") not in {"none_selected", "skipped"}:
+                raise ValueError("design reference audit has an invalid status")
+        except (OSError, json.JSONDecodeError, ValueError, TypeError):
+            template_attribution_ok = False
 
     checks = {
         "html_file_present": bool(html),
         "no_visible_template_credit": not template_credit_visible,
+        "template_attribution_comment": template_attribution_ok,
         "cta_buttons_no_arrows": not parser.cta_arrow_issues,
         "accessible_mobile_hamburger": parser.has_accessible_mobile_hamburger(),
         "css_file_present": bool(css),
@@ -1328,6 +1355,8 @@ def assess_website(prompt, session_dir):
         missing_sections.append("source contact form fields: " + ", ".join(missing_form_fields))
     if template_credit_visible:
         missing_sections.append("no visible template credit in page text or links")
+    if not template_attribution_ok:
+        missing_sections.append("HTML5 UP name, source, license, and adaptation note in a non-rendering HTML comment")
     if parser.cta_arrow_issues:
         missing_sections.append("CTA buttons without arrow glyphs or arrow icons")
     if not checks["accessible_mobile_hamburger"]:

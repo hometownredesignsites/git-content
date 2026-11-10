@@ -57,7 +57,9 @@ def restore_newest_code_block_fences(page, response_text: str, kind: str, part: 
 
     code_block = code_blocks.first
     language = (code_block.get_attribute("data-code-language") or "").strip().lower()
-    expected_language = "css" if kind == "css" else "text"
+    expected_language = {"css": "css", "html": "text", "json": "json"}.get(kind)
+    if not expected_language:
+        return response_text, {"dom_code_block_count": 1, "normalization_error": f"Unsupported rendered code kind: {kind}"}
     if language != expected_language:
         return response_text, {
             "dom_code_block_count": 1,
@@ -65,15 +67,16 @@ def restore_newest_code_block_fences(page, response_text: str, kind: str, part: 
             "normalization_error": f"Expected a rendered {expected_language} code block.",
         }
     code = code_block.inner_text().strip("\r\n")
-    expected_total = CSS_PART_COUNT if kind == "css" else HTML_PART_COUNT
-    expected_marker = f"/* CSS PART {part} OF {expected_total} */" if kind == "css" else f"<!-- HTML PART {part} OF {expected_total} -->"
-    marker = re.search(rf"(?m)^[ \t]*{re.escape(expected_marker)}[ \t]*$", code)
-    if not marker:
-        return response_text, {
-            "dom_code_block_count": 1,
-            "dom_code_language": language,
-            "normalization_error": "Rendered code block does not begin with the expected in-code part marker.",
-        }
+    if kind != "json":
+        expected_total = CSS_PART_COUNT if kind == "css" else HTML_PART_COUNT
+        expected_marker = f"/* CSS PART {part} OF {expected_total} */" if kind == "css" else f"<!-- HTML PART {part} OF {expected_total} -->"
+        marker = re.search(rf"(?m)^[ \t]*{re.escape(expected_marker)}[ \t]*$", code)
+        if not marker:
+            return response_text, {
+                "dom_code_block_count": 1,
+                "dom_code_language": language,
+                "normalization_error": "Rendered code block does not begin with the expected in-code part marker.",
+            }
 
     code_offset = response_text.find(code)
     if code_offset < 0:
@@ -216,6 +219,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--website-chat-id", help="Stable candidate conversation key used by the chunk manifest")
     parser.add_argument("--website-run-token", help="Resume token from the candidate checkpoint; generated when omitted")
     parser.add_argument("--website-quality-request", help="Short source-grounded request used to select QA sections")
+    parser.add_argument("--website-design-reference-file", help="Shared path for the one-per-site HTML5 UP template assessment")
     parser.add_argument(
         "--website-context-mode",
         choices=("source", "minimal"),
@@ -367,15 +371,20 @@ def run() -> int:
                             f"ChatGPT page became unavailable after the turn: {after_state['classification']}",
                             after_state,
                         )
-                    expected_part = re.search(
-                        r"(?:Now produce exactly|previous response for) (CSS|HTML) PART (\d+) OF \d+",
-                        turn_text,
-                        re.IGNORECASE,
-                    )
-                    if not expected_part:
-                        raise RuntimeError("Website turn prompt is missing its exact part label.")
+                    if re.search(r"DESIGN REFERENCE ASSESSMENT", turn_text, re.IGNORECASE):
+                        expected_part = None
+                        response_kind, response_part = "json", 0
+                    else:
+                        expected_part = re.search(
+                            r"(?:Now produce exactly|previous response for) (CSS|HTML) PART (\d+) OF \d+",
+                            turn_text,
+                            re.IGNORECASE,
+                        )
+                        if not expected_part:
+                            raise RuntimeError("Website turn prompt is missing its exact part label.")
+                        response_kind, response_part = expected_part.group(1).lower(), int(expected_part.group(2))
                     normalized_text, dom_metadata = restore_newest_code_block_fences(
-                        page, response_text, expected_part.group(1).lower(), int(expected_part.group(2))
+                        page, response_text, response_kind, response_part
                     )
                     return normalized_text, {
                         **response_metadata,
@@ -400,6 +409,7 @@ def run() -> int:
                     quality_request=quality_request,
                     stop_after=args.website_stop_after,
                     context_mode=args.website_context_mode,
+                    design_reference_file=args.website_design_reference_file,
                 )
                 if website_state.get("status") == "stage_complete":
                     notes_path = Path(args.website_run_folder) / "run_notes.json"
@@ -416,6 +426,8 @@ def run() -> int:
                     "website_chunks_complete": bool(website_state.get("complete")),
                     "accepted_parts": len(website_state.get("accepted_parts", [])),
                     "website_stage": website_state.get("staged_until"),
+                    "design_reference_status": website_state.get("design_reference_status"),
+                    "design_reference_name": website_state.get("design_reference_name"),
                     "context_mode": args.website_context_mode,
                     "conversation_url": website_state.get("conversation_url"),
                     "run_folder": str(Path(args.website_run_folder).resolve()),
