@@ -340,6 +340,20 @@ def _parse_design_reference_response(response: str) -> dict[str, Any]:
     return _validate_design_reference_result(json.loads(blocks[0]))
 
 
+def _parse_design_reference_or_fallback(response: str) -> dict[str, Any]:
+    """Use the verified Story anchor when ChatGPT's assessment is malformed or incomplete."""
+    try:
+        assessment = _parse_design_reference_response(response)
+    except (ValueError, TypeError) as error:
+        assessment = {
+            "search_status": "completed",
+            "design_reference": None,
+            "reason_if_none": f"ChatGPT returned an invalid design-reference assessment: {error}",
+            "sources": [],
+        }
+    return _fullscreen_story_fallback(assessment)
+
+
 def _design_reference_context(payload: dict[str, Any] | None) -> str:
     if not payload or payload.get("status") == "skipped":
         return ""
@@ -538,7 +552,7 @@ def run_website_chunks(
         started = time.monotonic()
         try:
             raw_response, metadata = _response_text(exchange(reference_prompt))
-            assessment = _fullscreen_story_fallback(_parse_design_reference_response(raw_response))
+            assessment = _parse_design_reference_or_fallback(raw_response)
         except Exception as error:
             state["last_error"] = {
                 "at_utc": _now(),
