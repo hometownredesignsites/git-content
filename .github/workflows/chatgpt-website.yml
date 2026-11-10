@@ -236,10 +236,10 @@ jobs:
           attempt="$prior_attempts"
           new_attempts=0
           target=3
-          max_attempts="${CANDIDATE_ATTEMPT_LIMIT:-10}"
+          batch_limit="${CANDIDATE_ATTEMPT_LIMIT:-10}"
+          max_total_attempts=$((batch_limit * 2))
           candidate_dirs=()
           previous_candidate_dir=""
-          mapfile -t candidate_indices < <(python chatgpt_automation/scripts/continuation.py indices --prior-attempts "$prior_attempts" --max-attempts "$max_attempts")
           prior_job_id="${PRIOR_JOB_ID:-}"
           if [[ -n "$prior_job_id" ]]; then
             python chatgpt_automation/scripts/continuation.py inherit \
@@ -252,71 +252,90 @@ jobs:
             mapfile -t inherited_dirs < <(find "chatgpt-runs/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-site-1-candidate-inherited"* -maxdepth 0 -type d 2>/dev/null | sort)
             candidate_dirs+=("${inherited_dirs[@]}")
           fi
-          while [[ "$successful" -lt "$target" && "$new_attempts" -lt "$max_attempts" ]]; do
-            candidate_index="${candidate_indices[$new_attempts]}"
-            attempt="$candidate_index"
-            new_attempts=$((new_attempts + 1))
-            run_dir="chatgpt-runs/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-site-1-candidate-${candidate_index}"
-            candidate_dirs+=("$run_dir")
-            mkdir -p "$run_dir/debug"
-            echo "::notice title=Candidate progress::Batch attempt ${new_attempts} of ${max_attempts} started (candidate ${attempt} overall); ${successful} of ${target} passes so far."
-            retry_flags=()
-            if [[ -n "$previous_candidate_dir" ]]; then retry_flags=(--previous-candidate "$previous_candidate_dir"); fi
-            if ! python chatgpt_automation/scripts/prepare_candidate_context.py \
-              --mode source \
-              --source-facts "$SOURCE_FACTS" \
-              --design-brief chatgpt_automation/design_brief.txt \
-              --output "$run_dir/debug/website_context.md" \
-              --inputs-output "$run_dir/debug/inputs.json" \
-              --site-index 1 \
-              --candidate-index "$candidate_index" \
-              "${retry_flags[@]}" > "${RUNNER_TEMP}/chatgpt-private/context-${candidate_index}.log" 2>&1; then
-              printf '{"status":"generation_failed","automated_success":false,"final_success":false,"human_visual_review_status":"pending"}\n' > "$run_dir/run_notes.json"
-              previous_candidate_dir="$run_dir"
-              continue
-            fi
-            cp "$SOURCE_FACTS" "$run_dir/debug/source_facts.json"
-            cp chatgpt_automation/website_request.txt "$run_dir/debug/website_request.txt"
-            chat_id="$(python -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["chat_id"])' "$run_dir/debug/inputs.json")"
-            profile="tmp/playwright-profiles/${GITHUB_RUN_ID}/1/candidate-${candidate_index}"
-            action_log="${RUNNER_TEMP}/chatgpt-private/action-${candidate_index}.log"
-            set +e
-            xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' \
-              python -u chatgpt_file_playwright_anonymous_ci.py \
-                --stage-name website \
-                --input-file "$run_dir/debug/website_context.md" \
-                --instructions-file chatgpt_automation/website_request.txt \
-                --output-file "$run_dir/debug/runner_output.txt" \
-                --metadata-output-file "$run_dir/debug/runner_metadata.json" \
-                --website-run-folder "$run_dir" \
-                --website-chat-id "$chat_id" \
-                --website-quality-request "Include only sections supported by the source pages. Preserve the source contact form's purpose and fields when present. Use relevant imagery. The hero must use a full-bleed image spanning the full viewport width, not a half-width split column. Place the headline and calls to action over the image with a contrast treatment that keeps text readable, and use a deliberate crop. Keep this full-width image treatment on mobile." \
-                --url "https://chatgpt.com/" \
-                --user-data-dir "$profile" \
-                --wait-seconds 60 \
-                --timeout-ms 180000 \
-                --post-response-wait-seconds 3 \
-                --response-settle-seconds 3 \
-                --max-settle-wait-seconds 180 \
-                --error-screenshot "$run_dir/debug/chatgpt_playwright_error.png" \
-                --website-context-mode source \
-                --start-new-chat \
-                > "$action_log" 2>&1
-            runner_status=$?
-            set -e
-            cp "$action_log" "$run_dir/debug/action.log" 2>/dev/null || true
-            if [[ "$runner_status" -eq 0 ]] && python -c 'import json,sys; raise SystemExit(0 if json.load(open(sys.argv[1], encoding="utf-8")).get("automated_success") else 1)' "$run_dir/run_notes.json" >/dev/null 2>&1; then
-              successful=$((successful + 1))
-              previous_candidate_dir=""
-              outcome="passed"
-            else
-              if [[ ! -f "$run_dir/run_notes.json" ]]; then
+          while [[ "$successful" -lt "$target" && "$attempt" -lt "$max_total_attempts" ]]; do
+            batch_attempt_limit="$batch_limit"
+            remaining_attempts=$((max_total_attempts - attempt))
+            if [[ "$batch_attempt_limit" -gt "$remaining_attempts" ]]; then batch_attempt_limit="$remaining_attempts"; fi
+            mapfile -t candidate_indices < <(python chatgpt_automation/scripts/continuation.py indices --prior-attempts "$attempt" --max-attempts "$batch_attempt_limit")
+            batch_attempt=0
+            while [[ "$successful" -lt "$target" && "$batch_attempt" -lt "$batch_attempt_limit" ]]; do
+              candidate_index="${candidate_indices[$batch_attempt]}"
+              attempt="$candidate_index"
+              batch_attempt=$((batch_attempt + 1))
+              new_attempts=$((new_attempts + 1))
+              run_dir="chatgpt-runs/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-site-1-candidate-${candidate_index}"
+              candidate_dirs+=("$run_dir")
+              mkdir -p "$run_dir/debug"
+              echo "::notice title=Candidate progress::Batch attempt ${batch_attempt} of ${batch_attempt_limit} started (candidate ${attempt} overall); ${successful} of ${target} passes so far."
+              retry_flags=()
+              if [[ -n "$previous_candidate_dir" ]]; then retry_flags=(--previous-candidate "$previous_candidate_dir"); fi
+              if ! python chatgpt_automation/scripts/prepare_candidate_context.py \
+                --mode source \
+                --source-facts "$SOURCE_FACTS" \
+                --design-brief chatgpt_automation/design_brief.txt \
+                --output "$run_dir/debug/website_context.md" \
+                --inputs-output "$run_dir/debug/inputs.json" \
+                --site-index 1 \
+                --candidate-index "$candidate_index" \
+                "${retry_flags[@]}" > "${RUNNER_TEMP}/chatgpt-private/context-${candidate_index}.log" 2>&1; then
                 printf '{"status":"generation_failed","automated_success":false,"final_success":false,"human_visual_review_status":"pending"}\n' > "$run_dir/run_notes.json"
+                previous_candidate_dir="$run_dir"
+                continue
               fi
-              previous_candidate_dir="$run_dir"
-              outcome="did not pass"
+              cp "$SOURCE_FACTS" "$run_dir/debug/source_facts.json"
+              cp chatgpt_automation/website_request.txt "$run_dir/debug/website_request.txt"
+              chat_id="$(python -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["chat_id"])' "$run_dir/debug/inputs.json")"
+              profile="tmp/playwright-profiles/${GITHUB_RUN_ID}/1/candidate-${candidate_index}"
+              action_log="${RUNNER_TEMP}/chatgpt-private/action-${candidate_index}.log"
+              set +e
+              xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' \
+                python -u chatgpt_file_playwright_anonymous_ci.py \
+                  --stage-name website \
+                  --input-file "$run_dir/debug/website_context.md" \
+                  --instructions-file chatgpt_automation/website_request.txt \
+                  --output-file "$run_dir/debug/runner_output.txt" \
+                  --metadata-output-file "$run_dir/debug/runner_metadata.json" \
+                  --website-run-folder "$run_dir" \
+                  --website-chat-id "$chat_id" \
+                  --website-quality-request "Include only sections supported by the source pages. Preserve the source contact form's purpose and fields when present. Use relevant imagery. The hero must use a full-bleed image spanning the full viewport width, not a half-width split column. Place the headline and calls to action over the image with a contrast treatment that keeps text readable, and use a deliberate crop. Keep this full-width image treatment on mobile." \
+                  --url "https://chatgpt.com/" \
+                  --user-data-dir "$profile" \
+                  --wait-seconds 60 \
+                  --timeout-ms 180000 \
+                  --post-response-wait-seconds 3 \
+                  --response-settle-seconds 3 \
+                  --max-settle-wait-seconds 180 \
+                  --error-screenshot "$run_dir/debug/chatgpt_playwright_error.png" \
+                  --website-context-mode source \
+                  --start-new-chat \
+                  > "$action_log" 2>&1
+              runner_status=$?
+              set -e
+              cp "$action_log" "$run_dir/debug/action.log" 2>/dev/null || true
+              if [[ "$runner_status" -eq 0 ]] && python -c 'import json,sys; raise SystemExit(0 if json.load(open(sys.argv[1], encoding="utf-8")).get("automated_success") else 1)' "$run_dir/run_notes.json" >/dev/null 2>&1; then
+                successful=$((successful + 1))
+                previous_candidate_dir=""
+                outcome="passed"
+              else
+                if [[ ! -f "$run_dir/run_notes.json" ]]; then
+                  printf '{"status":"generation_failed","automated_success":false,"final_success":false,"human_visual_review_status":"pending"}\n' > "$run_dir/run_notes.json"
+                fi
+                previous_candidate_dir="$run_dir"
+                outcome="did not pass"
+              fi
+              echo "::notice title=Candidate progress::Batch attempt ${batch_attempt} of ${batch_attempt_limit} ${outcome} (candidate ${attempt} overall); ${successful} of ${target} passes so far."
+            done
+            if [[ "$successful" -ge "$target" || "$attempt" -ge "$max_total_attempts" ]]; then break; fi
+            if ! python - "$successful" "$attempt" <<'PY'
+          import sys
+          from pathlib import Path
+          from chatgpt_automation.scripts.continuation import continuation_is_eligible
+          raise SystemExit(0 if continuation_is_eligible(int(sys.argv[1]), int(sys.argv[2]), Path("chatgpt-runs")) else 1)
+          PY
+            then
+              break
             fi
-            echo "::notice title=Candidate progress::Batch attempt ${new_attempts} of ${max_attempts} ${outcome} (candidate ${attempt} overall); ${successful} of ${target} passes so far."
+            echo "::notice title=Candidate continuation::Continuing with the existing passing candidates after ${attempt} attempts."
           done
           python - "$GITHUB_OUTPUT" "$successful" "$attempt" "${candidate_dirs[@]}" <<'PY'
           import json, pathlib, sys
