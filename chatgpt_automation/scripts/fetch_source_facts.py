@@ -17,6 +17,9 @@ from pathlib import Path
 
 PAGE_LIMIT = 8
 BYTE_LIMIT = 1_500_000
+RENDERED_CAPTURE_TIMEOUT_MS = 20_000
+RENDERED_SCROLL_LIMIT = 12
+RENDERED_ASSET_LIMIT = 160
 KEYWORDS = re.compile(r"about|service|product|solution|work|portfolio|contact|location|team|process|faq|support|hours|booking", re.I)
 
 
@@ -215,6 +218,238 @@ def _fetch_page(url: str) -> tuple[str, _PageParser]:
     return final_url, parser
 
 
+def _same_site_url(url: str, base_host: str) -> bool:
+    try:
+        host = (urllib.parse.urlsplit(url).hostname or "").lower().removeprefix("www.")
+    except ValueError:
+        return False
+    return host == base_host
+
+
+def _capture_rendered_page(source_url: str, base_host: str) -> dict:
+    """Supplement sparse static extraction with bounded, rendered DOM evidence."""
+    from playwright.sync_api import sync_playwright
+
+    browser = None
+    try:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True, args=["--no-sandbox"])
+            context = browser.new_context(viewport={"width": 1440, "height": 1000})
+
+            def guard_request(route) -> None:
+                request = route.request
+                parsed = urllib.parse.urlsplit(request.url)
+                if parsed.scheme in {"data", "blob", "about"}:
+                    route.continue_()
+                    return
+                try:
+                    _assert_public_http_url(request.url)
+                    if request.resource_type == "document" and not _same_site_url(request.url, base_host):
+                        route.abort()
+                        return
+                except (ValueError, OSError):
+                    route.abort()
+                    return
+                route.continue_()
+
+            context.route("**/*", guard_request)
+            page = context.new_page()
+            response = page.goto(source_url, wait_until="domcontentloaded", timeout=RENDERED_CAPTURE_TIMEOUT_MS)
+            final_url = page.url
+            if not _same_site_url(final_url, base_host):
+                raise ValueError("Rendered source page redirected outside the requested domain")
+            if response is not None and response.status >= 400:
+                raise ValueError(f"Rendered source page returned HTTP {response.status}")
+
+            page.wait_for_timeout(1200)
+            for frame in page.frames:
+                if frame == page.main_frame:
+                    continue
+                frame_url = frame.url
+                if frame_url.startswith("about:blank"):
+                    parent = frame.parent_frame
+                    while parent is not None and parent != page.main_frame and parent.url.startswith("about:blank"):
+                        parent = parent.parent_frame
+                    if parent != page.main_frame:
+                        continue
+                elif not _same_site_url(frame_url, base_host):
+                    continue
+                try:
+                    frame.evaluate("""async (limit) => {
+                      const step = Math.max(400, Math.floor(window.innerHeight * 0.8));
+                      for (let i = 0; i < limit && window.scrollY + window.innerHeight < document.body.scrollHeight; i++) {
+                        window.scrollBy(0, step);
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                      }
+                      window.scrollTo(0, 0);
+                    }""", RENDERED_SCROLL_LIMIT)
+                except Exception:
+                    pass
+
+            try:
+                page.evaluate("""async (limit) => {
+                  const step = Math.max(400, Math.floor(window.innerHeight * 0.8));
+                  for (let i = 0; i < limit && window.scrollY + window.innerHeight < document.body.scrollHeight; i++) {
+                    window.scrollBy(0, step);
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                  }
+                  window.scrollTo(0, 0);
+                }""", RENDERED_SCROLL_LIMIT)
+                page.wait_for_timeout(400)
+            except Exception:
+                pass
+
+            extract_dom = """() => {
+              const clean = value => (value || '').replace(/\\s+/g, ' ').trim();
+              const headings = Array.from(document.querySelectorAll('h1,h2,h3,h4'))
+                .map(el => ({tag: el.tagName.toLowerCase(), text: clean(el.innerText || el.textContent)}))
+                .filter(item => item.text).slice(0, 40);
+              const images = Array.from(document.querySelectorAll('img, picture source, video[poster]'))
+                .map(el => ({
+                  src: el.tagName.toLowerCase() === 'video' ? (el.poster || '') : (el.currentSrc || el.src || el.getAttribute('data-src') || el.getAttribute('data-lazy-src') || el.getAttribute('data-original') || ''),
+                  srcset: el.srcset || el.getAttribute('data-srcset') || el.getAttribute('data-lazy-srcset') || '',
+                  alt: clean(el.alt || el.getAttribute('aria-label') || el.title || ''),
+                  title: clean(el.title || ''),
+                  width: el.naturalWidth || el.width || 0,
+                  height: el.naturalHeight || el.height || 0,
+                  discovery_method: 'rendered_img'
+                })).filter(item => item.src || item.srcset).slice(0, 120);
+              const backgrounds = [];
+              for (const el of Array.from(document.querySelectorAll('body,*')).slice(0, 5000)) {
+                const background = getComputedStyle(el).backgroundImage;
+                if (background && background !== 'none' && background.includes('url(')) {
+                  backgrounds.push({src: background, alt: clean(el.getAttribute('aria-label') || el.getAttribute('alt') || el.title || ''), discovery_method: 'rendered_background'});
+                  if (backgrounds.length >= 80) break;
+                }
+              }
+              const links = Array.from(document.querySelectorAll('a[href]')).map(el => ({
+                href: el.href, text: clean(el.innerText || el.getAttribute('aria-label') || el.textContent || '')
+              })).filter(item => item.href).slice(0, 150);
+              const forms = Array.from(document.forms).slice(0, 8).map(form => ({
+                action: form.action || '', method: (form.method || 'get').toLowerCase(),
+                fields: Array.from(form.querySelectorAll('input,select,textarea')).filter(el => !['hidden','submit','image','reset'].includes((el.type || '').toLowerCase())).slice(0, 32).map(el => {
+                  const label = el.labels && el.labels.length ? clean(Array.from(el.labels).map(label => label.innerText).join(' ')) : '';
+                  return {tag: el.tagName.toLowerCase(), type: el.type || el.tagName.toLowerCase(), name: el.name || '', id: el.id || '', label: label || clean(el.getAttribute('aria-label') || ''), placeholder: el.placeholder || '', required: !!el.required};
+                })
+              }));
+              return {title: clean(document.title), headings, text: clean(document.body && document.body.innerText).slice(0,16000), images, backgrounds, links, forms};
+            }"""
+
+            rendered_pages = []
+            seen_frames = set()
+            for frame in page.frames:
+                frame_url = frame.url or "about:blank"
+                if frame == page.main_frame:
+                    source_page = final_url
+                elif frame_url.startswith("about:blank"):
+                    parent = frame.parent_frame
+                    while parent is not None and parent != page.main_frame and parent.url.startswith("about:blank"):
+                        parent = parent.parent_frame
+                    if parent != page.main_frame:
+                        continue
+                    source_page = final_url
+                elif _same_site_url(frame_url, base_host):
+                    source_page = frame_url
+                else:
+                    continue
+                if id(frame) in seen_frames:
+                    continue
+                seen_frames.add(id(frame))
+                try:
+                    rendered = frame.evaluate(extract_dom)
+                except Exception:
+                    continue
+                if not isinstance(rendered, dict):
+                    continue
+
+                images = []
+                for image in rendered.get("images", [])[:120]:
+                    if not isinstance(image, dict):
+                        continue
+                    candidates = [image.get("src", "")]
+                    candidates.extend(_urls_from_srcset(image.get("srcset", "")))
+                    for candidate in candidates:
+                        if candidate:
+                            images.append({
+                                "src": candidate,
+                                "alt": image.get("alt", ""),
+                                "title": image.get("title", ""),
+                                "width": str(image.get("width", "")),
+                                "height": str(image.get("height", "")),
+                                "discovery_method": "rendered_img",
+                            })
+                for image in rendered.get("backgrounds", [])[:80]:
+                    if not isinstance(image, dict):
+                        continue
+                    for candidate in _urls_from_css(image.get("src", "")):
+                        images.append({
+                            "src": candidate,
+                            "alt": image.get("alt", ""),
+                            "discovery_method": "rendered_background",
+                        })
+
+                rendered_pages.append({
+                    "url": source_page,
+                    "frame_url": frame_url,
+                    "title": _clean(rendered.get("title", "")),
+                    "headings": rendered.get("headings", [])[:40],
+                    "text": _clean(rendered.get("text", ""))[:16000],
+                    "links": rendered.get("links", [])[:150],
+                    "images": images[:RENDERED_ASSET_LIMIT],
+                    "forms": rendered.get("forms", [])[:8],
+                })
+            return {"pages": rendered_pages, "final_url": final_url}
+    finally:
+        if browser is not None:
+            browser.close()
+
+
+def _static_capture_is_sparse(pages: list[dict]) -> bool:
+    text_chars = sum(len(str(page.get("text", ""))) for page in pages)
+    image_count = sum(len(page.get("images", [])) for page in pages)
+    return text_chars < 500 or image_count == 0
+
+
+def _merge_rendered_pages(static_pages: list[dict], rendered_pages: list[dict], base_host: str) -> list[dict]:
+    """Merge browser-rendered evidence without duplicating the page crawl."""
+    pages = list(static_pages)
+    if not pages:
+        pages = [{"url": "", "title": "", "headings": [], "text": "", "links": [], "images": [], "forms": []}]
+    homepage = pages[0]
+    for rendered in rendered_pages:
+        if not _same_site_url(rendered.get("url", ""), base_host):
+            continue
+        target = next((page for page in pages if page.get("url") == rendered.get("url")), homepage)
+        rendered_text = rendered.get("text", "")
+        if rendered.get("frame_url", "").startswith("about:blank") and rendered_text:
+            current_text = target.get("text", "")
+            if rendered_text not in current_text:
+                target["text"] = _clean(f"{current_text} {rendered_text}")[:16000]
+        elif len(rendered_text) > len(target.get("text", "")):
+            target["text"] = rendered["text"]
+        existing_headings = target.setdefault("headings", [])
+        heading_keys = {str(item.get("text", "")).casefold() for item in existing_headings if isinstance(item, dict)}
+        for heading in rendered.get("headings", []):
+            key = str(heading.get("text", "")).casefold() if isinstance(heading, dict) else str(heading).casefold()
+            if key and key not in heading_keys and len(existing_headings) < 40:
+                existing_headings.append(heading)
+                heading_keys.add(key)
+        if not target.get("title") and rendered.get("title"):
+            target["title"] = rendered["title"]
+        existing_links = target.setdefault("links", [])
+        link_keys = {str(item.get("href", "")) for item in existing_links if isinstance(item, dict)}
+        for link in rendered.get("links", []):
+            if link.get("href") and link["href"] not in link_keys:
+                existing_links.append(link)
+                link_keys.add(link["href"])
+        target.setdefault("images", []).extend(rendered.get("images", []))
+        static_field_count = sum(len(form.get("fields", [])) for form in target.get("forms", []))
+        rendered_field_count = sum(len(form.get("fields", [])) for form in rendered.get("forms", []))
+        if rendered_field_count > static_field_count:
+            target["forms"] = rendered["forms"]
+    return pages
+
+
 def collect_source_facts(source_url: str, *, business: str = "", category: str = "", location: str = "") -> dict:
     requested = _assert_public_http_url(source_url)
     base_host = (requested.hostname or "").lower().removeprefix("www.")
@@ -248,6 +483,26 @@ def collect_source_facts(source_url: str, *, business: str = "", category: str =
             errors.append({"url": current, "error": str(error)[:500]})
     if not pages:
         raise RuntimeError(f"Could not retrieve the target website. Source-fetch errors: {errors}")
+
+    rendered_capture = {"attempted": False, "status": "skipped", "reason": "static capture had sufficient text and images"}
+    if _static_capture_is_sparse(pages):
+        rendered_capture = {"attempted": True, "status": "failed", "reason": "static capture was sparse"}
+        try:
+            rendered = _capture_rendered_page(source_url, base_host)
+            rendered_pages = rendered.get("pages", [])
+            pages = _merge_rendered_pages(pages, rendered_pages, base_host)
+            rendered_capture = {
+                "attempted": True,
+                "status": "completed" if rendered_pages else "empty",
+                "reason": "static capture was sparse",
+                "rendered_frames": len(rendered_pages),
+                "rendered_text_characters": sum(len(page.get("text", "")) for page in rendered_pages),
+                "rendered_image_candidates": sum(len(page.get("images", [])) for page in rendered_pages),
+            }
+        except Exception as error:
+            rendered_capture["error"] = str(error)[:500]
+            errors.append({"url": source_url, "error": f"Rendered source supplement failed: {str(error)[:400]}"})
+
     all_images = []
     for page in pages:
         for image in page["images"]:
@@ -263,6 +518,13 @@ def collect_source_facts(source_url: str, *, business: str = "", category: str =
                     "source_page": page["url"],
                     "source_provenance": "embedded_on_requested_site",
                 })
+    image_priority = {
+        "srcset": 0, "data-srcset": 0, "data-lazy-srcset": 0,
+        "rendered_img": 1, "data-src": 1, "data-lazy-src": 1, "data-original": 1,
+        "og:image": 2, "og:image:url": 2, "twitter:image": 2,
+        "inline_background": 3, "rendered_background": 3,
+    }
+    all_images.sort(key=lambda image: image_priority.get(image.get("discovery_method", ""), 4))
     return {
         "requested_url": source_url,
         "business_metadata_unverified": {"business": business, "category": category, "location": location},
@@ -271,6 +533,7 @@ def collect_source_facts(source_url: str, *, business: str = "", category: str =
         "source_assets": all_images[:120],
         "navigation_links": [{"page": page["url"], **link} for page in pages for link in page["links"][:100]],
         "source_fetch_errors": errors,
+        "rendered_capture": rendered_capture,
         "facts_are_observations_not_independently_verified": True,
     }
 
@@ -287,6 +550,13 @@ def main() -> int:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(facts, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(f"Fetched {len(facts['pages_reviewed'])} source page(s) for {args.source_url}.")
+    capture = facts.get("rendered_capture", {})
+    if capture.get("attempted"):
+        print(
+            "Rendered supplement "
+            f"{capture.get('status')}: {capture.get('rendered_text_characters', 0)} text characters, "
+            f"{capture.get('rendered_image_candidates', 0)} image candidates."
+        )
     return 0
 
 

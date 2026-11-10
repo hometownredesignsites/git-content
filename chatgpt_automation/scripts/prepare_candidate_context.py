@@ -303,9 +303,10 @@ def compact_facts(facts: dict) -> tuple[dict, list[str]]:
     candidate_by_key = {}
     discovery_priority = {
         "srcset": 0, "data-srcset": 0, "data-lazy-srcset": 0,
+        "rendered_srcset": 0, "rendered_img": 1,
         "data-src": 1, "data-lazy-src": 1, "data-original": 1,
         "og:image": 2, "og:image:url": 2, "twitter:image": 2,
-        "inline_background": 3, "src": 4, "img_src": 4,
+        "inline_background": 3, "rendered_background": 3, "src": 4, "img_src": 4,
     }
     for image in facts.get("source_assets", []):
         image_url = _canonical_source_image_url(str(image.get("url", "")).strip())
@@ -501,6 +502,11 @@ def main() -> int:
         "generation_context_characters": len(context),
         "generation_context_maximum_characters": MAX_GENERATION_CONTEXT_CHARS,
         "validated_source_image_count": len(source_image_urls),
+        "source_verified_fact_count": len(prompt_facts["verified_facts"]),
+        "source_section_count": len(prompt_facts["page_sections"]),
+        "source_contact_field_count": len(prompt_facts["contact_fields"]),
+        "source_capture_quality": "sparse" if not prompt_facts["verified_facts"] and not prompt_facts["page_sections"] and not source_image_urls else "usable",
+        "rendered_capture_status": facts.get("rendered_capture", {}).get("status", "not_attempted"),
         "validated_fallback_image_count": sum(1 for item in prompt_facts["project_images"] if item.get("source") == "validated_fallback"),
         "retry_guidance_included": bool(args.previous_candidate and _retry_guidance(args.previous_candidate)),
     }
