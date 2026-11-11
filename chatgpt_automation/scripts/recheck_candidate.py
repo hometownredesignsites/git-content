@@ -38,6 +38,12 @@ def recheck(candidate: Path) -> dict:
     )
     if repaired.returncode:
         raise RuntimeError(f"Source contact-form repair failed: {repaired.stderr or repaired.stdout}")
+    local_links = subprocess.run(
+        [sys.executable, str(SCRIPT_DIR / "repair_local_links.py"), str(candidate)],
+        capture_output=True, text=True, encoding="utf-8",
+    )
+    if local_links.returncode:
+        raise RuntimeError(f"Local-link repair failed: {local_links.stderr or local_links.stdout}")
     normalized = subprocess.run(
         [sys.executable, str(SCRIPT_DIR / "normalize_cta_arrows.py"), str(candidate / "files" / "index.html"),
          "--css-file", str(candidate / "files" / "styles.css")],
