@@ -389,7 +389,6 @@ jobs:
           PRIOR_JOB_ID: ${{ env.PRIOR_JOB_ID }}
           PRIOR_RUN_ID: ${{ env.PRIOR_RUN_ID }}
           TARGET_BRANCH: chatgpt
-          PRIVATE_SOURCE_ROOT: ${{ env.PRIVATE_SOURCE_ROOT }}
         run: |
           set -euo pipefail
           result_slug="$(python - "$JOB_ID" <<'PY'
