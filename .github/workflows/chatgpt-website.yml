@@ -137,9 +137,9 @@ jobs:
           job = json.loads(job_path.read_text(encoding="utf-8"))
           if job.get("job_id") != job_id or job.get("provider") != "chatgpt":
               raise SystemExit("The private job record is invalid for this provider.")
-          candidate_attempt_limit = job.get("candidate_attempt_limit", 10)
-          if isinstance(candidate_attempt_limit, bool) or not isinstance(candidate_attempt_limit, int) or not 1 <= candidate_attempt_limit <= 10:
-              raise SystemExit("The private candidate attempt limit must be an integer from 1 to 10.")
+          candidate_attempt_limit = job.get("candidate_attempt_limit", 12)
+          if isinstance(candidate_attempt_limit, bool) or not isinstance(candidate_attempt_limit, int) or not 1 <= candidate_attempt_limit <= 12:
+              raise SystemExit("The private candidate attempt limit must be an integer from 1 to 12.")
           expected = job.get("row")
           if os.environ.get("INPUT_JOB_ID"):
               row = expected
@@ -178,8 +178,8 @@ jobs:
               continuation = {}
           prior_passes = int(continuation.get("successful_candidates", 0) or 0)
           prior_attempts = int(continuation.get("attempts", 0) or 0)
-          if continuation.get("parent_job_id") and (prior_attempts != 10 or not 0 <= prior_passes < 3):
-              raise SystemExit("The ChatGPT continuation record is outside the ten-attempt bounds.")
+          if continuation.get("parent_job_id") and (prior_attempts != 12 or not 0 <= prior_passes < 3):
+              raise SystemExit("The ChatGPT continuation record is outside the twelve-attempt bounds.")
           aliases.update({
               "PRIOR_JOB_ID": str(continuation.get("parent_job_id", "")),
               "PRIOR_RUN_ID": str(continuation.get("parent_run_id", "")),
@@ -242,7 +242,7 @@ jobs:
           attempt="$prior_attempts"
           new_attempts=0
           target=3
-          batch_limit="${CANDIDATE_ATTEMPT_LIMIT:-10}"
+          batch_limit="${CANDIDATE_ATTEMPT_LIMIT:-12}"
           max_total_attempts=$((batch_limit * 2))
           candidate_dirs=()
           previous_candidate_dir=""
@@ -253,8 +253,9 @@ jobs:
               --destination-root chatgpt-runs \
               --parent-job-id "$prior_job_id" --parent-run-id "${PRIOR_RUN_ID:-0}" \
               --expected-passes "${PRIOR_SUCCESSFUL_CANDIDATES:-0}" \
-              --current-run-id "$GITHUB_RUN_ID" --current-run-attempt "$GITHUB_RUN_ATTEMPT"
-            successful="${PRIOR_SUCCESSFUL_CANDIDATES:-0}"
+              --current-run-id "$GITHUB_RUN_ID" --current-run-attempt "$GITHUB_RUN_ATTEMPT" \
+              --design-reference-output "${RUNNER_TEMP}/chatgpt-private/site-1-design-reference.json"
+            successful="$(python chatgpt_automation/scripts/continuation.py pass-count --candidates-dir chatgpt-runs)"
             mapfile -t inherited_dirs < <(find "chatgpt-runs/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-site-1-candidate-inherited"* -maxdepth 0 -type d 2>/dev/null | sort)
             candidate_dirs+=("${inherited_dirs[@]}")
           fi
@@ -272,7 +273,8 @@ jobs:
               run_dir="chatgpt-runs/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-site-1-candidate-${candidate_index}"
               candidate_dirs+=("$run_dir")
               mkdir -p "$run_dir/debug"
-              echo "::notice title=Candidate progress::Batch attempt ${batch_attempt} of ${batch_attempt_limit} started (candidate ${attempt} overall); ${successful} of ${target} passes so far."
+              template_slot="$(python chatgpt_automation/scripts/continuation.py next-slot --candidates-dir chatgpt-runs --candidate-index "$candidate_index")"
+              echo "::notice title=Candidate progress::Batch attempt ${batch_attempt} of ${batch_attempt_limit} started (candidate ${attempt} overall; template slot ${template_slot}); ${successful} of ${target} distinct-template passes so far."
               retry_flags=()
               if [[ -n "$previous_candidate_dir" ]]; then retry_flags=(--previous-candidate "$previous_candidate_dir"); fi
               if ! python chatgpt_automation/scripts/prepare_candidate_context.py \
@@ -313,6 +315,7 @@ jobs:
                   --website-run-folder "$run_dir" \
                   --website-chat-id "$chat_id" \
                   --website-design-reference-file "${RUNNER_TEMP}/chatgpt-private/site-1-design-reference.json" \
+                  --website-design-reference-slot "$template_slot" \
                   --website-quality-request "Include only sections supported by the source pages. Preserve the source contact form's purpose and fields when present. Use relevant imagery. The hero must use a full-bleed image spanning the full viewport width, not a half-width split column. Place the headline and calls to action over the image with a contrast treatment that keeps text readable, and use a deliberate crop. Keep this full-width image treatment on mobile." \
                   --url "https://chatgpt.com/" \
                   --user-data-dir "$profile" \
@@ -329,7 +332,6 @@ jobs:
               set -e
               cp "$action_log" "$run_dir/debug/action.log" 2>/dev/null || true
               if [[ "$runner_status" -eq 0 ]] && python -c 'import json,sys; raise SystemExit(0 if json.load(open(sys.argv[1], encoding="utf-8")).get("automated_success") else 1)' "$run_dir/run_notes.json" >/dev/null 2>&1; then
-                successful=$((successful + 1))
                 previous_candidate_dir=""
                 outcome="passed"
               else
@@ -339,7 +341,8 @@ jobs:
                 previous_candidate_dir="$run_dir"
                 outcome="did not pass"
               fi
-              echo "::notice title=Candidate progress::Batch attempt ${batch_attempt} of ${batch_attempt_limit} ${outcome} (candidate ${attempt} overall); ${successful} of ${target} passes so far."
+              successful="$(python chatgpt_automation/scripts/continuation.py pass-count --candidates-dir chatgpt-runs)"
+              echo "::notice title=Candidate progress::Batch attempt ${batch_attempt} of ${batch_attempt_limit} ${outcome} (candidate ${attempt} overall); ${successful} of ${target} distinct-template passes so far."
             done
             if [[ "$successful" -ge "$target" || "$attempt" -ge "$max_total_attempts" ]]; then break; fi
             if ! python - "$successful" "$attempt" <<'PY'
@@ -362,6 +365,7 @@ jobs:
               "site_index": 1,
               "target_passing_candidates": 3,
               "successful_candidates": int(sys.argv[2]),
+              "successful_template_slots": sorted(__import__('chatgpt_automation.scripts.continuation', fromlist=['successful_template_slots']).successful_template_slots(pathlib.Path('chatgpt-runs'))),
               "attempts": int(sys.argv[3]),
               "new_attempts": int(sys.argv[3]) - int(__import__('os').environ.get('PRIOR_ATTEMPTS', '0')),
               "candidate_folders": dirs,
@@ -372,7 +376,7 @@ jobs:
           PY
           echo "Generation finished: ${successful}/${target} automated passes after ${attempt} attempt(s)."
           if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
-            printf '## Private ChatGPT candidate batch\n\n- Automated passes: **%s/%s**\n- Attempts: **%s** total, **%s** in this run\n- Candidate files are intended for private storage; check the save step below for confirmation.\n' "$successful" "$target" "$attempt" "$new_attempts" >> "$GITHUB_STEP_SUMMARY"
+            printf '## Private ChatGPT candidate batch\n\n- Distinct-template automated passes: **%s/%s**\n- Attempts: **%s** total, **%s** in this run\n- Candidate files are intended for private storage; check the save step below for confirmation.\n' "$successful" "$target" "$attempt" "$new_attempts" >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Save all candidate evidence to the private repository

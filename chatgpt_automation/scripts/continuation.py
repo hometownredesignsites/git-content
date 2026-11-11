@@ -29,7 +29,7 @@ BLOCKED_CLASSIFICATIONS = {
     "service_error",
 }
 TARGET_PASSES = 3
-MAX_ATTEMPTS_PER_BATCH = 10
+MAX_ATTEMPTS_PER_BATCH = 12
 NON_BLOCKING_LOGIN_EVIDENCE = {"login_required", "sign in to continue"}
 
 
@@ -42,14 +42,57 @@ def read_json(path: Path) -> dict[str, Any] | None:
 
 
 def candidate_indices(prior_attempts: int, max_attempts: int = MAX_ATTEMPTS_PER_BATCH) -> list[int]:
-    """Return one batch of global candidate numbers, with a 20-attempt total cap."""
+    """Return one batch of global candidate numbers, with a 24-attempt total cap."""
     if not 0 <= prior_attempts <= MAX_ATTEMPTS_PER_BATCH:
-        raise ValueError("prior_attempts must be between zero and ten")
+        raise ValueError("prior_attempts must be between zero and twelve")
     if not 1 <= max_attempts <= MAX_ATTEMPTS_PER_BATCH:
-        raise ValueError("max_attempts must be between one and ten")
+        raise ValueError("max_attempts must be between one and twelve")
     if prior_attempts + max_attempts > 2 * MAX_ATTEMPTS_PER_BATCH:
-        raise ValueError("candidate indices cannot exceed the 20-attempt total cap")
+        raise ValueError("candidate indices cannot exceed the 24-attempt total cap")
     return list(range(prior_attempts + 1, prior_attempts + max_attempts + 1))
+
+
+def _candidate_slot(candidate_dir: Path) -> int | None:
+    audit = read_json(candidate_dir / "debug" / "design_reference.json")
+    try:
+        slot = int(audit.get("template_slot")) if audit else 0
+    except (TypeError, ValueError):
+        return None
+    return slot if slot in {1, 2, 3} else None
+
+
+def successful_template_slots(candidates_dir: Path) -> set[int]:
+    """Return distinct slots represented by automated-passing candidate folders."""
+    slots: set[int] = set()
+    if not candidates_dir.is_dir():
+        return slots
+    for candidate_dir in candidates_dir.glob("run-*-site-1-candidate-*"):
+        if not candidate_dir.is_dir():
+            continue
+        notes = read_json(candidate_dir / "run_notes.json")
+        slot = _candidate_slot(candidate_dir)
+        if notes and notes.get("automated_success") is True and slot is not None:
+            slots.add(slot)
+    return slots
+
+
+def next_template_slot(candidates_dir: Path, candidate_index: int) -> int:
+    """Choose the least-attempted slot that does not yet have a passing candidate."""
+    attempts = {slot: 0 for slot in (1, 2, 3)}
+    if candidates_dir.is_dir():
+        for candidate_dir in candidates_dir.glob("run-*-site-1-candidate-*"):
+            if not candidate_dir.is_dir():
+                continue
+            slot = _candidate_slot(candidate_dir)
+            if slot is not None:
+                attempts[slot] += 1
+    filled = successful_template_slots(candidates_dir)
+    available = [slot for slot in (1, 2, 3) if slot not in filled]
+    if not available:
+        raise ValueError("all three template slots already have passing candidates")
+    preferred = ((candidate_index - 1) % 3) + 1
+    rotation = [((preferred - 1 + offset) % 3) + 1 for offset in range(3)]
+    return min(available, key=lambda slot: (attempts[slot], rotation.index(slot)))
 
 
 def _collect_classifications(value: Any, found: set[str]) -> None:
@@ -104,7 +147,7 @@ def continuation_is_eligible(
 
 
 def observed_candidate_counts(candidates_dir: Path) -> tuple[int, int]:
-    successful = 0
+    successful = len(successful_template_slots(candidates_dir))
     attempts = 0
     if not candidates_dir.is_dir():
         return successful, attempts
@@ -113,9 +156,6 @@ def observed_candidate_counts(candidates_dir: Path) -> tuple[int, int]:
             continue
         if re.search(r"-candidate-\d+$", candidate_dir.name):
             attempts += 1
-        notes = read_json(candidate_dir / "run_notes.json")
-        if notes and notes.get("automated_success") is True:
-            successful += 1
     return successful, attempts
 
 
@@ -142,6 +182,7 @@ def inherit_passing_candidates(
     expected_passes: int,
     current_run_id: int,
     current_run_attempt: int,
+    design_reference_output: Path | None = None,
 ) -> list[Path]:
     if not 0 <= expected_passes < TARGET_PASSES:
         raise ValueError("A continuation must inherit zero, one, or two passing candidates")
@@ -166,6 +207,15 @@ def inherit_passing_candidates(
         destination = prefix.with_name(f"{prefix.name}-{number}")
         shutil.copytree(candidate, destination)
         copied.append(destination)
+    if design_reference_output is not None:
+        plan_path = next(
+            (candidate / "debug" / "design_references.json" for candidate in passing
+             if (candidate / "debug" / "design_references.json").is_file()),
+            None,
+        )
+        if plan_path is not None:
+            design_reference_output.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(plan_path, design_reference_output)
     return copied
 
 
@@ -188,13 +238,15 @@ def write_batch_status(
     if successful_candidates < 0 or not 0 <= new_attempts <= 2 * MAX_ATTEMPTS_PER_BATCH:
         raise ValueError("Candidate and new-attempt counts are outside their valid bounds")
     if not new_attempts <= attempts <= 2 * MAX_ATTEMPTS_PER_BATCH:
-        raise ValueError("Total attempts must include this batch and stay within the 20-attempt cap")
+        raise ValueError("Total attempts must include this batch and stay within the 24-attempt cap")
     evidence = access_gate_evidence(candidates_dir)
     non_retryable_evidence = sorted(set(evidence) - NON_BLOCKING_LOGIN_EVIDENCE)
+    passed_slots = sorted(successful_template_slots(candidates_dir))
     status = {
         "job_id": job_id,
-        "status": "passed" if successful_candidates >= TARGET_PASSES else "failed",
+        "status": "passed" if successful_candidates >= TARGET_PASSES and len(passed_slots) == TARGET_PASSES else "failed",
         "successful_candidates": successful_candidates,
+        "successful_template_slots": passed_slots,
         "attempts": attempts,
         "new_attempts": new_attempts,
         "continuation_eligible": continuation_is_eligible(
@@ -217,6 +269,11 @@ def main() -> None:
     indices = subparsers.add_parser("indices")
     indices.add_argument("--prior-attempts", type=int, required=True)
     indices.add_argument("--max-attempts", type=int, default=MAX_ATTEMPTS_PER_BATCH)
+    next_slot = subparsers.add_parser("next-slot")
+    next_slot.add_argument("--candidates-dir", type=Path, required=True)
+    next_slot.add_argument("--candidate-index", type=int, required=True)
+    pass_count = subparsers.add_parser("pass-count")
+    pass_count.add_argument("--candidates-dir", type=Path, required=True)
     inherit = subparsers.add_parser("inherit")
     inherit.add_argument("--results-root", type=Path, required=True)
     inherit.add_argument("--destination-root", type=Path, required=True)
@@ -225,6 +282,7 @@ def main() -> None:
     inherit.add_argument("--expected-passes", type=int, required=True)
     inherit.add_argument("--current-run-id", type=int, required=True)
     inherit.add_argument("--current-run-attempt", type=int, required=True)
+    inherit.add_argument("--design-reference-output", type=Path)
     status = subparsers.add_parser("status")
     status.add_argument("--output", type=Path, required=True)
     status.add_argument("--candidates-dir", type=Path, required=True)
@@ -240,10 +298,14 @@ def main() -> None:
     args = parser.parse_args()
     if args.command == "indices":
         print("\n".join(map(str, candidate_indices(args.prior_attempts, args.max_attempts))))
+    elif args.command == "next-slot":
+        print(next_template_slot(args.candidates_dir, args.candidate_index))
+    elif args.command == "pass-count":
+        print(len(successful_template_slots(args.candidates_dir)))
     elif args.command == "inherit":
         inherit_passing_candidates(args.results_root, args.destination_root, args.parent_job_id,
                                    args.parent_run_id, args.expected_passes, args.current_run_id,
-                                   args.current_run_attempt)
+                                   args.current_run_attempt, args.design_reference_output)
     else:
         write_batch_status(args.output, args.job_id, args.successful, args.attempts,
                            args.new_attempts, args.public_workflow_run, args.candidates_dir,

@@ -1058,23 +1058,41 @@ def assess_website(prompt, session_dir):
                 attribution_text = comments.lower()
                 css_comments = "\n".join(re.findall(r"/\*[\s\S]*?\*/", css))
                 css_attribution_text = css_comments.lower()
+                template_slot = design_reference_audit.get("template_slot")
+                plan_path = session_dir / "debug" / "design_references.json"
+                slot_matches_plan = True
+                if plan_path.is_file():
+                    plan_audit = json.loads(plan_path.read_text(encoding="utf-8"))
+                    plan_references = plan_audit.get("design_references", []) if isinstance(plan_audit, dict) else []
+                    slot_matches_plan = bool(
+                        template_slot in {1, 2, 3}
+                        and any(
+                            isinstance(item, dict)
+                            and item.get("slot") == template_slot
+                            and item.get("template_url") == design_reference.get("template_url")
+                            for item in plan_references
+                        )
+                    )
                 required_attribution = (
                     str(design_reference.get("name", "")).strip().lower(),
                     str(design_reference.get("template_url", "")).strip().lower(),
                     str(design_reference.get("license_url", "")).strip().lower(),
                 )
                 template_attribution_ok = bool(
-                    all(value and value in attribution_text for value in required_attribution)
+                    slot_matches_plan
+                    and all(value and value in attribution_text for value in required_attribution)
                     and re.search(r"\b(adapted|adaptation)\b", attribution_text)
                 )
                 template_attribution_css_ok = bool(
-                    all(value and value in css_attribution_text for value in required_attribution)
+                    slot_matches_plan
+                    and all(value and value in css_attribution_text for value in required_attribution)
                     and re.search(r"\b(adapted|adaptation)\b", css_attribution_text)
                 )
             elif design_reference_audit.get("status") not in {"none_selected", "skipped"}:
                 raise ValueError("design reference audit has an invalid status")
-        except (OSError, json.JSONDecodeError, ValueError, TypeError):
+        except (OSError, json.JSONDecodeError, ValueError, TypeError, AttributeError):
             template_attribution_ok = False
+            template_attribution_css_ok = False
 
     checks = {
         "html_file_present": bool(html),
