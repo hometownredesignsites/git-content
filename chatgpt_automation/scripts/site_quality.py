@@ -1043,6 +1043,7 @@ def assess_website(prompt, session_dir):
         or re.search(r"html5up\.net", visible_links, re.IGNORECASE)
     )
     template_attribution_ok = True
+    template_attribution_css_ok = True
     design_reference_path = session_dir / "debug" / "design_reference.json"
     if design_reference_path.is_file():
         try:
@@ -1055,6 +1056,8 @@ def assess_website(prompt, session_dir):
             if design_reference_audit.get("status") == "selected":
                 comments = "\n".join(re.findall(r"<!--[\s\S]*?-->", html))
                 attribution_text = comments.lower()
+                css_comments = "\n".join(re.findall(r"/\*[\s\S]*?\*/", css))
+                css_attribution_text = css_comments.lower()
                 required_attribution = (
                     str(design_reference.get("name", "")).strip().lower(),
                     str(design_reference.get("template_url", "")).strip().lower(),
@@ -1063,6 +1066,10 @@ def assess_website(prompt, session_dir):
                 template_attribution_ok = bool(
                     all(value and value in attribution_text for value in required_attribution)
                     and re.search(r"\b(adapted|adaptation)\b", attribution_text)
+                )
+                template_attribution_css_ok = bool(
+                    all(value and value in css_attribution_text for value in required_attribution)
+                    and re.search(r"\b(adapted|adaptation)\b", css_attribution_text)
                 )
             elif design_reference_audit.get("status") not in {"none_selected", "skipped"}:
                 raise ValueError("design reference audit has an invalid status")
@@ -1073,6 +1080,7 @@ def assess_website(prompt, session_dir):
         "html_file_present": bool(html),
         "no_visible_template_credit": not template_credit_visible,
         "template_attribution_comment": template_attribution_ok,
+        "template_attribution_css_comment": template_attribution_css_ok,
         "cta_buttons_no_arrows": not parser.cta_arrow_issues,
         "accessible_mobile_hamburger": parser.has_accessible_mobile_hamburger(),
         "css_file_present": bool(css),
@@ -1356,7 +1364,9 @@ def assess_website(prompt, session_dir):
     if template_credit_visible:
         missing_sections.append("no visible template credit in page text or links")
     if not template_attribution_ok:
-        missing_sections.append("HTML5 UP name, source, license, and adaptation note in a non-rendering HTML comment")
+        missing_sections.append("HTML5 UP name, source, license, and adaptation note in an HTML comment")
+    if not template_attribution_css_ok:
+        missing_sections.append("HTML5 UP name, source, license, and adaptation note in a CSS comment")
     if parser.cta_arrow_issues:
         missing_sections.append("CTA buttons without arrow glyphs or arrow icons")
     if not checks["accessible_mobile_hamburger"]:

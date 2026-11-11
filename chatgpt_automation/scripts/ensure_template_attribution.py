@@ -10,19 +10,22 @@ from pathlib import Path
 
 
 def _comment_value(value: object) -> str:
-    """Keep metadata on one safe HTML-comment line."""
+    """Keep metadata on one safe comment line."""
     text = re.sub(r"\s+", " ", str(value or "")).strip()
-    return text.replace("--", "- -")
+    return text.replace("--", "- -").replace("*/", "* /")
 
 
 def ensure_template_attribution(run_dir: Path) -> dict[str, object]:
     debug_dir = run_dir / "debug"
     reference_path = debug_dir / "design_reference.json"
     html_path = run_dir / "files" / "index.html"
+    css_path = run_dir / "files" / "styles.css"
     if not reference_path.is_file():
         raise RuntimeError("debug/design_reference.json is missing")
     if not html_path.is_file():
         raise RuntimeError("files/index.html is missing")
+    if not css_path.is_file():
+        raise RuntimeError("files/styles.css is missing")
 
     audit = json.loads(reference_path.read_text(encoding="utf-8"))
     if not isinstance(audit, dict):
@@ -43,18 +46,34 @@ def ensure_template_attribution(run_dir: Path) -> dict[str, object]:
         raise RuntimeError("selected design reference needs name, template_url, and license_url")
 
     html = html_path.read_text(encoding="utf-8")
-    comments = "\n".join(re.findall(r"<!--[\s\S]*?-->", html)).lower()
-    if all(value.lower() in comments for value in (name, template_url, license_url)) and re.search(
-        r"\b(adapted|adaptation)\b", comments
-    ):
-        return {"status": "already_present", "changed": False}
-
-    attribution = (
-        f"<!-- Adapted from {name}; source: {template_url}; license: {license_url}. "
-        "The original code, content, and assets are tailored for this business. -->"
+    css = css_path.read_text(encoding="utf-8")
+    details_present = lambda comment: bool(
+        all(value.lower() in comment.lower() for value in (name, template_url, license_url))
+        and re.search(r"\b(adapted|adaptation)\b", comment, re.IGNORECASE)
     )
-    html_path.write_text(f"{attribution}\n{html}", encoding="utf-8")
-    return {"status": "inserted", "changed": True}
+
+    html_comments = "\n".join(re.findall(r"<!--[\s\S]*?-->", html))
+    css_comments = "\n".join(re.findall(r"/\*[\s\S]*?\*/", css))
+    html_changed = not details_present(html_comments)
+    css_changed = not details_present(css_comments)
+    if html_changed:
+        html_attribution = (
+            f"<!-- Adapted from {name}; source: {template_url}; license: {license_url}. "
+            "The original code, content, and assets are tailored for this business. -->"
+        )
+        html_path.write_text(f"{html_attribution}\n{html}", encoding="utf-8")
+    if css_changed:
+        css_attribution = (
+            f"/* Design anchor: {name}; source: {template_url}; license: {license_url}. "
+            "Adapted for this business; original CSS. */"
+        )
+        css_path.write_text(f"{css_attribution}\n{css}", encoding="utf-8")
+    return {
+        "status": "inserted" if html_changed or css_changed else "already_present",
+        "changed": html_changed or css_changed,
+        "html_changed": html_changed,
+        "css_changed": css_changed,
+    }
 
 
 def main() -> int:
