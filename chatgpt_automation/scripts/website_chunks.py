@@ -189,8 +189,7 @@ def _design_reference_prompt(brief: str) -> str:
         "\"name\":string,\"template_url\":string,\"demo_url\":string,\"license_url\":string,"
         "\"fit_summary\":string,\"patterns_to_adapt\":[string],\"demo_observations\":[string],"
         "\"criteria_fit\":{\"full_bleed_hero\":true,\"responsive_layout\":true}},"
-        "\"reason_if_none\":string,"
-        "\"sources\":[string]}. Include the official template page, demo, and license URLs in sources.\n\n"
+        "\"reason_if_none\":string}. Keep fit_summary to one sentence and each patterns_to_adapt/demo_observations list to 1–3 concise items (120 characters max each).\n\n"
         "BUSINESS BRIEF (reference data):\n" + brief
     )
 
@@ -315,7 +314,65 @@ def _parse_design_reference_response(response: str) -> dict[str, Any]:
     outside = re.sub(r"```json[ \t]*\r?\n.*?\r?\n```", " ", response, flags=re.IGNORECASE | re.DOTALL)
     if not re.search(r"\bDESIGN REFERENCE ASSESSMENT\b", outside, re.IGNORECASE):
         raise ValueError("design reference assessment label is missing")
-    return _validate_design_reference_result(json.loads(blocks[0]))
+    return _validate_design_reference_result(_normalize_design_reference_result(json.loads(blocks[0])))
+
+
+def _short_assessment_text(value: Any, *, maximum: int = 120) -> str:
+    """Collapse whitespace and shorten a descriptive assessment field safely."""
+    if not isinstance(value, str):
+        return ""
+    text = " ".join(value.split())
+    if len(text) <= maximum:
+        return text
+    clipped = text[: maximum - 1].rsplit(" ", 1)[0].rstrip(" ,;:-")
+    if not clipped:
+        clipped = text[: maximum - 1].rstrip()
+    return clipped + "…"
+
+
+def _normalize_assessment_items(value: Any) -> list[str]:
+    """Normalize ChatGPT's compact lists to the validator's count and size limits."""
+    if isinstance(value, str):
+        values = [value]
+    elif isinstance(value, list):
+        values = value
+    else:
+        return []
+    normalized = []
+    for item in values:
+        text = _short_assessment_text(item)
+        if text and text not in normalized:
+            normalized.append(text)
+        if len(normalized) == 3:
+            break
+    return normalized
+
+
+def _normalize_design_reference_result(result: Any) -> Any:
+    """Repair bounded schema drift without inventing a template or evidence."""
+    if not isinstance(result, dict):
+        return result
+    reference = result.get("design_reference")
+    if not isinstance(reference, dict):
+        return result
+
+    normalized = dict(reference)
+    normalized["patterns_to_adapt"] = _normalize_assessment_items(reference.get("patterns_to_adapt"))
+    normalized["demo_observations"] = _normalize_assessment_items(reference.get("demo_observations"))
+
+    fit_summary = reference.get("fit_summary")
+    if not isinstance(fit_summary, str) or not fit_summary.strip():
+        criteria = reference.get("criteria_fit")
+        if isinstance(criteria, dict) and criteria.get("full_bleed_hero") is True and criteria.get("responsive_layout") is True:
+            name = _short_assessment_text(reference.get("name"), maximum=80) or "The selected template"
+            normalized["fit_summary"] = f"{name} supports the required full-bleed hero and responsive layout."
+
+    # These URLs are required and validated independently. Deriving `sources`
+    # avoids rejecting a sound assessment for an omitted echo of those URLs.
+    result = dict(result)
+    result["design_reference"] = normalized
+    result["sources"] = [reference.get(key) for key in ("template_url", "demo_url", "license_url")]
+    return result
 
 
 def _parse_design_reference_or_fallback(response: str) -> dict[str, Any]:
