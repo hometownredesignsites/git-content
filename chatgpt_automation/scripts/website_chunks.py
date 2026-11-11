@@ -288,10 +288,12 @@ def _validate_design_reference_result(
         return result
     if not isinstance(reference, dict):
         raise ValueError("design_reference must be an object or null")
-    for key, maximum in (("name", 80), ("fit_summary", 500)):
-        value = str(reference.get(key, "")).strip()
-        if not value or len(value) > maximum:
-            raise ValueError(f"design reference is missing {key}")
+    for key, maximum in (("name", 80), ("fit_summary", 2000)):
+        value = reference.get(key)
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"design reference {key} must be non-empty text")
+        if len(value.strip()) > maximum:
+            raise ValueError(f"design reference {key} exceeds {maximum} characters")
     if result.get("search_status") != "completed" and not allow_verified_fallback:
         raise ValueError("a selected design reference requires a completed search")
     template_url = _validated_web_url(reference.get("template_url"), {"html5up.net", "www.html5up.net"})
