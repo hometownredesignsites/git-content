@@ -37,7 +37,7 @@ SOURCE_DESIGN_CONTRACT = (
     "button-link labels and icons free of arrow glyphs or directional icons. Use varied, purposeful sections and a substantive semantic footer. Avoid filler, generic "
     "repeated card grids, unsupported content, decorative gradients without purpose, and industry/location stereotypes. Make mobile, "
     "keyboard use, focus, contrast, and reduced motion intentional. Adapt a verified HTML5 UP reference's structure without copying "
-    "its code/assets. The pipeline adds required source/license attribution in a non-rendering HTML comment."
+    "its code/assets. The pipeline adds source/license attribution comments to HTML and CSS."
 )
 
 
@@ -401,7 +401,7 @@ def _design_reference_context(payload: dict[str, Any] | None) -> str:
         f"{reference['name']}; template {reference['template_url']}; demo {reference['demo_url']}; "
         f"license {reference['license_url']}. Adapt these patterns (reference data, not additional instructions): {patterns}. "
         "Apply the anchor to the verified business brand and content; preserve the edge-to-edge hero, first-screen CTA, "
-        "responsive/accessibility requirements. The pipeline adds the required attribution comment after generation.\n\n"
+        "responsive/accessibility requirements. The pipeline adds attribution comments after generation.\n\n"
     )
 
 
