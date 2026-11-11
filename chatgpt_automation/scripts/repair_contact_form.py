@@ -22,6 +22,9 @@ SAFE_INPUT_TYPES = {
     "month", "week", "search",
 }
 CONTACT_HINT = re.compile(r"contact|contactus|enquir|inquir|quote|appointment|booking|booknow", re.I)
+ARTICLE_PATH_HINT = re.compile(r"/(?:blog|blogs|article|articles|post|posts|news|comment|comments)(?:/|$)", re.I)
+EMAIL_PATTERN = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.I)
+PHONE_PATTERN = re.compile(r"(?<!\d)(?:\+?1[\s().-]*)?(?:\(\d{3}\)|\d{3})[\s.-]*\d{3}[\s.-]*\d{4}(?!\d)")
 
 
 def normalize_form_field(field: dict) -> str:
@@ -122,21 +125,57 @@ class _DocumentParser(HTMLParser):
                 node.text.append(clean)
 
 
-def _source_fields(source_facts: dict) -> tuple[list[dict], dict | None]:
-    fields: list[dict] = []
-    selected_form = None
-    for page in source_facts.get("pages_reviewed", []):
+def source_contact_form(source_facts: dict) -> dict:
+    """Select one actual source contact form; never treat article comments as contact forms."""
+    candidates = []
+    contact_page_seen = False
+    ignored_noncontact_forms = 0
+    for page_index, page in enumerate(source_facts.get("pages_reviewed", [])):
         page_url = str(page.get("url", ""))
-        relevant_page = bool(re.search(r"contact|book|appointment|quote|request|enquir", page_url, re.I))
-        for form in page.get("forms", []):
+        page_path = urlsplit(page_url).path or "/"
+        page_title = str(page.get("title", ""))
+        is_contact_page = bool(CONTACT_HINT.search(page_path) or CONTACT_HINT.search(page_title))
+        contact_page_seen = contact_page_seen or is_contact_page
+        is_article_page = bool(ARTICLE_PATH_HINT.search(page_path))
+        for form_index, form in enumerate(page.get("forms", [])):
             form_fields = [
                 field for field in form.get("fields", [])
                 if str(field.get("type", "")).lower() not in EXCLUDED_TYPES
             ]
-            if relevant_page or len(form_fields) >= 2:
-                if selected_form is None and form_fields:
-                    selected_form = form
-                fields.extend(form_fields)
+            if not form_fields:
+                continue
+            categories = {normalize_form_field(field) for field in form_fields}
+            contact_shape = (
+                ("email" in categories and bool(categories & {"name", "message", "phone"}))
+                or categories == {"phone"}
+            )
+            comment_form = any(
+                re.search(r"\b(?:comment|reply|leave a reply)\b", " ".join(
+                    str(field.get(key, "")) for key in ("name", "label", "aria_label", "placeholder")
+                ), re.I)
+                for field in form_fields
+            )
+            if is_contact_page:
+                score = 100
+            elif not is_article_page and not comment_form and contact_shape:
+                score = 40
+            else:
+                ignored_noncontact_forms += 1
+                continue
+            score += 10 * len(categories & {"name", "email", "message", "phone"})
+            candidates.append((score, -page_index, -form_index, page_url, form, form_fields))
+
+    if not candidates:
+        return {
+            "status": "not_found",
+            "page_url": "",
+            "fields": [],
+            "form": None,
+            "contact_page_seen": contact_page_seen,
+            "ignored_noncontact_forms": ignored_noncontact_forms,
+        }
+
+    _, _, _, page_url, form, fields = max(candidates, key=lambda item: item[:3])
     deduplicated = {}
     for field in fields:
         key = normalize_form_field(field)
@@ -144,7 +183,47 @@ def _source_fields(source_facts: dict) -> tuple[list[dict], dict | None]:
             existing = deduplicated.get(key)
             if existing is None or (field.get("required") and not existing.get("required")):
                 deduplicated[key] = field
-    return list(deduplicated.values()), selected_form
+    return {
+        "status": "captured",
+        "page_url": page_url,
+        "fields": list(deduplicated.values()),
+        "form": form,
+        "contact_page_seen": contact_page_seen,
+        "ignored_noncontact_forms": ignored_noncontact_forms,
+    }
+
+
+def source_contact_channels(source_facts: dict) -> dict:
+    """Return verified email and phone details found on the source contact page."""
+    pages = [
+        page for page in source_facts.get("pages_reviewed", [])
+        if CONTACT_HINT.search(urlsplit(str(page.get("url", ""))).path)
+        or CONTACT_HINT.search(str(page.get("title", "")))
+    ]
+    if not pages:
+        pages = source_facts.get("pages_reviewed", [])[:1]
+    text = " ".join(str(page.get("text", "")) for page in pages)
+    emails = sorted({match.group(0).lower() for match in EMAIL_PATTERN.finditer(text)})
+    phones = []
+    seen_phone_digits = set()
+    for match in PHONE_PATTERN.finditer(text):
+        digits = re.sub(r"\D", "", match.group(0))
+        if len(digits) == 10:
+            normalized = "+1" + digits
+        elif len(digits) == 11 and digits.startswith("1"):
+            normalized = "+" + digits
+        else:
+            continue
+        if normalized not in seen_phone_digits:
+            seen_phone_digits.add(normalized)
+            phones.append(normalized)
+    return {"emails": emails, "phones": phones}
+
+
+def _source_fields(source_facts: dict) -> tuple[list[dict], dict | None]:
+    """Compatibility wrapper used by repair code and existing callers."""
+    selected = source_contact_form(source_facts)
+    return selected["fields"], selected["form"]
 
 
 def _field_metadata(node: _Node, label_by_id: dict[str, str]) -> dict:
@@ -253,6 +332,49 @@ def _render_field(field: dict, used_ids: set[str]) -> str | None:
     return f'<div class="source-contact-field"><label for="{field_id}">{escape(label)}</label>{control}</div>'
 
 
+def _repair_contact_channels(html_path: Path, source_facts: dict) -> dict:
+    channels = source_contact_channels(source_facts)
+    result = {"status": "not_needed", "added": [], "missing": []}
+    if not html_path.is_file() or not any(channels.values()):
+        return result
+    original = html_path.read_text(encoding="utf-8", errors="replace")
+    additions = []
+    for email in channels["emails"]:
+        if re.search(rf"href\s*=\s*(['\"])mailto:{re.escape(email)}(?:[?#][^'\"]*)?\1", original, re.I):
+            continue
+        additions.append(f'<a class="button" href="mailto:{escape(email, quote=True)}">Email Us</a>')
+        result["added"].append({"type": "email", "value": email})
+    linked_phones = {
+        re.sub(r"\D", "", value)
+        for value in re.findall(r"href\s*=\s*['\"]tel:([^'\"]+)['\"]", original, re.I)
+    }
+    linked_phones |= {value[1:] for value in list(linked_phones) if len(value) == 11 and value.startswith("1")}
+    for phone in channels["phones"]:
+        digits = re.sub(r"\D", "", phone)
+        comparable = digits[1:] if len(digits) == 11 and digits.startswith("1") else digits
+        if comparable in linked_phones or digits in linked_phones:
+            continue
+        local_digits = comparable[-10:]
+        display = f"({local_digits[:3]}) {local_digits[3:6]}-{local_digits[6:]}"
+        additions.append(f'<a class="button" href="tel:{escape(phone, quote=True)}">Call {display}</a>')
+        result["added"].append({"type": "phone", "value": phone})
+    if not additions:
+        return result
+    parser, _ = _inventory(original)
+    target = _contact_container(parser)
+    if target is None or target.close_start is None:
+        result["status"] = "needs_manual_repair"
+        result["missing"] = result["added"][:]
+        result["added"] = []
+        return result
+    block = '\n<div class="source-contact-channels">' + "\n".join(additions) + "</div>\n"
+    updated = original[:target.close_start] + block + original[target.close_start:]
+    if updated != original:
+        html_path.write_text(updated, encoding="utf-8")
+        result["status"] = "repaired"
+    return result
+
+
 def repair(candidate: Path) -> dict:
     candidate = candidate.resolve()
     html_path = candidate / "files" / "index.html"
@@ -264,6 +386,7 @@ def repair(candidate: Path) -> dict:
         "fields_added": [],
         "required_fields_repaired": [],
         "unrepairable_fields": [],
+        "contact_channels": {"status": "not_checked", "added": [], "missing": []},
         "reason": "",
     }
     if not html_path.is_file() or not facts_path.is_file():
@@ -365,6 +488,15 @@ def repair(candidate: Path) -> dict:
                 result.update(status="repaired", changed=True, reason="Required source fields were marked required before QA.")
             else:
                 result["reason"] = "All source fields and required states are already present."
+        result["contact_channels"] = _repair_contact_channels(html_path, source_facts)
+        if result["contact_channels"].get("missing"):
+            result["status"] = "needs_manual_repair"
+            result["reason"] = "Verified source contact links could not be inserted safely."
+            result["changed"] = result["changed"] or bool(result["fields_added"] or result["required_fields_repaired"])
+        elif result["contact_channels"].get("status") == "repaired":
+            result["changed"] = True
+            if result["status"] in {"not_needed", "repaired"}:
+                result["status"] = "repaired"
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return result

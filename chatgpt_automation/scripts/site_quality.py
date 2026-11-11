@@ -12,6 +12,11 @@ import urllib.parse
 from html.parser import HTMLParser
 from pathlib import Path
 
+try:
+    from .repair_contact_form import normalize_form_field, source_contact_channels, source_contact_form
+except ImportError:  # Direct execution from the workflow script directory.
+    from repair_contact_form import normalize_form_field, source_contact_channels, source_contact_form
+
 
 SECTION_ALIASES = {
     "hero": ("hero", "banner", "welcome", "introduction", "intro", "site-header", "masthead"),
@@ -545,6 +550,7 @@ class _PageInventory(HTMLParser):
         self.cta_arrow_issues = []
         self._cta_stack = []
         self.forms = 0
+        self.form_actions = []
         self.form_fields = []
         self._form_depth = 0
         self._labels = {}
@@ -634,6 +640,7 @@ class _PageInventory(HTMLParser):
         if tag == "form":
             self.forms += 1
             self._form_depth += 1
+            self.form_actions.append(values.get("action", "").strip())
         if tag == "label":
             self._label_for = values.get("for", "")
             self._label_stack.append({"for": self._label_for, "text": [], "field_index": None})
@@ -971,6 +978,34 @@ def _required_sections(prompt):
     return sorted(required)
 
 
+def _unresolved_local_routes(references, files_dir):
+    """List same-origin paths that cannot resolve inside this single-page candidate."""
+    issues = []
+    files_dir = Path(files_dir).resolve()
+    for tag, value in references:
+        value = str(value or "").strip()
+        if not value:
+            continue
+        parsed = urllib.parse.urlsplit(value)
+        if parsed.scheme or parsed.netloc or value.startswith("//") or not parsed.path:
+            continue
+        path = urllib.parse.unquote(parsed.path)
+        if path in {"/", "/index.html"}:
+            continue
+        target = (files_dir / path.lstrip("/")).resolve()
+        try:
+            target.relative_to(files_dir)
+        except ValueError:
+            target = None
+        if target is not None:
+            if path.endswith("/"):
+                target = target / "index.html"
+            if target.is_file():
+                continue
+        issues.append({"tag": tag, "value": value})
+    return issues
+
+
 def assess_website(prompt, session_dir):
     """Assess whether assembled files are structurally complete for the request."""
     session_dir = Path(session_dir)
@@ -997,10 +1032,18 @@ def assess_website(prompt, session_dir):
         id_counts[element_id] = id_counts.get(element_id, 0) + 1
     duplicate_ids = sorted(element_id for element_id, count in id_counts.items() if count > 1)
     fragment_targets = set(parser.ids)
+    fragment_references = parser.visible_links + parser.form_actions
     missing_fragment_targets = sorted({
-        href[1:] for href in parser.visible_links
-        if href.startswith("#") and href[1:] and href[1:] not in fragment_targets
+        parsed.fragment for reference in fragment_references
+        if not (parsed := urllib.parse.urlsplit(reference)).scheme
+        and not parsed.netloc and not parsed.path
+        and parsed.fragment and urllib.parse.unquote(parsed.fragment) not in fragment_targets
     })
+    unresolved_local_routes = _unresolved_local_routes(
+        [("a", href) for href in parser.visible_links]
+        + [("form", action) for action in parser.form_actions],
+        html_path.parent,
+    )
     h1_values = re.findall(r"<h1\b[^>]*>([\s\S]*?)</h1\s*>", html, re.IGNORECASE)
     h1_text = [re.sub(r"<[^>]+>", " ", value).strip() for value in h1_values]
     css_syntax_issues = _css_syntax_issues(css)
@@ -1035,6 +1078,7 @@ def assess_website(prompt, session_dir):
         else:
             section_present = any(alias in evidence for alias in aliases)
         section_results[section] = bool(section_present and complete_section_results.get(section))
+    required_sections_complete = all(section_results.values())
 
     visible_content = " ".join(parser.visible_text)
     visible_links = " ".join(parser.visible_links)
@@ -1109,6 +1153,7 @@ def assess_website(prompt, session_dir):
         "viewport_meta_present": parser.viewport_meta,
         "ids_unique": not duplicate_ids,
         "fragment_links_resolve": not missing_fragment_targets,
+        "local_routes_resolve": not unresolved_local_routes,
         "interactive_buttons_named": all(
             button["label"] or (
                 button["labelledby"]
@@ -1144,6 +1189,7 @@ def assess_website(prompt, session_dir):
     for section, present in section_results.items():
         checks[f"section_{section}"] = present
         checks[f"section_{section}_complete"] = complete_section_results.get(section, False)
+    checks["required_sections_complete"] = required_sections_complete
 
     hero_image_present = parser.hero_image_present or _hero_has_css_background_image(
         css, parser.hero_selectors
@@ -1240,63 +1286,43 @@ def assess_website(prompt, session_dir):
     if approved_image_urls:
         checks.update(_image_source_checks(image_urls, parser.hero_image_urls, approved_image_urls, base_url))
 
-    explicit_form_request = re.sub(
-        r"[^.!?\n]*\b(?:if|when)\b[^.!?\n]*[.!?]?",
-        " ",
-        request_text,
-        flags=re.IGNORECASE,
-    )
-    if re.search(r"\b(?:form|booking form|contact form|request form)\b", explicit_form_request, re.IGNORECASE):
-        checks["requested_form_present"] = parser.forms > 0
-
     source_facts_path = session_dir / "debug" / "source_facts.json"
+    source_form_assessment = {"status": "unavailable", "page_url": "", "fields": []}
+    source_channels = {"emails": [], "phones": []}
+    missing_contact_channels = []
+    missing_form_fields = []
+    missing_required_fields = []
     if source_facts_path.is_file():
         try:
             source_facts = json.loads(source_facts_path.read_text(encoding="utf-8"))
-            source_forms = []
-            source_form_expected = False
-            for page in source_facts.get("pages_reviewed", []):
-                page_url = str(page.get("url", ""))
-                relevant_page = bool(re.search(r"contact|book|appointment|quote|request|enquir", page_url, re.IGNORECASE))
-                for form in page.get("forms", []):
-                    fields = [field for field in form.get("fields", []) if field.get("type") not in {"hidden", "submit", "image", "reset"}]
-                    if relevant_page or len(fields) >= 2:
-                        source_form_expected = True
-                        source_forms.extend(fields)
-
-            def normalize_form_field(field):
-                # Compare the human-facing field label first. Concatenating the
-                # label, name, and placeholder creates a different string for
-                # otherwise-correct fields and caused false failures when
-                # parser inventory contains repeated label text.
-                raw_label = next((
-                    str(field.get(key, "")).strip()
-                    for key in ("label", "aria_label", "name", "placeholder")
-                    if str(field.get(key, "")).strip()
-                ), "")
-                raw_label = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", raw_label)
-                label = re.sub(r"[^a-z0-9]+", " ", raw_label.lower()).strip()
-                words = label.split()
-                if len(words) % 2 == 0 and words[:len(words) // 2] == words[len(words) // 2:]:
-                    label = " ".join(words[:len(words) // 2])
-                field_type = str(field.get("type", "")).lower()
-                if field_type == "email" or "email" in label:
-                    return "email"
-                if field_type == "tel" or re.search(r"\b(phone|telephone|mobile|tel)\b", label):
-                    return "phone"
-                if re.search(r"\b(name|first|last)\b", label):
-                    return "name"
-                if field_type in {"textarea"} or re.search(r"\b(message|details|comment|enquiry|inquiry)\b", label):
-                    return "message"
-                if re.search(r"\b(address|location|city|postcode|zip)\b", label):
-                    return "property location"
-                if re.search(r"\b(service|project type|what do you need)\b", label):
-                    return "project type"
-                return label or field_type
-
-            expected_fields = {normalize_form_field(field) for field in source_forms} - {"", "text"}
-            actual_fields = {normalize_form_field(field) for field in parser.form_fields} - {"", "text"}
-            if expected_fields:
+            source_form_assessment = source_contact_form(source_facts)
+            source_channels = source_contact_channels(source_facts)
+            expected_emails = {email.lower() for email in source_channels.get("emails", [])}
+            linked_emails = {
+                email.lower()
+                for email in re.findall(r"href\s*=\s*['\"]mailto:([^?'\"#]+)", html, re.I)
+            }
+            linked_phones = [
+                re.sub(r"\D", "", phone)
+                for phone in re.findall(r"href\s*=\s*['\"]tel:([^'\"]+)", html, re.I)
+            ]
+            for email in sorted(expected_emails - linked_emails):
+                missing_contact_channels.append({"type": "email", "value": email})
+            normalized_phones = {
+                digits[1:] if len(digits) == 11 and digits.startswith("1") else digits
+                for digits in linked_phones
+            }
+            for phone in source_channels.get("phones", []):
+                digits = re.sub(r"\D", "", phone)
+                comparable = digits[1:] if len(digits) == 11 and digits.startswith("1") else digits
+                if comparable not in normalized_phones:
+                    missing_contact_channels.append({"type": "phone", "value": phone})
+            if source_channels.get("emails") or source_channels.get("phones"):
+                checks["source_contact_channels_preserved"] = not missing_contact_channels
+            source_forms = source_form_assessment.get("fields", [])
+            if source_form_assessment.get("status") == "captured" and source_forms:
+                expected_fields = {normalize_form_field(field) for field in source_forms} - {"", "text"}
+                actual_fields = {normalize_form_field(field) for field in parser.form_fields} - {"", "text"}
                 missing_form_fields = sorted(expected_fields - actual_fields)
                 checks["source_contact_form_present"] = parser.forms > 0
                 checks["source_contact_form_fields_preserved"] = parser.forms > 0 and not missing_form_fields
@@ -1309,17 +1335,15 @@ def assess_website(prompt, session_dir):
                 missing_required_fields = sorted(expected_required - actual_required)
                 checks["source_contact_form_required_fields_preserved"] = not missing_required_fields
             else:
-                missing_form_fields = []
-                missing_required_fields = []
-                if source_form_expected:
-                    checks["source_contact_form_present"] = parser.forms > 0
-                    checks["source_contact_form_fields_preserved"] = parser.forms > 0
-                    checks["source_contact_form_required_fields_preserved"] = parser.forms > 0
+                source_form_assessment["status"] = "not_found"
+                if parser.forms:
+                    checks["generated_contact_form_has_source_basis"] = False
         except (OSError, json.JSONDecodeError, TypeError, AttributeError):
-            missing_form_fields = []
-            checks["source_contact_form_fields_preserved"] = False
-    else:
-        missing_form_fields = []
+            source_form_assessment = {"status": "invalid_source_facts", "page_url": "", "fields": []}
+            if parser.forms:
+                checks["generated_contact_form_has_source_basis"] = False
+    elif parser.forms:
+        checks["generated_contact_form_has_source_basis"] = False
 
     passed = sum(checks.values())
     total = len(checks)
@@ -1330,6 +1354,13 @@ def assess_website(prompt, session_dir):
             contact_form_repair = json.loads(repair_report_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             contact_form_repair = {"status": "unavailable", "reason": "Repair report could not be read."}
+    local_link_repair = {}
+    local_link_report_path = session_dir / "debug" / "local_link_repair.json"
+    if local_link_report_path.is_file():
+        try:
+            local_link_repair = json.loads(local_link_report_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            local_link_repair = {"status": "unavailable", "reason": "Local-link repair report could not be read."}
     # Rendered layout, loaded visible imagery, and CTA output are blocking
     # requirements because they directly affect the page people see.
     blocking_browser_checks = {
@@ -1379,6 +1410,12 @@ def assess_website(prompt, session_dir):
         missing_sections.append("a substantive footer with at least two useful links")
     if missing_form_fields:
         missing_sections.append("source contact form fields: " + ", ".join(missing_form_fields))
+    if missing_contact_channels:
+        missing_sections.append("verified source contact links: " + ", ".join(item["value"] for item in missing_contact_channels))
+    if unresolved_local_routes:
+        missing_sections.append("local links to missing routes: " + ", ".join(item["value"] for item in unresolved_local_routes))
+    if not checks.get("generated_contact_form_has_source_basis", True):
+        missing_sections.append("a generated contact form without captured source fields")
     if template_credit_visible:
         missing_sections.append("no visible template credit in page text or links")
     if not template_attribution_ok:
@@ -1431,6 +1468,20 @@ def assess_website(prompt, session_dir):
         "structural_gate_checks": automated_checks,
         "advisory_checks": {name: checks[name] for name in sorted(advisory_check_names)},
         "blocking_failures": [name for name, passed_check in automated_checks.items() if not passed_check],
+        "qualification": {
+            "status": "automated_pass" if automated_success else "candidate_failed",
+            "hard_failures": [name for name, passed_check in automated_checks.items() if not passed_check],
+            "minor_repairs": {
+                "contact_form": contact_form_repair,
+                "local_links": local_link_repair,
+            },
+            "human_review_pending": bool(
+                automated_success and (
+                    visual_design_review_status != "pass"
+                    or (visual_review_required and visual_review_status != "pass")
+                )
+            ),
+        },
         "advisory_findings": advisory_findings,
         "automated_success": automated_success,
         "structural_complete": automated_success,
@@ -1458,6 +1509,9 @@ def assess_website(prompt, session_dir):
         "parse_diagnostic": parse_error,
         "duplicate_ids": duplicate_ids,
         "missing_fragment_targets": missing_fragment_targets,
+        "unresolved_local_routes": unresolved_local_routes,
+        "source_contact_channels": source_channels,
+        "source_contact_channels_missing": missing_contact_channels,
         "h1_count": len(h1_text),
         "css_syntax_issues": css_syntax_issues,
         "html_bytes": len(html.encode("utf-8")),
@@ -1468,6 +1522,8 @@ def assess_website(prompt, session_dir):
         "source_form_fields_missing": missing_form_fields,
         "source_form_required_fields_missing": missing_required_fields,
         "contact_form_repair": contact_form_repair,
+        "source_contact_form_assessment": source_form_assessment,
+        "local_link_repair": local_link_repair,
         "cta_arrow_issues": parser.cta_arrow_issues,
         "complete": bool(html and css and all(checks.values())),
         "final_success": bool(

@@ -32,6 +32,7 @@ SOURCE_IMAGE_CDN_SUFFIXES = (
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 from site_quality import _image_loads_ok, _url_key  # noqa: E402
+from repair_contact_form import source_contact_form  # noqa: E402
 
 # These Unsplash assets are used only after a live image-byte check succeeds.
 # Keep fallbacks grouped by the categories present in source_urls.csv.
@@ -147,24 +148,36 @@ def _retry_guidance(previous_candidate: Path | None) -> str:
         corrections.append("Keep a clearly labeled primary CTA visible in the first screen on desktop and mobile.")
     if "browser_rendered_sections_visible_desktop_and_mobile" in failures:
         corrections.append("Ensure every requested section has visible, nonempty content at desktop and mobile sizes.")
+    if "generated_contact_form_has_source_basis" in failures:
+        corrections.append("No source form fields were captured. Omit the form and use only verified phone or email contact links.")
+    if "source_contact_form_fields_preserved" in failures or "source_contact_form_required_fields_preserved" in failures:
+        corrections.append("Preserve every captured source contact-form field, label, required state, and placeholder; the pipeline can repair only simple missing controls.")
+    if "source_contact_channels_preserved" in failures:
+        corrections.append("Include clickable links for all verified source email and phone contact details.")
+    if "local_routes_resolve" in failures:
+        corrections.append("Use in-page #section links or files included in this single-page candidate; do not link to missing source-site paths.")
+    if any(name.startswith("section_") for name in failures):
+        corrections.append("Include every requested section with its own clear heading and substantial supporting content; missing or incomplete sections fail the candidate.")
     if "browser_mobile_has_no_horizontal_overflow" in failures:
         corrections.append("Prevent any element from creating horizontal page overflow at the mobile viewport.")
     if not corrections:
         corrections.append("Correct the previous candidate's automated quality failures and keep the required HTML/CSS part markers exact.")
     return "\n\nRETRY GUIDANCE (specific automated failures from the previous candidate):\n- " + "\n- ".join(corrections)
 def _select_context_pages(facts: dict) -> list[dict]:
-    """Keep the homepage, a few relevant content pages, and the contact form page."""
+    """Keep the homepage, relevant content pages, and the actual source contact-form page."""
     reviewed = facts.get("pages_reviewed", [])
     if not reviewed:
         return []
     requested = str(facts.get("requested_url", "")).rstrip("/").lower()
     homepage = None
+    selected_form = source_contact_form(facts)
+    form_page_url = selected_form.get("page_url")
     form_page = None
     for index, page in enumerate(reviewed):
         url = str(page.get("url", ""))
         if url.rstrip("/").lower() == requested:
             homepage = page
-        if form_page is None and page.get("forms"):
+        if form_page_url and url == form_page_url:
             form_page = page
     homepage = homepage or reviewed[0]
     chosen = [homepage]
@@ -219,6 +232,7 @@ def _verified_facts(page: dict, limit: int = MAX_VERIFIED_FACT_CHARS) -> list[st
 def compact_facts(facts: dict) -> tuple[dict, list[str]]:
     """Build a small design brief while retaining the full source audit on disk."""
     domain = str(facts.get("source_domain", "")).lower().removeprefix("www.")
+    selected_form = source_contact_form(facts)
     pages = _select_context_pages(facts)
     homepage = pages[0] if pages else {}
     headings = []
@@ -274,31 +288,27 @@ def compact_facts(facts: dict) -> tuple[dict, list[str]]:
             break
 
     form_fields = []
-    for page in pages:
-        for form in page.get("forms", [])[:1]:
-            for field in form.get("fields", []):
-                field_type = str(field.get("type") or field.get("tag") or "").strip().lower()
-                placeholder = " ".join(str(field.get("placeholder", "")).split())
-                label = " ".join(str(
-                    field.get("label") or field.get("aria_label") or
-                    ("" if field_type == "textarea" else placeholder) or field.get("name") or ""
-                ).split())
-                label = re.sub(r"\s*[(*]required[*)]\s*", " ", label, flags=re.IGNORECASE).strip()
-                if not label and field_type == "textarea":
-                    label = "Message"
-                elif not label:
-                    label = placeholder
-                if not label or str(field.get("name", "")).lower().startswith(("ak_hp", "honeypot")):
-                    continue
-                item = {"label": label[:70], "required": bool(field.get("required"))}
-                if placeholder and placeholder.casefold() != label.casefold():
-                    item["placeholder"] = placeholder[:110]
-                if item not in form_fields:
-                    form_fields.append(item)
-                if len(form_fields) >= MAX_CONTACT_FIELDS:
-                    break
-            if form_fields:
-                break
+    for field in selected_form.get("fields", []):
+        field_type = str(field.get("type") or field.get("tag") or "").strip().lower()
+        placeholder = " ".join(str(field.get("placeholder", "")).split())
+        label = " ".join(str(
+            field.get("label") or field.get("aria_label") or
+            ("" if field_type == "textarea" else placeholder) or field.get("name") or ""
+        ).split())
+        label = re.sub(r"\s*[(*]required[*)]\s*", " ", label, flags=re.IGNORECASE).strip()
+        if not label and field_type == "textarea":
+            label = "Message"
+        elif not label:
+            label = placeholder
+        if not label or str(field.get("name", "")).lower().startswith(("ak_hp", "honeypot")):
+            continue
+        item = {"label": label[:70], "required": bool(field.get("required"))}
+        if placeholder and placeholder.casefold() != label.casefold():
+            item["placeholder"] = placeholder[:110]
+        if item not in form_fields:
+            form_fields.append(item)
+        if len(form_fields) >= MAX_CONTACT_FIELDS:
+            break
 
     candidate_by_key = {}
     discovery_priority = {
