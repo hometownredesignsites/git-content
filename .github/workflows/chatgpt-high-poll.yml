@@ -106,7 +106,7 @@ jobs:
                   base = re.sub(r"[^a-z0-9]+", "-", site_host).strip("-") or "site"
                   slug = base if base not in used else f"{base}-{hashlib.sha256(site_host.encode()).hexdigest()[:6]}"
                   slug_map[site_host] = slug; used.add(slug)
-              job = {"job_id": job_id, "batch_id": batch_id, "provider": "chatgpt", "result_slug": slug, "candidate_attempt_limit": 10, "row": target}
+              job = {"job_id": job_id, "batch_id": batch_id, "provider": "chatgpt", "result_slug": slug, "candidate_attempt_limit": 12, "row": target}
               (jobs_dir / f"{job_id}.json").write_text(json.dumps(job, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
               job_ids.append(job_id)
           batch = {"schema_version": 1, "batch_id": batch_id, "created_at": datetime.now(timezone.utc).isoformat(), "source": "website-lead-hunting-operations/scores/HIGH_MEDIUM_CANDIDATES.csv", "selection": "final_outcome=high, assessment_state=complete, confidence_level=3", "job_ids": job_ids, "target_count": len(job_ids)}

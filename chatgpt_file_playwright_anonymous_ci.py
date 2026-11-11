@@ -219,7 +219,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--website-chat-id", help="Stable candidate conversation key used by the chunk manifest")
     parser.add_argument("--website-run-token", help="Resume token from the candidate checkpoint; generated when omitted")
     parser.add_argument("--website-quality-request", help="Short source-grounded request used to select QA sections")
-    parser.add_argument("--website-design-reference-file", help="Shared path for the one-per-site HTML5 UP template assessment")
+    parser.add_argument("--website-design-reference-file", help="Shared path for the three-template HTML5 UP assessment")
+    parser.add_argument("--website-design-reference-slot", type=int, choices=(1, 2, 3), default=1)
     parser.add_argument(
         "--website-context-mode",
         choices=("source", "minimal"),
@@ -410,6 +411,7 @@ def run() -> int:
                     stop_after=args.website_stop_after,
                     context_mode=args.website_context_mode,
                     design_reference_file=args.website_design_reference_file,
+                    design_reference_slot=args.website_design_reference_slot,
                 )
                 if website_state.get("status") == "stage_complete":
                     notes_path = Path(args.website_run_folder) / "run_notes.json"
@@ -428,6 +430,7 @@ def run() -> int:
                     "website_stage": website_state.get("staged_until"),
                     "design_reference_status": website_state.get("design_reference_status"),
                     "design_reference_name": website_state.get("design_reference_name"),
+                    "design_reference_slot": website_state.get("design_reference_slot"),
                     "context_mode": args.website_context_mode,
                     "conversation_url": website_state.get("conversation_url"),
                     "run_folder": str(Path(args.website_run_folder).resolve()),
