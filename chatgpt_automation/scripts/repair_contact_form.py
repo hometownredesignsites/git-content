@@ -284,8 +284,17 @@ def _contact_container(parser: _DocumentParser) -> _Node | None:
         if node.tag not in {"section", "div", "article", "main"} or is_component:
             continue
         if not any(CONTACT_HINT.search(token) for token in tokens if token.strip()):
-            continue
-        has_form = any(child.tag == "form" for child in node.descendants())
+            text = " ".join(node.text)
+            has_form = any(child.tag == "form" for child in node.descendants())
+            has_verified_channel = any(
+                child.tag == "a" and str(child.attrs.get("href", "")).lower().startswith(("mailto:", "tel:"))
+                for child in node.descendants()
+            )
+            if not (re.search(r"\b(contact|request (?:a )?quote|get in touch|free estimate)\b", text, re.I)
+                    and (has_form or has_verified_channel)):
+                continue
+        else:
+            has_form = any(child.tag == "form" for child in node.descendants())
         exact_id = bool(re.fullmatch(r"(?:contact|contact-us|contactus)", node.attrs.get("id", ""), re.I))
         tag_score = {"section": 30, "main": 24, "article": 18, "div": 12}[node.tag]
         score = tag_score + (15 if exact_id else 0) + (10 if has_form else 0)
@@ -393,11 +402,11 @@ def _repair_contact_channels(html_path: Path, source_facts: dict) -> dict:
         display = f"({local_digits[:3]}) {local_digits[3:6]}-{local_digits[6:]}"
         additions.append(f'<a class="button" href="tel:{escape(phone, quote=True)}">Call {display}</a>')
         result["added"].append({"type": "phone", "value": phone})
-    if not additions:
-        return result
     parser, _ = _inventory(original)
     target = _contact_container(parser)
     if target is None or target.close_start is None:
+        if not additions:
+            return result
         result["status"] = "needs_manual_repair"
         result["missing"] = result["added"][:]
         result["added"] = []
@@ -414,7 +423,11 @@ def _repair_contact_channels(html_path: Path, source_facts: dict) -> dict:
             for ancestor in _ancestors_until(node, target)
         )
     ]
-    if action_groups:
+    if not additions:
+        destination = target
+        block = ""
+        result["inserted_into"] = "contact-section-marker"
+    elif action_groups:
         # Keep repaired channels in the same flex/grid action group as the
         # generated phone and quote buttons. Appending them after the contact
         # layout creates a third grid item aligned to the section's far left.
@@ -436,22 +449,19 @@ def _repair_contact_channels(html_path: Path, source_facts: dict) -> dict:
             & {"contact-detail", "contact-details", "contact-layout", "contact-grid"}
             for node in target.descendants()
         )
-        if has_detail_grid and not panels:
-            result["status"] = "needs_manual_repair"
-            result["missing"] = result["added"][:]
-            result["added"] = []
-            return result
-        destination = next(
+        full_row = has_detail_grid and not panels
+        destination = target if full_row else next(
             (node for node in panels if "contact-panel" in node.attrs.get("class", "").split()),
             panels[0] if panels else target,
         )
         block = (
             '\n<div class="source-contact-channels contact-actions" '
-            'style="display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-top:18px">'
+            'style="display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:14px;margin:18px auto 0;grid-column:1/-1;width:100%">'
             + "\n".join(additions)
             + "</div>\n"
         )
         result["inserted_into"] = (
+            "contact-section-full-row" if full_row else
             "contact-panel" if "contact-panel" in destination.attrs.get("class", "").split()
             else "contact-copy" if "contact-copy" in destination.attrs.get("class", "").split()
             else "contact-section"
@@ -462,7 +472,14 @@ def _repair_contact_channels(html_path: Path, source_facts: dict) -> dict:
         result["added"] = []
         result["inserted_into"] = ""
         return result
-    updated = original[:destination.close_start] + block + original[destination.close_start:]
+    edits = [(destination.close_start, destination.close_start, block)]
+    if target.start_end is not None:
+        opening = original[target.start:target.start_end]
+        if not re.search(r"\bdata-source-contact-region(?:\s|=|/?>)", opening, re.I):
+            edits.append((target.start_end - 1, target.start_end - 1, ' data-source-contact-region="true"'))
+    updated = original
+    for start, end, replacement in sorted(edits, reverse=True):
+        updated = updated[:start] + replacement + updated[end:]
     if updated != original:
         html_path.write_text(updated, encoding="utf-8")
         result["status"] = "repaired"

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import importlib
 import json
 import re
@@ -18,6 +19,51 @@ from playwright_runner.recovery import refresh_chat, start_new_chat_from_login_g
 from playwright_runner.stage_runner import EmptyAssistantResponseError, run_stage_once, write_stage_outputs
 from playwright_runner.browser_session import assistant_turns, find_chat_composer
 from chatgpt_automation.scripts.website_chunks import CSS_PART_COUNT, HTML_PART_COUNT, WebsiteTurnError, run_website_chunks
+
+
+def _checkpoint_resume_note(run_folder: Path) -> str:
+    """Build a small design handoff from accepted chunks after a fresh-chat recovery."""
+    chunks = run_folder / "chunks"
+    accepted = []
+    checkpoint = chunks / "sequence_checkpoint.json"
+    try:
+        accepted = json.loads(checkpoint.read_text(encoding="utf-8")).get("accepted_parts", [])
+    except (OSError, json.JSONDecodeError):
+        return ""
+    details = []
+    for part in accepted:
+        match = re.fullmatch(r"(css|html)-(\d+)", str(part))
+        if not match:
+            continue
+        path = chunks / f"{match.group(1)}-{match.group(2)}.{ 'css' if match.group(1) == 'css' else 'html' }"
+        try:
+            content = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if match.group(1) == "css":
+            tokens = list(dict.fromkeys(re.findall(r"--[\w-]+\s*:\s*[^;}{]+", content)))[:5]
+            selectors = list(dict.fromkeys(re.findall(r"(?m)^\s*([^@{}][^{}]*?)\s*\{", content)))[:7]
+            summary = "; ".join((tokens + selectors)[:9])
+        else:
+            ids = list(dict.fromkeys(re.findall(r"\bid\s*=\s*['\"]([^'\"]+)", content, re.I)))[:8]
+            headings = [re.sub(r"\s+", " ", item).strip() for item in re.findall(r"<h[1-6][^>]*>(.*?)</h[1-6]>", content, re.I | re.S)]
+            headings = [re.sub(r"<[^>]+>", "", item) for item in headings[:5]]
+            summary = "sections=" + ",".join(ids) + ("; headings=" + ", ".join(headings) if headings else "")
+        if summary:
+            details.append(f"{part}: {summary}")
+    if accepted and not details:
+        return ""
+    return (
+        "\n\nCOMPACT RESUME CONTEXT (validated prior parts; continue these choices, do not regenerate them):\n"
+        + "\n".join(details)[:1100]
+        + "\n"
+    ) if details else ""
+
+
+def _with_resume_context(prompt: str, note: str) -> str:
+    if not note or "COMPACT RESUME CONTEXT" in prompt:
+        return prompt
+    return note + "\n" + prompt
 
 
 def ensure_package(module_name: str, pip_name: str | None = None):
@@ -294,17 +340,30 @@ def run() -> int:
                     except (OSError, json.JSONDecodeError):
                         # If saved conversational context is uncertain, preserve the current tab.
                         return observation, False
-                    if accepted_parts:
+                    resume_note = _checkpoint_resume_note(Path(args.website_run_folder)) if accepted_parts else ""
+                    if accepted_parts and not resume_note:
                         return observation, False
                     if not start_new_chat_from_login_gate(page, args.timeout_ms):
                         return inspect_chatgpt_page_state(page), False
                     started_new_chat = True
+                    if accepted_parts:
+                        checkpoint["fresh_chat_resume"] = {
+                            "accepted_parts": accepted_parts,
+                            "context_note": resume_note,
+                            "at_utc": datetime.now(timezone.utc).isoformat(),
+                        }
+                        checkpoint_path.write_text(json.dumps(checkpoint, indent=2) + "\n", encoding="utf-8")
                     return inspect_chatgpt_page_state(page), True
 
                 def exchange_website_turn(turn_text: str):
                     # Reuse the existing newest-assistant-response capture on this same page.
                     before_state = inspect_chatgpt_page_state(page)
-                    before_state, _ = recover_login_gate(before_state)
+                    before_state, recovered_before_send = recover_login_gate(before_state)
+                    if recovered_before_send:
+                        turn_text = _with_resume_context(
+                            turn_text,
+                            _checkpoint_resume_note(Path(args.website_run_folder)),
+                        )
                     if before_state["classification"] != "ready":
                         raise WebsiteTurnError(
                             before_state["classification"],
@@ -333,7 +392,11 @@ def run() -> int:
                         after_error = inspect_chatgpt_page_state(page)
                         after_error, recovered_login_gate = recover_login_gate(after_error)
                         if recovered_login_gate and after_error["classification"] == "ready":
-                            # No response was captured, so retry this exact prompt in the fresh chat.
+                            # Retry the pending prompt, carrying a bounded summary of accepted parts.
+                            turn_text = _with_resume_context(
+                                turn_text,
+                                _checkpoint_resume_note(Path(args.website_run_folder)),
+                            )
                             try:
                                 response_text, response_metadata = submit_turn()
                             except Exception as retry_error:

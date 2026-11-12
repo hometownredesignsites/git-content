@@ -33,6 +33,8 @@ class _LinkInventory(HTMLParser):
         self.line_offsets.extend(index + 1 for index, char in enumerate(source) if char == "\n")
         self.ids: set[str] = set()
         self.attributes: list[dict] = []
+        self.stack: list[dict] = []
+        self.sections: list[dict] = []
 
     def _offset(self) -> int:
         line, column = self.getpos()
@@ -46,6 +48,24 @@ class _LinkInventory(HTMLParser):
         values = {str(key).lower(): str(value or "") for key, value in attrs}
         if values.get("id"):
             self.ids.add(values["id"])
+        for section in self.stack:
+            section["text"].append(values.get("aria-label", ""))
+            if tag.lower() == "form":
+                section["has_form"] = True
+            if tag.lower() == "a" and str(values.get("href", "")).lower().startswith(("mailto:", "tel:")):
+                section["has_contact_link"] = True
+        if tag.lower() == "section":
+            section = {
+                "id": values.get("id", ""),
+                "start_end": start + len(raw),
+                "attrs": values,
+                "text": [values.get("aria-label", "")],
+                "has_form": False,
+                "has_contact_link": False,
+            }
+            self.sections.append(section)
+            if tag.lower() not in VOID_TAGS:
+                self.stack.append(section)
         attribute = "href" if tag.lower() == "a" else "action" if tag.lower() == "form" else ""
         if not attribute:
             return
@@ -61,6 +81,29 @@ class _LinkInventory(HTMLParser):
 
     def handle_startendtag(self, tag, attrs):
         self.handle_starttag(tag, attrs)
+
+    def handle_endtag(self, tag):
+        if tag.lower() == "section" and self.stack:
+            self.stack.pop()
+
+    def handle_data(self, data):
+        for section in self.stack:
+            section["text"].append(data)
+
+
+def _semantic_contact_section(inventory: _LinkInventory) -> dict | None:
+    ranked = []
+    for section in inventory.sections:
+        attrs = section["attrs"]
+        marker = " ".join((attrs.get("id", ""), attrs.get("class", ""), attrs.get("aria-label", "")))
+        text = " ".join(section["text"])
+        explicit = bool(re.search(r"contact|quote|estimate|get.?in.?touch", marker, re.I))
+        heading = bool(re.search(r"\b(contact|request (?:a )?quote|get in touch|free estimate)\b", text, re.I))
+        if not (explicit or (heading and (section["has_form"] or section["has_contact_link"]))):
+            continue
+        score = (100 if explicit else 50) + (25 if section["has_form"] else 0) + (10 if section["has_contact_link"] else 0)
+        ranked.append((score, section))
+    return max(ranked, key=lambda item: item[0])[1] if ranked else None
 
 
 def _safe_file_target(files_dir: Path, path: str) -> bool:
@@ -105,6 +148,14 @@ def repair(candidate: Path) -> dict:
         inventory = _LinkInventory(source)
         inventory.feed(source)
         inventory.close()
+        semantic_contact = _semantic_contact_section(inventory)
+        contact_id = semantic_contact.get("id", "") if semantic_contact else ""
+        if semantic_contact and not contact_id:
+            contact_id = "contact"
+            while contact_id in inventory.ids:
+                contact_id = "contact-section"
+            semantic_contact["assigned_id"] = contact_id
+            inventory.ids.add(contact_id)
         replacements = []
         for item in inventory.attributes:
             value = item["value"].strip()
@@ -118,6 +169,8 @@ def repair(candidate: Path) -> dict:
                 continue
             fragment = unquote(parsed.fragment)
             section = fragment if fragment in inventory.ids else _section_for_path(path, inventory.ids)
+            if section is None and semantic_contact and re.search(r"contact|quote|estimate|get.?in.?touch", Path(unquote(path)).stem, re.I):
+                section = contact_id
             if section:
                 replacement = f"#{section}"
                 replacements.append((item["value_start"], item["value_end"], replacement))
@@ -125,7 +178,7 @@ def repair(candidate: Path) -> dict:
                     "tag": item["tag"],
                     "from": value,
                     "to": replacement,
-                    "reason": "The path is not a candidate file, but a matching in-page section exists.",
+                    "reason": "The path is not a candidate file, but a matching in-page or semantically identified contact section exists.",
                 })
             else:
                 result["unresolved_local_routes"].append({
@@ -133,6 +186,9 @@ def repair(candidate: Path) -> dict:
                     "value": value,
                     "reason": "The local path does not resolve to a candidate file or an existing fragment.",
                 })
+        if semantic_contact and semantic_contact.get("assigned_id"):
+            start = semantic_contact["start_end"] - 1
+            replacements.append((start, start, f' id="{contact_id}"'))
         for start, end, replacement in sorted(replacements, reverse=True):
             source = source[:start] + replacement + source[end:]
         if replacements:

@@ -38,6 +38,12 @@ def recheck(candidate: Path) -> dict:
     )
     if repaired.returncode:
         raise RuntimeError(f"Source contact-form repair failed: {repaired.stderr or repaired.stdout}")
+    visuals = subprocess.run(
+        [sys.executable, str(SCRIPT_DIR / "repair_generated_visuals.py"), str(candidate)],
+        capture_output=True, text=True, encoding="utf-8",
+    )
+    if visuals.returncode:
+        raise RuntimeError(f"Generated visual repair failed: {visuals.stderr or visuals.stdout}")
     local_links = subprocess.run(
         [sys.executable, str(SCRIPT_DIR / "repair_local_links.py"), str(candidate)],
         capture_output=True, text=True, encoding="utf-8",
