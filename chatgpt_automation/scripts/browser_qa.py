@@ -224,6 +224,23 @@ VIEWPORT_CHECKS_JS = r"""async () => {
       )) || (['grid', 'inline-grid'].includes(parentStyle.display) && parent.children.length > 1);
     })()
   );
+  const contactChannelButtons = contactSections.flatMap(section =>
+    Array.from(section.querySelectorAll('a[href^="tel:"], a[href^="mailto:"]'))
+  ).filter(element => {
+    const label = [element.innerText, element.getAttribute('aria-label')].filter(Boolean).join(' ');
+    return visible(element) && (/(?:^|\s)(?:button|btn|cta)(?:\s|$)/i.test(String(element.className || '')) ||
+      /\b(call now|call us|email us|contact us)\b/i.test(label));
+  });
+  const contactChannelGroups = contactChannelButtons.map(element =>
+    element.closest('.source-contact-channel-actions, [class*="contact-actions" i], [class~="actions"], [class*="cta-group" i], [class*="button-group" i]')
+  );
+  const contactChannelGroup = contactChannelGroups[0];
+  const contactChannelStyle = contactChannelGroup ? getComputedStyle(contactChannelGroup) : null;
+  const contactChannelAlignment = contactChannelButtons.length < 2 || Boolean(
+    contactChannelGroup && contactChannelGroups.every(group => group === contactChannelGroup) &&
+    ['flex', 'inline-flex'].includes(contactChannelStyle.display) &&
+    contactChannelStyle.alignItems === 'center' && contactChannelStyle.justifyContent === 'center'
+  );
   const rgb = value => {
     const parts = String(value || '').match(/[\d.]+/g);
     if (!parts || parts.length < 3) return null;
@@ -346,6 +363,11 @@ VIEWPORT_CHECKS_JS = r"""async () => {
       count: contactEmailButtons.length,
       ungrouped_count: ungroupedContactEmailButtons.length,
       misplaced_count: misplacedContactEmailButtons.length
+    },
+    contact_channel_ctas: {
+      count: contactChannelButtons.length,
+      aligned: contactChannelAlignment,
+      labels: contactChannelButtons.map(element => (element.innerText || element.getAttribute('aria-label') || '').trim())
     },
     contact_cta_contrast: {pass: contactCtaContrastIssues.length === 0, issues: contactCtaContrastIssues},
     image_card_labels: {count: imageCardLabels.length, pass: imageCardLabelIssues.length === 0, issues: imageCardLabelIssues},
@@ -734,6 +756,8 @@ def main() -> int:
                                 visual["contact_email_ctas"]["ungrouped_count"] == 0
                                 and visual["contact_email_ctas"]["misplaced_count"] == 0
                             ),
+                            "contact_channel_ctas": visual["contact_channel_ctas"],
+                            "contact_channel_ctas_aligned": bool(visual["contact_channel_ctas"]["aligned"]),
                             "contact_cta_contrast": visual["contact_cta_contrast"],
                             "contact_ctas_readable": bool(visual["contact_cta_contrast"]["pass"]),
                             "image_card_labels": visual["image_card_labels"],
@@ -780,6 +804,8 @@ def main() -> int:
                             "no_critical_content_clipping": False,
                             "contact_email_ctas": {"count": 0, "ungrouped_count": 0, "misplaced_count": 0},
                             "contact_email_ctas_grouped": False,
+                            "contact_channel_ctas": {"count": 0, "aligned": False, "labels": []},
+                            "contact_channel_ctas_aligned": False,
                             "contact_cta_contrast": {"pass": False, "issues": []},
                             "contact_ctas_readable": False,
                             "image_card_labels": {"count": 0, "pass": False, "issues": []},
@@ -829,6 +855,9 @@ def main() -> int:
             ),
             "contact_email_ctas_grouped": bool(
                 desktop.get("contact_email_ctas_grouped") and mobile.get("contact_email_ctas_grouped")
+            ),
+            "contact_channel_ctas_aligned": bool(
+                desktop.get("contact_channel_ctas_aligned") and mobile.get("contact_channel_ctas_aligned")
             ),
             "contact_ctas_readable_desktop_and_mobile": bool(
                 desktop.get("contact_ctas_readable") and mobile.get("contact_ctas_readable")

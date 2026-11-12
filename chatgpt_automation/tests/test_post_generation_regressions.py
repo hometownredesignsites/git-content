@@ -152,6 +152,42 @@ class PostGenerationRegressionTest(unittest.TestCase):
             self.assertEqual(result["contact_channels"]["inserted_into"], "contact-section-marker")
             self.assertIn('id="five" class="wrapper style2" data-source-contact-region="true"', html)
 
+    def test_contact_call_and_email_buttons_move_to_one_centered_row(self):
+        html = """
+            <section id="contact" data-source-contact-region="true">
+              <div class="contact-copy">
+                <h2>Let's talk about your remodel.</h2>
+                <a class="button light" href="tel:+15551234567">Call Now: (555) 123-4567</a>
+                <div class="contact-details"><a href="tel:+15551234567">(555) 123-4567</a></div>
+                <div class="source-contact-channels contact-actions" style="display:flex;justify-content:center">
+                  <a class="button" href="mailto:hello@example.test">Email Us</a>
+                </div>
+              </div>
+            </section>
+        """
+        with tempfile.TemporaryDirectory(prefix="aligned-contact-actions-") as temporary:
+            candidate = self._candidate(Path(temporary), html)
+
+            result = repair(candidate)
+            repaired = (candidate / "files" / "index.html").read_text(encoding="utf-8")
+            executable_path = str(EDGE_PATH) if EDGE_PATH.is_file() else None
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch(headless=True, executable_path=executable_path)
+                try:
+                    page = browser.new_page(viewport={"width": 390, "height": 844})
+                    page.set_content(repaired)
+                    visual = page.evaluate(VIEWPORT_CHECKS_JS)
+                    row = page.locator(".source-contact-channel-actions")
+
+                    self.assertEqual(result["contact_cta_alignment"]["placement"], "shared_centered_row")
+                    self.assertEqual(row.locator("a").count(), 2)
+                    self.assertTrue(visual["contact_channel_ctas"]["aligned"])
+                    self.assertEqual(visual["contact_email_ctas"]["ungrouped_count"], 0)
+                    self.assertEqual(visual["contact_email_ctas"]["misplaced_count"], 0)
+                    self.assertIn('href="tel:+15551234567">(555) 123-4567</a>', repaired)
+                finally:
+                    browser.close()
+
     def test_contact_us_route_maps_to_semantic_section_with_generic_id(self):
         with tempfile.TemporaryDirectory(prefix="contact-route-repair-") as temporary:
             candidate = self._candidate(Path(temporary), """
