@@ -461,6 +461,7 @@ def _browser_qa_result(session_dir):
         "mobile_has_no_horizontal_overflow",
         "critical_content_within_viewport_desktop_and_mobile",
         "contact_email_ctas_grouped",
+        "contact_channel_ctas_aligned",
         "contact_ctas_readable_desktop_and_mobile",
         "image_card_labels_readable_desktop_and_mobile",
         "hero_ctas_readable_desktop_and_mobile",
@@ -1285,6 +1286,7 @@ def assess_website(prompt, session_dir):
         "mobile_has_no_horizontal_overflow",
         "critical_content_within_viewport_desktop_and_mobile",
         "contact_email_ctas_grouped",
+        "contact_channel_ctas_aligned",
         "contact_ctas_readable_desktop_and_mobile",
         "image_card_labels_readable_desktop_and_mobile",
         "hero_ctas_readable_desktop_and_mobile",
@@ -1406,6 +1408,7 @@ def assess_website(prompt, session_dir):
         "browser_mobile_has_no_horizontal_overflow",
         "browser_critical_content_within_viewport_desktop_and_mobile",
         "browser_contact_email_ctas_grouped",
+        "browser_contact_channel_ctas_aligned",
         "browser_contact_ctas_readable_desktop_and_mobile",
         "browser_image_card_labels_readable_desktop_and_mobile",
         "browser_hero_ctas_readable_desktop_and_mobile",
@@ -1444,6 +1447,8 @@ def assess_website(prompt, session_dir):
         missing_sections.append("headlines and CTA text fully visible within desktop and mobile containers")
     if not checks.get("browser_contact_email_ctas_grouped"):
         missing_sections.append("verified email CTAs grouped within the contact action layout")
+    if not checks.get("browser_contact_channel_ctas_aligned"):
+        missing_sections.append("related phone and email CTAs aligned in one centered contact action row")
     if not checks.get("browser_contact_ctas_readable_desktop_and_mobile"):
         missing_sections.append("contact CTAs with readable text contrast on desktop and mobile")
     if not checks.get("browser_image_card_labels_readable_desktop_and_mobile"):

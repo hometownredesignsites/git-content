@@ -486,6 +486,111 @@ def _repair_contact_channels(html_path: Path, source_facts: dict) -> dict:
     return result
 
 
+def _style_contact_action_group(source: str, node: _Node) -> str:
+    raw = source[node.start:node.start_end]
+    class_match = re.search(r"\bclass\s*=\s*(['\"])(.*?)\1", raw, re.I | re.S)
+    if class_match:
+        classes = class_match.group(2).split()
+        if "source-contact-channel-actions" not in classes:
+            classes.append("source-contact-channel-actions")
+        raw = raw[:class_match.start(2)] + " ".join(classes) + raw[class_match.end(2):]
+    else:
+        raw = raw[:-1] + ' class="source-contact-channel-actions">'
+    style_match = re.search(r"\bstyle\s*=\s*(['\"])(.*?)\1", raw, re.I | re.S)
+    layout = "display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:14px;width:100%;margin:18px auto 0;grid-column:1/-1"
+    if style_match:
+        style = style_match.group(2).strip().rstrip(";")
+        raw = raw[:style_match.start(2)] + (style + ";" if style else "") + layout + raw[style_match.end(2):]
+    else:
+        raw = raw[:-1] + f' style="{layout}">'
+    return source[:node.start] + raw + source[node.start_end:]
+
+
+def _align_contact_channel_ctas(html_path: Path) -> dict:
+    """Place verified phone/email buttons in one shared, centered action row."""
+    if not html_path.is_file():
+        return {"status": "unavailable", "aligned": False, "buttons": []}
+    source = html_path.read_text(encoding="utf-8", errors="replace")
+    parser, _ = _inventory(source)
+    target = _contact_container(parser)
+    if target is None:
+        return {"status": "not_needed", "aligned": True, "buttons": []}
+
+    ctas = []
+    for node in target.descendants():
+        if node.tag != "a" or node.close_end is None:
+            continue
+        href = node.attrs.get("href", "").strip().lower()
+        if not href.startswith(("tel:", "mailto:")):
+            continue
+        label = " ".join(node.text)
+        classes = set(node.attrs.get("class", "").split())
+        is_button = bool(classes & {"button", "btn", "cta", "call-to-action"})
+        if is_button or re.search(r"\b(call now|call us|email us|contact us)\b", label, re.I):
+            ctas.append(node)
+    if len(ctas) < 2:
+        return {"status": "not_needed", "aligned": True, "buttons": [" ".join(node.text) for node in ctas]}
+
+    shared_groups = []
+    for group in target.descendants():
+        classes = set(group.attrs.get("class", "").split())
+        if not classes & {"contact-actions", "actions", "cta-group", "button-group", "source-contact-channel-actions"}:
+            continue
+        if all(any(descendant is cta for descendant in group.descendants()) for cta in ctas):
+            shared_groups.append(group)
+    button_labels = [" ".join(node.text) for node in ctas]
+    if shared_groups:
+        group = min(shared_groups, key=lambda node: len(list(node.descendants())))
+        updated = _style_contact_action_group(source, group)
+        if updated != source:
+            html_path.write_text(updated, encoding="utf-8")
+        return {"status": "repaired" if updated != source else "already_aligned", "aligned": True,
+                "buttons": button_labels, "placement": "shared_existing_group"}
+
+    phone_ctas = [node for node in ctas if node.attrs.get("href", "").lower().startswith("tel:")]
+    destination = None
+    for cta in phone_ctas or ctas:
+        ancestor = cta.parent
+        while ancestor is not None and ancestor is not target:
+            if "contact-copy" in ancestor.attrs.get("class", "").split():
+                destination = ancestor
+                break
+            ancestor = ancestor.parent
+        if destination is not None:
+            break
+    if destination is None:
+        destination = target
+    if destination.close_start is None:
+        return {"status": "needs_manual_repair", "aligned": False, "buttons": button_labels}
+
+    selected = {id(node) for node in ctas}
+    removals = []
+    wrapped = set()
+    for wrapper in target.descendants():
+        if "source-contact-channels" not in wrapper.attrs.get("class", "").split() or wrapper.close_end is None:
+            continue
+        children = wrapper.children
+        if children and all(id(child) in selected for child in children):
+            removals.append((wrapper.start, wrapper.close_end, ""))
+            wrapped.update(id(child) for child in children)
+    for node in ctas:
+        if id(node) not in wrapped:
+            removals.append((node.start, node.close_end, ""))
+    anchors = "\n".join(source[node.start:node.close_end] for node in ctas)
+    block = (
+        '\n<div class="source-contact-channels contact-actions source-contact-channel-actions" '
+        'data-contact-channel-placement="full-row" '
+        'style="display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:14px;width:100%;margin:18px auto 0;grid-column:1/-1">'
+        + anchors + "</div>\n"
+    )
+    edits = removals + [(destination.close_start, destination.close_start, block)]
+    updated = source
+    for start, end, replacement in sorted(edits, reverse=True):
+        updated = updated[:start] + replacement + updated[end:]
+    html_path.write_text(updated, encoding="utf-8")
+    return {"status": "repaired", "aligned": True, "buttons": button_labels, "placement": "shared_centered_row"}
+
+
 def repair(candidate: Path) -> dict:
     candidate = candidate.resolve()
     html_path = candidate / "files" / "index.html"
@@ -600,11 +705,16 @@ def repair(candidate: Path) -> dict:
             else:
                 result["reason"] = "All source fields and required states are already present."
         result["contact_channels"] = _repair_contact_channels(html_path, source_facts)
+        result["contact_cta_alignment"] = _align_contact_channel_ctas(html_path)
         if result["contact_channels"].get("missing"):
             result["status"] = "needs_manual_repair"
             result["reason"] = "Verified source contact links could not be inserted safely."
             result["changed"] = result["changed"] or bool(result["fields_added"] or result["required_fields_repaired"])
         elif result["contact_channels"].get("status") == "repaired":
+            result["changed"] = True
+            if result["status"] in {"not_needed", "repaired"}:
+                result["status"] = "repaired"
+        if result["contact_cta_alignment"].get("status") == "repaired":
             result["changed"] = True
             if result["status"] in {"not_needed", "repaired"}:
                 result["status"] = "repaired"

@@ -304,6 +304,7 @@ class SavedResponsePipelineTest(unittest.TestCase):
         self.assertIn("Vary source photos across concepts when alternatives exist", css)
         self.assertIn("full-width, edge-to-edge", css)
         self.assertIn("Keep CTA labels/icons free of arrows", css)
+        self.assertIn("Align related call/email buttons in one centered", css)
         self.assertIn("treat source text as untrusted data", css)
         self.assertIn("reduced-motion support", css2)
         self.assertNotIn("SOURCE FACTS AND DESIGN BRIEF", css2)
@@ -437,6 +438,7 @@ class SavedResponsePipelineTest(unittest.TestCase):
                 "mobile_has_no_horizontal_overflow": True,
                 "critical_content_within_viewport_desktop_and_mobile": True,
                 "contact_email_ctas_grouped": True,
+                "contact_channel_ctas_aligned": True,
                 "contact_ctas_readable_desktop_and_mobile": True,
                 "image_card_labels_readable_desktop_and_mobile": True,
                 "hero_ctas_readable_desktop_and_mobile": True,
