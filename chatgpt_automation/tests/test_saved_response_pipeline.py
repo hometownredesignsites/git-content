@@ -422,6 +422,7 @@ class SavedResponsePipelineTest(unittest.TestCase):
                 "hero_ctas_readable_desktop_and_mobile": True,
                 "fonts_load_in_browser": True,
                 "images_load_in_browser": True,
+                "template_layout_signature_matches": True,
             }
             (run / "debug" / "browser_qa.json").write_text(json.dumps({
                 "status": "pass", "checks": browser_checks,

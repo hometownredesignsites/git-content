@@ -464,6 +464,7 @@ def _browser_qa_result(session_dir):
         "hero_ctas_readable_desktop_and_mobile",
         "fonts_load_in_browser",
         "images_load_in_browser",
+        "template_layout_signature_matches",
     )
     if any(not isinstance(checks.get(name), bool) for name in expected):
         return "invalid", {}, {"error": "browser_qa.json is missing one or more boolean checks"}
@@ -1285,6 +1286,7 @@ def assess_website(prompt, session_dir):
         "hero_ctas_readable_desktop_and_mobile",
         "fonts_load_in_browser",
         "images_load_in_browser",
+        "template_layout_signature_matches",
     )
     for name in browser_check_names:
         checks[f"browser_{name}"] = browser_qa_status in {"pass", "fail"} and browser_qa_checks.get(name) is True
@@ -1401,6 +1403,7 @@ def assess_website(prompt, session_dir):
         "browser_critical_content_within_viewport_desktop_and_mobile",
         "browser_contact_email_ctas_grouped",
         "browser_hero_ctas_readable_desktop_and_mobile",
+        "browser_template_layout_signature_matches",
     }
     advisory_check_names = {
         name for name in checks
