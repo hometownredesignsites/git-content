@@ -23,6 +23,10 @@ SAFE_INPUT_TYPES = {
 }
 CONTACT_HINT = re.compile(r"contact|contactus|enquir|inquir|quote|appointment|booking|booknow", re.I)
 ARTICLE_PATH_HINT = re.compile(r"/(?:blog|blogs|article|articles|post|posts|news|comment|comments)(?:/|$)", re.I)
+CONTACT_COMPONENT = re.compile(
+    r"^contact[-_ ]?(?:actions?|details?|detail|copy|panel|form|field|channels?)$",
+    re.I,
+)
 EMAIL_PATTERN = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.I)
 PHONE_PATTERN = re.compile(r"(?<!\d)(?:\+?1[\s().-]*)?(?:\(\d{3}\)|\d{3})[\s.-]*\d{3}[\s.-]*\d{4}(?!\d)")
 
@@ -265,18 +269,42 @@ def _inventory(source: str):
 
 def _contact_container(parser: _DocumentParser) -> _Node | None:
     candidates = []
+    components = []
     for node in parser.nodes:
-        if node.tag not in {"section", "div", "article", "main"} or node.close_start is None:
+        if node.close_start is None:
             continue
-        marker = " ".join((node.attrs.get("id", ""), node.attrs.get("class", ""), node.attrs.get("aria-label", "")))
-        if not CONTACT_HINT.search(marker):
+        tokens = [
+            node.attrs.get("id", ""),
+            *node.attrs.get("class", "").split(),
+            node.attrs.get("aria-label", ""),
+        ]
+        is_component = any(CONTACT_COMPONENT.fullmatch(token.strip()) for token in tokens if token.strip())
+        if is_component:
+            components.append(node)
+        if node.tag not in {"section", "div", "article", "main"} or is_component:
+            continue
+        if not any(CONTACT_HINT.search(token) for token in tokens if token.strip()):
             continue
         has_form = any(child.tag == "form" for child in node.descendants())
         exact_id = bool(re.fullmatch(r"(?:contact|contact-us|contactus)", node.attrs.get("id", ""), re.I))
-        tag_score = 2 if node.tag == "section" else 1 if node.tag in {"main", "article"} else 0
-        score = (4 if has_form else 0) + (3 if exact_id else 0) + tag_score
+        tag_score = {"section": 30, "main": 24, "article": 18, "div": 12}[node.tag]
+        score = tag_score + (15 if exact_id else 0) + (10 if has_form else 0)
         text_length = len(" ".join(node.text))
         candidates.append((score, -text_length, node))
+
+    # Class names such as contact-detail and contact-details describe small
+    # components, not the contact region. If the section itself has an
+    # unrelated template id (for example, id="five"), use the nearest
+    # enclosing section of the contact component as the repair boundary.
+    for component in components:
+        ancestor = component.parent
+        while ancestor is not None and ancestor.tag not in {"section", "main"}:
+            ancestor = ancestor.parent
+        if ancestor is not None and ancestor.close_start is not None:
+            has_form = any(child.tag == "form" for child in ancestor.descendants())
+            score = (40 if ancestor.tag == "section" else 32) + (10 if has_form else 0)
+            text_length = len(" ".join(ancestor.text))
+            candidates.append((score, -text_length, ancestor))
     return max(candidates, key=lambda item: (item[0], item[1]))[2] if candidates else None
 
 
@@ -332,6 +360,13 @@ def _render_field(field: dict, used_ids: set[str]) -> str | None:
     return f'<div class="source-contact-field"><label for="{field_id}">{escape(label)}</label>{control}</div>'
 
 
+def _ancestors_until(node: _Node, boundary: _Node):
+    ancestor = node.parent
+    while ancestor is not None and ancestor is not boundary:
+        yield ancestor
+        ancestor = ancestor.parent
+
+
 def _repair_contact_channels(html_path: Path, source_facts: dict) -> dict:
     channels = source_contact_channels(source_facts)
     result = {"status": "not_needed", "added": [], "missing": [], "inserted_into": ""}
@@ -370,7 +405,14 @@ def _repair_contact_channels(html_path: Path, source_facts: dict) -> dict:
     action_groups = [
         node for node in target.descendants()
         if node.close_start is not None
-        and "contact-actions" in node.attrs.get("class", "").split()
+        and bool(
+            set(node.attrs.get("class", "").split())
+            & {"contact-actions", "actions", "cta-group", "button-group"}
+        )
+        and not any(
+            set(ancestor.attrs.get("class", "").split()) & {"contact-detail", "contact-details"}
+            for ancestor in _ancestors_until(node, target)
+        )
     ]
     if action_groups:
         # Keep repaired channels in the same flex/grid action group as the
@@ -384,7 +426,21 @@ def _repair_contact_channels(html_path: Path, source_facts: dict) -> dict:
             node for node in target.descendants()
             if node.close_start is not None
             and set(node.attrs.get("class", "").split()) & {"contact-panel", "contact-copy"}
+            and not any(
+                set(ancestor.attrs.get("class", "").split()) & {"contact-detail", "contact-details"}
+                for ancestor in _ancestors_until(node, target)
+            )
         ]
+        has_detail_grid = any(
+            set(node.attrs.get("class", "").split())
+            & {"contact-detail", "contact-details", "contact-layout", "contact-grid"}
+            for node in target.descendants()
+        )
+        if has_detail_grid and not panels:
+            result["status"] = "needs_manual_repair"
+            result["missing"] = result["added"][:]
+            result["added"] = []
+            return result
         destination = next(
             (node for node in panels if "contact-panel" in node.attrs.get("class", "").split()),
             panels[0] if panels else target,

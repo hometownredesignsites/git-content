@@ -950,6 +950,7 @@ def finalize_candidate(run_folder: str | Path, request_text: str) -> dict[str, A
         [sys.executable, str(SCRIPT_DIR / "assemble_chunks.py"), str(run)],
         [sys.executable, str(SCRIPT_DIR / "ensure_template_attribution.py"), str(run)],
         [sys.executable, str(SCRIPT_DIR / "repair_contact_form.py"), str(run)],
+        [sys.executable, str(SCRIPT_DIR / "repair_generated_visuals.py"), str(run)],
         [sys.executable, str(SCRIPT_DIR / "repair_local_links.py"), str(run)],
         [sys.executable, str(SCRIPT_DIR / "repair_phone_cta_labels.py"), str(files / "index.html")],
         [sys.executable, str(SCRIPT_DIR / "normalize_cta_arrows.py"), str(files / "index.html"), "--css-file", str(files / "styles.css")],
@@ -958,7 +959,7 @@ def finalize_candidate(run_folder: str | Path, request_text: str) -> dict[str, A
         [sys.executable, str(SCRIPT_DIR / "normalize_cta_arrows.py"), str(files / "inlined" / "index.html")],
         [sys.executable, str(SCRIPT_DIR / "browser_qa.py"), str(run), request_text],
     ]
-    step_names = ("assembly", "template_attribution", "contact_form_repair", "local_link_repair", "phone_cta_repair", "cta_arrow_normalization", "css_inlining", "final_cta_arrow_normalization", "browser_qa")
+    step_names = ("assembly", "template_attribution", "contact_form_repair", "visual_repair", "local_link_repair", "phone_cta_repair", "cta_arrow_normalization", "css_inlining", "final_cta_arrow_normalization", "browser_qa")
     step_results: dict[str, Any] = {}
     for name, command in zip(step_names, commands):
         if name == "browser_qa":

@@ -461,6 +461,8 @@ def _browser_qa_result(session_dir):
         "mobile_has_no_horizontal_overflow",
         "critical_content_within_viewport_desktop_and_mobile",
         "contact_email_ctas_grouped",
+        "contact_ctas_readable_desktop_and_mobile",
+        "image_card_labels_readable_desktop_and_mobile",
         "hero_ctas_readable_desktop_and_mobile",
         "fonts_load_in_browser",
         "images_load_in_browser",
@@ -1283,6 +1285,8 @@ def assess_website(prompt, session_dir):
         "mobile_has_no_horizontal_overflow",
         "critical_content_within_viewport_desktop_and_mobile",
         "contact_email_ctas_grouped",
+        "contact_ctas_readable_desktop_and_mobile",
+        "image_card_labels_readable_desktop_and_mobile",
         "hero_ctas_readable_desktop_and_mobile",
         "fonts_load_in_browser",
         "images_load_in_browser",
@@ -1402,6 +1406,8 @@ def assess_website(prompt, session_dir):
         "browser_mobile_has_no_horizontal_overflow",
         "browser_critical_content_within_viewport_desktop_and_mobile",
         "browser_contact_email_ctas_grouped",
+        "browser_contact_ctas_readable_desktop_and_mobile",
+        "browser_image_card_labels_readable_desktop_and_mobile",
         "browser_hero_ctas_readable_desktop_and_mobile",
         "browser_template_layout_signature_matches",
     }
@@ -1438,6 +1444,10 @@ def assess_website(prompt, session_dir):
         missing_sections.append("headlines and CTA text fully visible within desktop and mobile containers")
     if not checks.get("browser_contact_email_ctas_grouped"):
         missing_sections.append("verified email CTAs grouped within the contact action layout")
+    if not checks.get("browser_contact_ctas_readable_desktop_and_mobile"):
+        missing_sections.append("contact CTAs with readable text contrast on desktop and mobile")
+    if not checks.get("browser_image_card_labels_readable_desktop_and_mobile"):
+        missing_sections.append("image-card labels with readable foreground contrast on desktop and mobile")
     if not checks.get("browser_hero_ctas_readable_desktop_and_mobile"):
         missing_sections.append("hero CTAs with readable text contrast on desktop and mobile")
     if not checks["footer_has_substance"]:
