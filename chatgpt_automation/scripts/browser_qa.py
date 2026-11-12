@@ -15,6 +15,7 @@ from playwright.sync_api import sync_playwright
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 from site_quality import SECTION_ALIASES, _required_sections  # noqa: E402
+from template_scaffolds import qa_profile, selection_is_supported  # noqa: E402
 
 
 SECTION_VISIBILITY_JS = r"""(required) => {
@@ -362,6 +363,98 @@ FOCUS_INDICATOR_JS = r"""element => {
 }"""
 
 
+TEMPLATE_LAYOUT_JS = r"""profile => {
+  const main = document.querySelector('main');
+  const h1 = document.querySelector('h1');
+  const hero = h1 && (h1.closest('section') || h1.closest('[class*="hero" i]') || h1.closest('main'));
+  const below = element => !!element && element !== hero && !(hero && hero.contains(element));
+  const hasMedia = element => !!element.querySelector('img, picture, video, .image, [style*="background-image"]') ||
+    ['::before', '::after'].some(pseudo => /url\s*\(/i.test(getComputedStyle(element, pseudo).backgroundImage || ''));
+  const mediaSide = element => {
+    const section = element.getBoundingClientRect();
+    const media = element.querySelector('.image, picture, img, video, [style*="background-image"]');
+    if (!media) return null;
+    const rect = media.getBoundingClientRect();
+    if (!rect.width || !section.width || rect.width < section.width * 0.18) return null;
+    return rect.left + rect.width / 2 < section.left + section.width / 2 ? 'left' : 'right';
+  };
+  const alternations = sides => sides.slice(1).reduce((count, side, index) =>
+    count + (side && sides[index] && side !== sides[index] ? 1 : 0), 0);
+  const mainClasses = main ? main.className : '';
+  const visibleSections = main ? Array.from(main.querySelectorAll(':scope > section, :scope > div > section'))
+    .filter(section => section !== hero && !section.contains(hero)) : [];
+  const spotlightSections = visibleSections.filter(section => section.matches('.spotlight'));
+  const sides = spotlightSections.map(mediaSide);
+  const common = {
+    hero_has_banner_marker: !!(hero && hero.classList.contains('banner')),
+    below_hero_section_count: visibleSections.length,
+    below_hero_section_classes: visibleSections.slice(0, 8).map(section => String(section.className || '').trim()),
+    spotlight_count: spotlightSections.length,
+    spotlight_media_sides: sides,
+    spotlight_side_alternations: alternations(sides),
+    main_classes: mainClasses
+  };
+  let pass = false;
+  let evidence = {};
+  if (profile.profile === 'forty') {
+    const tiles = main && main.querySelector('.tiles');
+    const articles = tiles ? Array.from(tiles.querySelectorAll(':scope > article')) : [];
+    const positions = [...new Set(articles.map(article => Math.round(article.getBoundingClientRect().left / 16)))];
+    const mediaTiles = articles.filter(hasMedia).length;
+    const layout = tiles ? getComputedStyle(tiles).display : 'missing';
+    const columns = layout === 'grid' ? getComputedStyle(tiles).gridTemplateColumns.split(/\s+/).filter(Boolean).length : positions.length;
+    evidence = {tile_grid_present: !!tiles, tile_count: articles.length, media_tile_count: mediaTiles,
+      tile_layout: layout, desktop_tile_columns: columns};
+    pass = !!(hero && hero.id === 'banner' && hero.classList.contains('major') && tiles && articles.length >= 3 &&
+      mediaTiles >= 3 && (layout === 'grid' || layout === 'flex') && columns >= 2);
+  } else if (profile.profile === 'landed') {
+    const hasThreeStyles = ['style1', 'style2', 'style3'].every(name =>
+      spotlightSections.some(section => section.classList.contains(name)));
+    evidence = {has_three_spotlights: spotlightSections.length >= 3, has_three_source_styles: hasThreeStyles,
+      alternating_media_columns: alternations(sides), wide_split_media_count: sides.filter(Boolean).length};
+    pass = !!(hero && hero.id === 'banner' && spotlightSections.length >= 3 && hasThreeStyles && alternations(sides) >= 2);
+  } else if (profile.profile === 'story') {
+    const hasGalleryOrItems = !!(main && main.querySelector('.gallery, .items'));
+    const hasOrientations = !!(main && main.querySelector('.orient-left') && main.querySelector('.orient-right'));
+    evidence = {divided_page: !!document.querySelector('.divided, #wrapper.divided'),
+      has_gallery_or_items: hasGalleryOrItems, has_both_orientations: hasOrientations,
+      alternating_media_columns: alternations(sides), spotlight_media_count: sides.filter(Boolean).length};
+    pass = !!(hero && hero.classList.contains('banner') && hero.classList.contains('fullscreen') && spotlightSections.length >= 2 &&
+      hasGalleryOrItems && hasOrientations && alternations(sides) >= 1);
+  }
+  return {status: pass ? 'pass' : 'fail', pass, slug: profile.slug,
+    signature_id: profile.signature_id, profile: profile.profile, ...common, ...evidence};
+}"""
+
+
+def _selected_template_profile(run_dir: Path) -> tuple[dict | None, dict]:
+    audit_path = run_dir / "debug" / "design_reference.json"
+    try:
+        audit = json.loads(audit_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None, {"status": "not_required", "pass": True, "reason": "no selected template audit"}
+    if not isinstance(audit, dict) or audit.get("status") != "selected":
+        return None, {"status": "not_required", "pass": True, "reason": "no selected template"}
+    profile = qa_profile(audit.get("design_reference"))
+    if not profile:
+        try:
+            plan = json.loads((run_dir / "debug" / "design_references.json").read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            plan = {}
+        if isinstance(plan, dict) and isinstance(plan.get("design_references"), list):
+            if selection_is_supported(plan["design_references"]):
+                return {"profile": "unsupported"}, {"status": "pending", "pass": False, "reason": "selected template does not match maintained scaffold plan"}
+            return None, {"status": "legacy_unverified", "pass": True, "reason": "saved continuation uses a pre-scaffold template plan"}
+        try:
+            checkpoint = json.loads((run_dir / "chunks" / "sequence_checkpoint.json").read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            checkpoint = {}
+        if checkpoint.get("sequence_plan") != "html5up-source-scaffolds-three-reference-slots-css-2-html-2-single-chat-v4":
+            return None, {"status": "legacy_unverified", "pass": True, "reason": "saved candidate uses a pre-scaffold template plan"}
+        return {"profile": "unsupported"}, {"status": "pending", "pass": False, "reason": "selected template has no maintained scaffold signature"}
+    return profile, {"status": "pending", "pass": False}
+
+
 def _resource_event(event, collection: list[dict]) -> None:
     request = event.request if hasattr(event, "request") else event
     if request.resource_type not in {"image", "font"}:
@@ -475,6 +568,7 @@ def main() -> int:
     debug_dir = run_dir / "debug"
     screenshots_dir = debug_dir / "screenshots"
     screenshots_dir.mkdir(parents=True, exist_ok=True)
+    template_profile, template_layout = _selected_template_profile(run_dir)
     requested_sections = _required_sections(args.request)
     section_aliases = {name: list(SECTION_ALIASES.get(name, (name,))) for name in requested_sections}
     viewports = {"desktop": (1440, 900), "mobile": (390, 844)}
@@ -484,6 +578,7 @@ def main() -> int:
         "required_sections": requested_sections,
         "viewports": {},
         "mobile_menu": {},
+        "template_layout": template_layout,
         "checks": {},
         "resource_errors": [],
     }
@@ -523,6 +618,8 @@ def main() -> int:
                         page.wait_for_timeout(150)
                         sections = page.evaluate(SECTION_VISIBILITY_JS, section_aliases)
                         visual = page.evaluate(VIEWPORT_CHECKS_JS)
+                        if name == "desktop" and template_profile:
+                            report["template_layout"] = page.evaluate(TEMPLATE_LAYOUT_JS, template_profile)
                         page.screenshot(path=str(screenshots_dir / f"{name}.png"), full_page=False)
                         font_errors = [item for item in page_errors if item["type"] == "font"]
                         image_errors = [item for item in page_errors if item["type"] == "image"]
@@ -563,6 +660,11 @@ def main() -> int:
                             "resource_errors": page_errors,
                             "screenshot": f"screenshots/{name}.png",
                         }
+                        if name == "desktop" and template_profile and report["template_layout"].get("status") == "pending":
+                            report["template_layout"] = {
+                                **report["template_layout"], "status": "fail", "pass": False,
+                                "reason": "desktop template layout could not be measured",
+                            }
                         report["resource_errors"].extend(page_errors)
                         if name == "mobile":
                             report["mobile_menu"] = _exercise_mobile_menu(page)
@@ -632,6 +734,7 @@ def main() -> int:
             ),
             "fonts_load_in_browser": bool(desktop.get("fonts_loaded") and mobile.get("fonts_loaded")),
             "images_load_in_browser": bool(desktop.get("images_loaded") and mobile.get("images_loaded")),
+            "template_layout_signature_matches": bool(report["template_layout"].get("pass")),
         }
         report["status"] = "pass" if all(report["checks"].values()) else "fail"
 

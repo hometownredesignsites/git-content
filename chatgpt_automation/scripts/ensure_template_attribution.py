@@ -59,13 +59,13 @@ def ensure_template_attribution(run_dir: Path) -> dict[str, object]:
     if html_changed:
         html_attribution = (
             f"<!-- Adapted from {name}; source: {template_url}; license: {license_url}. "
-            "The original code, content, and assets are tailored for this business. -->"
+            "The licensed scaffold was modified for this business; demo copy and assets were replaced. -->"
         )
         html_path.write_text(f"{html_attribution}\n{html}", encoding="utf-8")
     if css_changed:
         css_attribution = (
-            f"/* Design anchor: {name}; source: {template_url}; license: {license_url}. "
-            "Adapted for this business; original CSS. */"
+            f"/* Adapted from {name} CSS scaffold; source: {template_url}; license: {license_url}. "
+            "Template layout rules were tailored for this business. */"
         )
         css_path.write_text(f"{css_attribution}\n{css}", encoding="utf-8")
     return {

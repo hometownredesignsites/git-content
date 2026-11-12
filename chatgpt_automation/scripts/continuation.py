@@ -62,17 +62,31 @@ def _candidate_slot(candidate_dir: Path) -> int | None:
 
 
 def successful_template_slots(candidates_dir: Path) -> set[int]:
-    """Return distinct slots represented by automated-passing candidate folders."""
+    """Return passing slots with distinct rendered template-layout signatures."""
     slots: set[int] = set()
+    signatures: set[str] = set()
     if not candidates_dir.is_dir():
         return slots
-    for candidate_dir in candidates_dir.glob("run-*-site-1-candidate-*"):
+    for candidate_dir in sorted(candidates_dir.glob("run-*-site-1-candidate-*")):
         if not candidate_dir.is_dir():
             continue
         notes = read_json(candidate_dir / "run_notes.json")
         slot = _candidate_slot(candidate_dir)
-        if notes and notes.get("automated_success") is True and slot is not None:
+        if not (notes and notes.get("automated_success") is True and slot is not None):
+            continue
+        browser_qa = read_json(candidate_dir / "debug" / "browser_qa.json") or {}
+        layout = browser_qa.get("template_layout") if isinstance(browser_qa, dict) else None
+        if isinstance(layout, dict) and layout.get("signature_id"):
+            if layout.get("pass") is not True:
+                continue
+            signature = str(layout["signature_id"])
+        else:
+            # Keep pre-scaffold successful candidates eligible for a continuation;
+            # newly qualified candidates always publish a rendered signature.
+            signature = f"legacy-template-slot-{slot}"
+        if slot not in slots and signature not in signatures:
             slots.add(slot)
+            signatures.add(signature)
     return slots
 
 
