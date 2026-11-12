@@ -34,10 +34,9 @@ SOURCE_DESIGN_CONTRACT = (
     "the verified service. Use a matching source photo for the edge-to-edge hero, else `category_fallback_hero`, else a matching "
     "direct URL; reuse that exact URL in HTML. Make the hero full-width and edge-to-edge. Use `visual_category_hint_unverified` only as a matching cue, never as a fact. Never "
     "use indoor-room imagery for outdoor services. Use three distinct relevant image assets when available; never reuse a photo with "
-    "different crops to meet the count. Keep the source-appropriate CTA visible in the first viewport on desktop/mobile; keep CTA and "
+    "different crops to meet the count. Vary source photos across concepts when alternatives exist. Keep the source-appropriate CTA visible in the first viewport on desktop/mobile; label phone-link CTAs as calls. Keep CTA and "
     "button-link labels and icons free of arrow glyphs or directional icons. Use varied, purposeful sections and a substantive semantic footer. Make this concept visibly distinct from the other template slots through its hero composition, section order, type pairing, and brand-appropriate palette. Avoid filler, generic "
-    "repeated card grids, unsupported content, decorative gradients without purpose, and industry/location stereotypes. Make mobile, "
-    "keyboard use, focus, contrast, and reduced motion intentional. Adapt a verified HTML5 UP reference's structure without copying "
+    "repeated generic copy across sections or concepts, unsupported content, decorative gradients without purpose, and industry/location stereotypes. Use verified business-specific details. Keep hero text and buttons readable over imagery. Make mobile, keyboard use, focus, and reduced motion intentional. Adapt a verified HTML5 UP reference's structure without copying "
     "its code/assets. The pipeline adds source/license attribution comments to HTML and CSS."
 )
 
@@ -949,13 +948,14 @@ def finalize_candidate(run_folder: str | Path, request_text: str) -> dict[str, A
         [sys.executable, str(SCRIPT_DIR / "ensure_template_attribution.py"), str(run)],
         [sys.executable, str(SCRIPT_DIR / "repair_contact_form.py"), str(run)],
         [sys.executable, str(SCRIPT_DIR / "repair_local_links.py"), str(run)],
+        [sys.executable, str(SCRIPT_DIR / "repair_phone_cta_labels.py"), str(files / "index.html")],
         [sys.executable, str(SCRIPT_DIR / "normalize_cta_arrows.py"), str(files / "index.html"), "--css-file", str(files / "styles.css")],
         [sys.executable, str(SCRIPT_DIR / "inline_css.py"), str(files / "index.html"),
          str(files / "styles.css"), str(files / "inlined" / "index.html")],
         [sys.executable, str(SCRIPT_DIR / "normalize_cta_arrows.py"), str(files / "inlined" / "index.html")],
         [sys.executable, str(SCRIPT_DIR / "browser_qa.py"), str(run), request_text],
     ]
-    step_names = ("assembly", "template_attribution", "contact_form_repair", "local_link_repair", "cta_arrow_normalization", "css_inlining", "final_cta_arrow_normalization", "browser_qa")
+    step_names = ("assembly", "template_attribution", "contact_form_repair", "local_link_repair", "phone_cta_repair", "cta_arrow_normalization", "css_inlining", "final_cta_arrow_normalization", "browser_qa")
     step_results: dict[str, Any] = {}
     for name, command in zip(step_names, commands):
         if name == "browser_qa":

@@ -38,6 +38,20 @@ VOID_ELEMENTS = {
     "meta", "param", "source", "track", "wbr",
 }
 CTA_ARROW_GLYPHS = re.compile(r"[←↑→↓↗↘↙↖↩↪⇢⇨⟶⟹➔➜➝➞➟➠➡➢➤⮕⮞❯❱›»]")
+PHONE_INTENT = re.compile(r"\b(call|phone|dial|talk|speak)\b", re.IGNORECASE)
+
+
+def _telephone_cta_label_issues(source):
+    issues = []
+    anchor_re = re.compile(r"<a\b(?P<attrs>[^>]*)>(?P<body>[\s\S]*?)</a\s*>", re.IGNORECASE)
+    href_re = re.compile(r"\bhref\s*=\s*(['\"])\s*tel:", re.IGNORECASE)
+    for match in anchor_re.finditer(source):
+        if not href_re.search(match.group("attrs")):
+            continue
+        label = " ".join(html_module.unescape(re.sub(r"<[^>]*>", " ", match.group("body"))).split())
+        if re.search(r"[a-z]", label, re.IGNORECASE) and not PHONE_INTENT.search(label):
+            issues.append(label)
+    return issues
 
 
 def _has_alias(value, aliases):
@@ -1138,12 +1152,14 @@ def assess_website(prompt, session_dir):
             template_attribution_ok = False
             template_attribution_css_ok = False
 
+    telephone_cta_label_issues = _telephone_cta_label_issues(html)
     checks = {
         "html_file_present": bool(html),
         "no_visible_template_credit": not template_credit_visible,
         "template_attribution_comment": template_attribution_ok,
         "template_attribution_css_comment": template_attribution_css_ok,
         "cta_buttons_no_arrows": not parser.cta_arrow_issues,
+        "telephone_cta_labels_identify_call": not telephone_cta_label_issues,
         "accessible_mobile_hamburger": parser.has_accessible_mobile_hamburger(),
         "css_file_present": bool(css),
         "document_has_main": parser.tag_counts.get("main", 0) == 1,
@@ -1424,6 +1440,8 @@ def assess_website(prompt, session_dir):
         missing_sections.append("HTML5 UP name, source, license, and adaptation note in a CSS comment")
     if parser.cta_arrow_issues:
         missing_sections.append("CTA buttons without arrow glyphs or arrow icons")
+    if telephone_cta_label_issues:
+        missing_sections.append("telephone links with call-specific labels: " + ", ".join(telephone_cta_label_issues))
     if not checks["accessible_mobile_hamburger"]:
         missing_sections.append("accessible three-bar mobile navigation button")
     if not checks["browser_hero_media_covers_hero_desktop_and_mobile"]:
@@ -1525,6 +1543,7 @@ def assess_website(prompt, session_dir):
         "source_contact_form_assessment": source_form_assessment,
         "local_link_repair": local_link_repair,
         "cta_arrow_issues": parser.cta_arrow_issues,
+        "telephone_cta_label_issues": telephone_cta_label_issues,
         "complete": bool(html and css and all(checks.values())),
         "final_success": bool(
             automated_success and checks["visual_design_review_passed"]
