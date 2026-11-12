@@ -195,15 +195,15 @@ jobs:
           print("Loaded and masked the private target row.")
           PY
 
-      - name: Validate saved-response assembly and structural gate fixtures
-        if: steps.private_target.outcome == 'success'
-        run: python -m unittest discover -s chatgpt_automation/tests -v
-
       - name: Install pinned Playwright dependencies
         if: steps.private_target.outcome == 'success'
         run: |
           python -m pip install --upgrade pip
           pip install -r .github/workflows/requirements-playwright.txt
+
+      - name: Validate saved-response assembly and structural gate fixtures
+        if: steps.private_target.outcome == 'success'
+        run: python -m unittest discover -s chatgpt_automation/tests -v
 
       - name: Fetch source facts privately
         id: context
