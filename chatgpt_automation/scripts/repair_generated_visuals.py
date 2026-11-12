@@ -11,6 +11,7 @@ import re
 
 
 REPAIR_MARKER = "/* Generated visual repairs: CTA contrast, image-card labels, and template layout. */"
+MOBILE_NAV_REPAIR_MARKER = "/* Generated navigation repair: keep the controlled mobile menu hidden until opened. */"
 REPAIR_CSS = """/* Generated visual repairs: CTA contrast, image-card labels, and template layout. */
 #banner a.button, #banner button, #banner [role="button"],
 .hero a.button, .hero button, .hero [role="button"] {
@@ -38,6 +39,59 @@ REPAIR_CSS = """/* Generated visual repairs: CTA contrast, image-card labels, an
   text-shadow: 0 1px 3px rgba(0, 0, 0, .85);
 }
 """
+MOBILE_NAV_REPAIR_CSS = """/* Generated navigation repair: keep the controlled mobile menu hidden until opened. */
+header nav.mobile-nav { display: none !important; }
+header nav.mobile-nav.is-open { display: flex !important; }
+"""
+
+
+class _MobileNavInventory(HTMLParser):
+    """Find a uniquely controlled mobile nav before applying the CSS repair."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.header_depth = 0
+        self.header_navs: list[dict[str, str]] = []
+        self.menu_controls: list[str] = []
+        self.ids: list[str] = []
+
+    def handle_starttag(self, tag, attrs):
+        tag = tag.lower()
+        values = {str(key).lower(): str(value or "") for key, value in attrs}
+        if values.get("id"):
+            self.ids.append(values["id"])
+        if tag == "header":
+            self.header_depth += 1
+        if self.header_depth and tag == "nav":
+            self.header_navs.append({
+                "id": values.get("id", ""),
+                "classes": values.get("class", "").split(),
+            })
+        if self.header_depth and tag == "button":
+            classes = values.get("class", "")
+            if values.get("aria-controls") and re.search(r"(?:^|[\\s_-])(?:menu|nav)(?:$|[\\s_-])", classes, re.I):
+                self.menu_controls.append(values["aria-controls"])
+
+    def handle_endtag(self, tag):
+        if tag.lower() == "header" and self.header_depth:
+            self.header_depth -= 1
+
+
+def _controlled_mobile_nav_id(html: str) -> str | None:
+    inventory = _MobileNavInventory()
+    try:
+        inventory.feed(html)
+        inventory.close()
+    except Exception:
+        return None
+    id_counts = {item: inventory.ids.count(item) for item in inventory.ids}
+    candidates = [
+        nav["id"] for nav in inventory.header_navs
+        if nav["id"] in inventory.menu_controls
+        and "mobile-nav" in nav["classes"]
+        and id_counts.get(nav["id"]) == 1
+    ]
+    return candidates[0] if len(candidates) == 1 else None
 
 
 class _TagOffsets(HTMLParser):
@@ -84,6 +138,19 @@ def repair(candidate: Path) -> dict:
             )
 
     html_path = candidate / "files" / "index.html"
+    if css_path.is_file() and html_path.is_file():
+        css = css_path.read_text(encoding="utf-8", errors="replace")
+        controlled_mobile_nav = _controlled_mobile_nav_id(
+            html_path.read_text(encoding="utf-8", errors="replace")
+        )
+        if controlled_mobile_nav and MOBILE_NAV_REPAIR_MARKER not in css:
+            css_path.write_text(css.rstrip() + "\n\n" + MOBILE_NAV_REPAIR_CSS, encoding="utf-8")
+            result["repairs"].append("hide the controlled mobile navigation until opened")
+            result["changed"] = True
+            result["status"] = "repaired"
+        elif controlled_mobile_nav:
+            result["repairs"].append("controlled mobile navigation visibility rule already present")
+
     reference_path = candidate / "debug" / "design_reference.json"
     if html_path.is_file() and reference_path.is_file():
         try:
