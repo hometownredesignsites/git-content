@@ -334,7 +334,7 @@ def _render_field(field: dict, used_ids: set[str]) -> str | None:
 
 def _repair_contact_channels(html_path: Path, source_facts: dict) -> dict:
     channels = source_contact_channels(source_facts)
-    result = {"status": "not_needed", "added": [], "missing": []}
+    result = {"status": "not_needed", "added": [], "missing": [], "inserted_into": ""}
     if not html_path.is_file() or not any(channels.values()):
         return result
     original = html_path.read_text(encoding="utf-8", errors="replace")
@@ -367,8 +367,46 @@ def _repair_contact_channels(html_path: Path, source_facts: dict) -> dict:
         result["missing"] = result["added"][:]
         result["added"] = []
         return result
-    block = '\n<div class="source-contact-channels">' + "\n".join(additions) + "</div>\n"
-    updated = original[:target.close_start] + block + original[target.close_start:]
+    action_groups = [
+        node for node in target.descendants()
+        if node.close_start is not None
+        and "contact-actions" in node.attrs.get("class", "").split()
+    ]
+    if action_groups:
+        # Keep repaired channels in the same flex/grid action group as the
+        # generated phone and quote buttons. Appending them after the contact
+        # layout creates a third grid item aligned to the section's far left.
+        destination = min(action_groups, key=lambda node: len(list(node.descendants())))
+        block = "\n" + "\n".join(additions) + "\n"
+        result["inserted_into"] = "contact-actions"
+    else:
+        panels = [
+            node for node in target.descendants()
+            if node.close_start is not None
+            and set(node.attrs.get("class", "").split()) & {"contact-panel", "contact-copy"}
+        ]
+        destination = next(
+            (node for node in panels if "contact-panel" in node.attrs.get("class", "").split()),
+            panels[0] if panels else target,
+        )
+        block = (
+            '\n<div class="source-contact-channels contact-actions" '
+            'style="display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-top:18px">'
+            + "\n".join(additions)
+            + "</div>\n"
+        )
+        result["inserted_into"] = (
+            "contact-panel" if "contact-panel" in destination.attrs.get("class", "").split()
+            else "contact-copy" if "contact-copy" in destination.attrs.get("class", "").split()
+            else "contact-section"
+        )
+    if destination.close_start is None:
+        result["status"] = "needs_manual_repair"
+        result["missing"] = result["added"][:]
+        result["added"] = []
+        result["inserted_into"] = ""
+        return result
+    updated = original[:destination.close_start] + block + original[destination.close_start:]
     if updated != original:
         html_path.write_text(updated, encoding="utf-8")
         result["status"] = "repaired"

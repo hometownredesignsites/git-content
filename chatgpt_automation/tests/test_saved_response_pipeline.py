@@ -417,6 +417,9 @@ class SavedResponsePipelineTest(unittest.TestCase):
                 "mobile_menu_focus_indicator_visible": True,
                 "mobile_menu_keyboard_works": True,
                 "mobile_has_no_horizontal_overflow": True,
+                "critical_content_within_viewport_desktop_and_mobile": True,
+                "contact_email_ctas_grouped": True,
+                "hero_ctas_readable_desktop_and_mobile": True,
                 "fonts_load_in_browser": True,
                 "images_load_in_browser": True,
             }
