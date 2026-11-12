@@ -459,6 +459,9 @@ def _browser_qa_result(session_dir):
         "mobile_menu_focus_indicator_visible",
         "mobile_menu_keyboard_works",
         "mobile_has_no_horizontal_overflow",
+        "critical_content_within_viewport_desktop_and_mobile",
+        "contact_email_ctas_grouped",
+        "hero_ctas_readable_desktop_and_mobile",
         "fonts_load_in_browser",
         "images_load_in_browser",
     )
@@ -1277,6 +1280,9 @@ def assess_website(prompt, session_dir):
         "mobile_menu_focus_indicator_visible",
         "mobile_menu_keyboard_works",
         "mobile_has_no_horizontal_overflow",
+        "critical_content_within_viewport_desktop_and_mobile",
+        "contact_email_ctas_grouped",
+        "hero_ctas_readable_desktop_and_mobile",
         "fonts_load_in_browser",
         "images_load_in_browser",
     )
@@ -1392,6 +1398,9 @@ def assess_website(prompt, session_dir):
         "browser_mobile_menu_focus_indicator_visible",
         "browser_mobile_menu_keyboard_works",
         "browser_mobile_has_no_horizontal_overflow",
+        "browser_critical_content_within_viewport_desktop_and_mobile",
+        "browser_contact_email_ctas_grouped",
+        "browser_hero_ctas_readable_desktop_and_mobile",
     }
     advisory_check_names = {
         name for name in checks
@@ -1422,6 +1431,12 @@ def assess_website(prompt, session_dir):
         missing_sections.append("all visible content images loading in desktop and mobile browsers")
     if not checks.get("browser_cta_arrows_absent_desktop_and_mobile"):
         missing_sections.append("CTA buttons without rendered arrow characters, icons, or pseudo-elements")
+    if not checks.get("browser_critical_content_within_viewport_desktop_and_mobile"):
+        missing_sections.append("headlines and CTA text fully visible within desktop and mobile containers")
+    if not checks.get("browser_contact_email_ctas_grouped"):
+        missing_sections.append("verified email CTAs grouped within the contact action layout")
+    if not checks.get("browser_hero_ctas_readable_desktop_and_mobile"):
+        missing_sections.append("hero CTAs with readable text contrast on desktop and mobile")
     if not checks["footer_has_substance"]:
         missing_sections.append("a substantive footer with at least two useful links")
     if missing_form_fields:

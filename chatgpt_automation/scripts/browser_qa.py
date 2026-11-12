@@ -166,6 +166,80 @@ VIEWPORT_CHECKS_JS = r"""async () => {
     return rect.top >= 0 && rect.bottom <= window.innerHeight && rect.left >= 0 && rect.right <= window.innerWidth;
   });
   const ctaRect = cta ? cta.getBoundingClientRect() : null;
+  const criticalElements = Array.from(document.querySelectorAll('h1, a.button, button.button, a[class*="cta" i], button[class*="cta" i]'))
+    .filter(visible);
+  const clippingIssues = [];
+  for (const element of criticalElements) {
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    let textNode;
+    while ((textNode = walker.nextNode())) {
+      if (!textNode.textContent.trim()) continue;
+      const range = document.createRange();
+      range.selectNodeContents(textNode);
+      for (const line of Array.from(range.getClientRects())) {
+        for (let ancestor = element; ancestor && ancestor !== document.documentElement; ancestor = ancestor.parentElement) {
+          const style = getComputedStyle(ancestor);
+          if (!['hidden', 'clip', 'scroll', 'auto'].includes(style.overflowX)) continue;
+          const box = ancestor.getBoundingClientRect();
+          if (line.left < Math.max(0, box.left) - 1 || line.right > Math.min(window.innerWidth, box.right) + 1) {
+            clippingIssues.push({
+              element: `${element.tagName.toLowerCase()}${element.id ? '#' + element.id : ''}`,
+              text: (element.innerText || '').trim().slice(0, 100),
+              clipped_by: `${ancestor.tagName.toLowerCase()}${ancestor.id ? '#' + ancestor.id : ''}`,
+              left: Math.round(line.left), right: Math.round(line.right),
+              container_left: Math.round(box.left), container_right: Math.round(box.right)
+            });
+            break;
+          }
+          if (ancestor === document.body) break;
+        }
+      }
+    }
+  }
+  const contactEmailButtons = Array.from(document.querySelectorAll('section[id*="contact" i] a[href^="mailto:"]'))
+    .filter(element => /(?:^|\s)(?:button|btn|cta)(?:\s|$)/i.test(String(element.className || '')));
+  const ungroupedContactEmailButtons = contactEmailButtons.filter(element =>
+    !element.closest('[class*="contact-actions" i], [class~="actions"], [class*="cta-group" i], [class*="button-group" i]')
+  );
+  const rgb = value => {
+    const parts = String(value || '').match(/[\d.]+/g);
+    if (!parts || parts.length < 3) return null;
+    return [Number(parts[0]), Number(parts[1]), Number(parts[2])].map(channel => {
+      const s = channel / 255;
+      return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+    });
+  };
+  const luminance = color => color ? 0.2126 * color[0] + 0.7152 * color[1] + 0.0722 * color[2] : null;
+  const h1Node = document.querySelector('h1');
+  const heroNode = h1Node && (h1Node.closest('section') || h1Node.closest('[class*="hero" i]') || h1Node.closest('main'));
+  const heroHasImage = Boolean(heroNode && [heroNode, ...heroNode.querySelectorAll('*')].some(node => {
+    const styles = [getComputedStyle(node), getComputedStyle(node, '::before'), getComputedStyle(node, '::after')];
+    return styles.some(style => style.backgroundImage && style.backgroundImage !== 'none');
+  }));
+  const heroCtas = heroNode ? Array.from(heroNode.querySelectorAll('a,button,[role="button"]')).filter(element => {
+    const label = [element.innerText, element.getAttribute('aria-label'), element.getAttribute('href')].filter(Boolean).join(' ');
+    const isAction = /quote|estimate|contact|call|book|schedule|inquir|email|start a project|let.s talk/i.test(label) ||
+      /(?:^|\s)(?:button|btn|cta)(?:\s|$)/i.test(String(element.className || ''));
+    return isAction && visible(element);
+  }) : [];
+  const heroCtaContrastIssues = heroCtas.filter(element => {
+    const style = getComputedStyle(element);
+    const foreground = luminance(rgb(style.color));
+    const backgroundParts = String(style.backgroundColor || '').match(/[\d.]+/g);
+    const alpha = backgroundParts && backgroundParts.length > 3 ? Number(backgroundParts[3]) : 1;
+    const background = alpha >= 0.85 ? luminance(rgb(style.backgroundColor)) : null;
+    if (background !== null && foreground !== null) {
+      const ratio = (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+      return ratio < 4.5;
+    }
+    // A dark label over a photographic hero with no opaque button surface is
+    // unreadable over common dark image areas. Require a solid contrast surface.
+    return heroHasImage && alpha < 0.85 && foreground !== null && foreground < 0.35;
+  }).map(element => ({
+    text: (element.innerText || element.getAttribute('aria-label') || '').trim().slice(0, 100),
+    color: getComputedStyle(element).color,
+    background: getComputedStyle(element).backgroundColor
+  }));
   const images = Array.from(document.images);
   images.forEach(image => { image.loading = 'eager'; });
   const imageResults = images.map(image => ({
@@ -182,6 +256,9 @@ VIEWPORT_CHECKS_JS = r"""async () => {
   return {
     hero: heroData,
     cta: {visible_first_screen: Boolean(cta), text: cta ? (cta.innerText || cta.getAttribute('aria-label') || '') : '', bottom: ctaRect ? Math.round(ctaRect.bottom) : null, arrow_issues: ctaArrowIssues.map(element => (element.innerText || element.getAttribute('aria-label') || '').trim())},
+    critical_content_clipping: {pass: clippingIssues.length === 0, issues: clippingIssues},
+    contact_email_ctas: {count: contactEmailButtons.length, ungrouped_count: ungroupedContactEmailButtons.length},
+    hero_cta_contrast: {pass: heroCtaContrastIssues.length === 0, issues: heroCtaContrastIssues},
     visible_content_images: {distinct_count: distinctVisibleAssets.size, loaded_count: loadedVisibleAssets.size, failures: visibleMediaResults.filter(item => !item.loaded)},
     horizontal_overflow: {scroll_width: documentWidth, viewport_width: root.clientWidth, overflow: documentWidth > root.clientWidth + 1},
     images: {count: images.length, loaded_count: imageResults.filter(item => item.loaded).length, failures: imageResults.filter(item => !item.loaded)},
@@ -463,6 +540,12 @@ def main() -> int:
                             "cta_visible_first_screen": visual["cta"]["visible_first_screen"],
                             "horizontal_overflow": visual["horizontal_overflow"],
                             "no_horizontal_overflow": not visual["horizontal_overflow"]["overflow"],
+                            "critical_content_clipping": visual["critical_content_clipping"],
+                            "no_critical_content_clipping": bool(visual["critical_content_clipping"]["pass"]),
+                            "contact_email_ctas": visual["contact_email_ctas"],
+                            "contact_email_ctas_grouped": visual["contact_email_ctas"]["ungrouped_count"] == 0,
+                            "hero_cta_contrast": visual["hero_cta_contrast"],
+                            "hero_ctas_readable": bool(visual["hero_cta_contrast"]["pass"]),
                             "images": resource_state,
                             "visible_content_images": visual["visible_content_images"],
                             "cta_arrows_absent": not visual["cta"].get("arrow_issues"),
@@ -494,6 +577,12 @@ def main() -> int:
                             "hero_image_loaded": False,
                             "cta_visible_first_screen": False,
                             "no_horizontal_overflow": False,
+                            "critical_content_clipping": {"pass": False, "issues": []},
+                            "no_critical_content_clipping": False,
+                            "contact_email_ctas": {"count": 0, "ungrouped_count": 0},
+                            "contact_email_ctas_grouped": False,
+                            "hero_cta_contrast": {"pass": False, "issues": []},
+                            "hero_ctas_readable": False,
                             "images_loaded": False,
                             "visible_content_images": {"distinct_count": 0, "loaded_count": 0, "failures": []},
                             "cta_arrows_absent": False,
@@ -532,6 +621,15 @@ def main() -> int:
                 and mobile_menu.get("space_toggles") and mobile_menu.get("escape_closes")
             ),
             "mobile_has_no_horizontal_overflow": bool(mobile.get("no_horizontal_overflow")),
+            "critical_content_within_viewport_desktop_and_mobile": bool(
+                desktop.get("no_critical_content_clipping") and mobile.get("no_critical_content_clipping")
+            ),
+            "contact_email_ctas_grouped": bool(
+                desktop.get("contact_email_ctas_grouped") and mobile.get("contact_email_ctas_grouped")
+            ),
+            "hero_ctas_readable_desktop_and_mobile": bool(
+                desktop.get("hero_ctas_readable") and mobile.get("hero_ctas_readable")
+            ),
             "fonts_load_in_browser": bool(desktop.get("fonts_loaded") and mobile.get("fonts_loaded")),
             "images_load_in_browser": bool(desktop.get("images_loaded") and mobile.get("images_loaded")),
         }
