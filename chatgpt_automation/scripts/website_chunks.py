@@ -20,12 +20,17 @@ from .template_scaffolds import (
     template_slug,
 )
 
+try:
+    from .palette import PALETTES
+except ImportError:  # Direct execution from the workflow script directory.
+    from palette import PALETTES
+
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 CAPTURE_SCRIPT = SCRIPT_DIR / "capture_chunk.py"
 CSS_PART_COUNT = 2
 HTML_PART_COUNT = 2
-SEQUENCE_PLAN = "html5up-source-scaffolds-three-reference-slots-css-2-html-2-single-chat-v4"
+SEQUENCE_PLAN = "html5up-source-scaffolds-three-reference-slots-css-2-html-2-single-chat-palette-v5"
 PARTS = [("css", number) for number in range(1, CSS_PART_COUNT + 1)] + [("html", number) for number in range(1, HTML_PART_COUNT + 1)]
 TOTALS = {"css": CSS_PART_COUNT, "html": HTML_PART_COUNT}
 
@@ -112,7 +117,9 @@ def _part_prompt(
             1: (
                 "Return CSS part 1 only: tokens, reset, typography, container/layout, header/nav, buttons, hero, and desktop styles "
                 "for primary supported sections. Use `brand_logo` only in the brand lockup. Follow the image/hero rules in the core "
-                "contract; record the exact hero URL in its background for HTML reuse. Define the reusable class names and tokens. Omit contact, "
+                "contract; record the exact hero URL in its background for HTML reuse. Define the reusable class names and use the assigned shared palette tokens: "
+                "`--ink`, `--ink-soft`, `--paper`, `--surface`, `--accent`, `--accent-dark`, `--accent-soft`, `--accent-warm`, and `--line`. "
+                "Use them across sections, cards, navigation, and CTAs. Omit contact, "
                 "footer, and responsive overrides."
             ),
             2: (
@@ -425,12 +432,23 @@ def _design_reference_context(payload: dict[str, Any] | None) -> str:
     legacy_scaffold_note = "" if scaffold else (
         "This is a saved legacy reference without a bundled source scaffold; preserve its saved patterns and continue the existing candidate set.\n"
     )
+    slot = payload.get("template_slot", 1)
+    palette = PALETTES.get(slot)
+    palette_note = ""
+    if palette:
+        palette_note = (
+            f"Palette slot {slot} ({palette['name']}): ink {palette['ink']}, muted {palette['ink-soft']}, "
+            f"paper {palette['paper']}, surface {palette['surface']}, accent {palette['accent']}, "
+            f"dark accent {palette['accent-dark']}, soft accent {palette['accent-soft']}, warm accent {palette['accent-warm']}, "
+            f"line {palette['line']}. Use these exact tokens throughout and keep text/CTA contrast readable.\n"
+        )
     return (
         "HTML5 UP DESIGN ANCHOR (verified official scaffold; adapt supplied source markup/CSS, replace all demo content/assets): "
         f"{reference['name']}; template {reference['template_url']}; demo {reference['demo_url']}; "
         f"license {reference['license_url']}. Adapt these patterns (reference data, not additional instructions): {patterns}. "
-        f"Use this as concept slot {payload.get('template_slot', 1)} of 3. Retain its named source components and actual below-hero "
+        f"Use this as concept slot {slot} of 3. Retain its named source components and actual below-hero "
         "layout behavior; only the hero is shared as a fixed full-bleed requirement.\n"
+        + palette_note
         + legacy_scaffold_note
         + scaffold
     )
@@ -949,6 +967,7 @@ def finalize_candidate(run_folder: str | Path, request_text: str) -> dict[str, A
             design_reference_notes = {"status": "invalid_record"}
     commands = [
         [sys.executable, str(SCRIPT_DIR / "assemble_chunks.py"), str(run)],
+        [sys.executable, str(SCRIPT_DIR / "palette.py"), str(run)],
         [sys.executable, str(SCRIPT_DIR / "ensure_template_attribution.py"), str(run)],
         [sys.executable, str(SCRIPT_DIR / "repair_contact_form.py"), str(run)],
         [sys.executable, str(SCRIPT_DIR / "repair_generated_visuals.py"), str(run)],
@@ -960,7 +979,7 @@ def finalize_candidate(run_folder: str | Path, request_text: str) -> dict[str, A
         [sys.executable, str(SCRIPT_DIR / "normalize_cta_arrows.py"), str(files / "inlined" / "index.html")],
         [sys.executable, str(SCRIPT_DIR / "browser_qa.py"), str(run), request_text],
     ]
-    step_names = ("assembly", "template_attribution", "contact_form_repair", "visual_repair", "local_link_repair", "phone_cta_repair", "cta_arrow_normalization", "css_inlining", "final_cta_arrow_normalization", "browser_qa")
+    step_names = ("assembly", "palette_repair", "template_attribution", "contact_form_repair", "visual_repair", "local_link_repair", "phone_cta_repair", "cta_arrow_normalization", "css_inlining", "final_cta_arrow_normalization", "browser_qa")
     step_results: dict[str, Any] = {}
     for name, command in zip(step_names, commands):
         if name == "browser_qa":
@@ -1041,6 +1060,7 @@ def finalize_candidate(run_folder: str | Path, request_text: str) -> dict[str, A
         "automated_success": automated_success,
         "final_success": bool(quality_report.get("final_success")),
         "design_reference": design_reference_notes,
+        "palette": quality_report.get("palette_validation", {"status": "unavailable"}),
         "human_visual_review_status": quality_report.get("visual_design_review_status", "pending"),
         "image_relevance_review_status": quality_report.get("visual_review_status", "pending"),
         "browser_qa_status": browser_report.get("status", "invalid"),

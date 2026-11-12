@@ -238,6 +238,7 @@ class PostGenerationRegressionTest(unittest.TestCase):
 
                     result = repair_visuals(candidate)
                     repaired_css = stylesheet.read_text(encoding="utf-8")
+                    self.assertIn("background-color: var(--accent-dark, #24372d)", repaired_css)
                     page.set_content(f"<style>{repaired_css}</style>{html}")
                     after = page.evaluate(VIEWPORT_CHECKS_JS)
 
