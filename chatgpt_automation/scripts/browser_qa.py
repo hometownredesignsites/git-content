@@ -197,10 +197,30 @@ VIEWPORT_CHECKS_JS = r"""async () => {
       }
     }
   }
-  const contactEmailButtons = Array.from(document.querySelectorAll('section[id*="contact" i] a[href^="mailto:"]'))
-    .filter(element => /(?:^|\s)(?:button|btn|cta)(?:\s|$)/i.test(String(element.className || '')));
+  const contactSections = Array.from(document.querySelectorAll('section')).filter(section => {
+    const marker = [section.id, section.className, section.getAttribute('aria-label')].join(' ');
+    return /contact|quote|estimate|booking|appointment/i.test(marker) || Boolean(
+      section.querySelector('[class~="contact-detail"], [class~="contact-details"], [class*="contact-form" i]')
+    );
+  });
+  const contactSectionFor = element => element.closest('section') && contactSections.includes(element.closest('section'));
+  const contactEmailButtons = Array.from(document.querySelectorAll('a[href^="mailto:"]'))
+    .filter(element => contactSectionFor(element) && /(?:^|\s)(?:button|btn|cta)(?:\s|$)/i.test(String(element.className || '')));
   const ungroupedContactEmailButtons = contactEmailButtons.filter(element =>
     !element.closest('[class*="contact-actions" i], [class~="actions"], [class*="cta-group" i], [class*="button-group" i]')
+  );
+  const misplacedContactEmailButtons = contactEmailButtons.filter(element =>
+    element.closest('[class~="contact-detail"], [class~="contact-details"]') || (() => {
+      const group = element.closest('.source-contact-channels');
+      if (!group || !group.parentElement) return false;
+      const parent = group.parentElement;
+      const parentClasses = String(parent.className || '').split(/\s+/);
+      if (parentClasses.includes('contact-copy') || parentClasses.includes('contact-panel')) return false;
+      const parentStyle = getComputedStyle(parent);
+      return Boolean(parent.querySelector(
+        ':scope > .contact-layout, :scope > .contact-inner, :scope > .contact-grid, :scope > .contact-details'
+      )) || (['grid', 'inline-grid'].includes(parentStyle.display) && parent.children.length > 1);
+    })()
   );
   const rgb = value => {
     const parts = String(value || '').match(/[\d.]+/g);
@@ -211,6 +231,68 @@ VIEWPORT_CHECKS_JS = r"""async () => {
     });
   };
   const luminance = color => color ? 0.2126 * color[0] + 0.7152 * color[1] + 0.0722 * color[2] : null;
+  const rgba = value => {
+    const parts = String(value || '').match(/[\d.]+/g);
+    if (!parts || parts.length < 3) return null;
+    return {
+      channels: parts.slice(0, 3).map(Number),
+      alpha: parts.length > 3 ? Number(parts[3]) : 1
+    };
+  };
+  const effectiveBackground = element => {
+    let background = [255, 255, 255];
+    const ancestors = [];
+    for (let node = element; node; node = node.parentElement) ancestors.push(node);
+    let unknownImageLayer = false;
+    for (const node of ancestors.reverse()) {
+      const style = getComputedStyle(node);
+      const hasImage = Boolean(style.backgroundImage && style.backgroundImage !== 'none');
+      if (hasImage) unknownImageLayer = true;
+      const layer = rgba(style.backgroundColor);
+      if (!layer || layer.alpha <= 0) continue;
+      if (layer.alpha >= 0.98) {
+        background = layer.channels;
+        unknownImageLayer = hasImage;
+        continue;
+      }
+      background = background.map((channel, index) => layer.channels[index] * layer.alpha + channel * (1 - layer.alpha));
+    }
+    return unknownImageLayer ? null : background;
+  };
+  const contactCtas = contactSections.flatMap(section =>
+    Array.from(section.querySelectorAll('a,button,[role="button"],input[type="submit"]'))
+  ).filter(element => {
+    const label = [element.innerText, element.getAttribute('aria-label'), element.getAttribute('value'), element.getAttribute('href')].filter(Boolean).join(' ');
+    const buttonClass = /(?:^|[\s_-])(?:button|btn|cta|call[-_]?to[-_]?action)(?:$|[\s_-])/i.test(String(element.className || ''));
+    return visible(element) && (ctaWords.test(label) || buttonClass);
+  });
+  const contactCtaContrastIssues = contactCtas.filter(element => {
+    const foreground = luminance(rgb(getComputedStyle(element).color));
+    const backgroundColor = effectiveBackground(element);
+    if (foreground === null || backgroundColor === null) return false;
+    const background = luminance(rgb(`rgb(${backgroundColor.join(',')})`));
+    if (background === null) return false;
+    const ratio = (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+    return ratio < 4.5;
+  }).map(element => {
+    const background = effectiveBackground(element);
+    return {
+      text: (element.innerText || element.getAttribute('aria-label') || '').trim().slice(0, 100),
+      color: getComputedStyle(element).color,
+      background: background ? `rgb(${background.join(',')})` : 'unknown'
+    };
+  });
+  const imageCardLabels = Array.from(document.querySelectorAll('.tiles article .eyebrow')).filter(visible);
+  const imageCardLabelIssues = imageCardLabels.filter(element => {
+    const style = getComputedStyle(element);
+    const color = luminance(rgb(style.color));
+    const background = rgba(style.backgroundColor);
+    return color === null || color < 0.8 || !background || background.alpha < 0.65;
+  }).map(element => ({
+    text: (element.innerText || '').trim().slice(0, 100),
+    color: getComputedStyle(element).color,
+    background: getComputedStyle(element).backgroundColor
+  }));
   const h1Node = document.querySelector('h1');
   const heroNode = h1Node && (h1Node.closest('section') || h1Node.closest('[class*="hero" i]') || h1Node.closest('main'));
   const heroHasImage = Boolean(heroNode && [heroNode, ...heroNode.querySelectorAll('*')].some(node => {
@@ -258,7 +340,13 @@ VIEWPORT_CHECKS_JS = r"""async () => {
     hero: heroData,
     cta: {visible_first_screen: Boolean(cta), text: cta ? (cta.innerText || cta.getAttribute('aria-label') || '') : '', bottom: ctaRect ? Math.round(ctaRect.bottom) : null, arrow_issues: ctaArrowIssues.map(element => (element.innerText || element.getAttribute('aria-label') || '').trim())},
     critical_content_clipping: {pass: clippingIssues.length === 0, issues: clippingIssues},
-    contact_email_ctas: {count: contactEmailButtons.length, ungrouped_count: ungroupedContactEmailButtons.length},
+    contact_email_ctas: {
+      count: contactEmailButtons.length,
+      ungrouped_count: ungroupedContactEmailButtons.length,
+      misplaced_count: misplacedContactEmailButtons.length
+    },
+    contact_cta_contrast: {pass: contactCtaContrastIssues.length === 0, issues: contactCtaContrastIssues},
+    image_card_labels: {count: imageCardLabels.length, pass: imageCardLabelIssues.length === 0, issues: imageCardLabelIssues},
     hero_cta_contrast: {pass: heroCtaContrastIssues.length === 0, issues: heroCtaContrastIssues},
     visible_content_images: {distinct_count: distinctVisibleAssets.size, loaded_count: loadedVisibleAssets.size, failures: visibleMediaResults.filter(item => !item.loaded)},
     horizontal_overflow: {scroll_width: documentWidth, viewport_width: root.clientWidth, overflow: documentWidth > root.clientWidth + 1},
@@ -640,7 +728,14 @@ def main() -> int:
                             "critical_content_clipping": visual["critical_content_clipping"],
                             "no_critical_content_clipping": bool(visual["critical_content_clipping"]["pass"]),
                             "contact_email_ctas": visual["contact_email_ctas"],
-                            "contact_email_ctas_grouped": visual["contact_email_ctas"]["ungrouped_count"] == 0,
+                            "contact_email_ctas_grouped": (
+                                visual["contact_email_ctas"]["ungrouped_count"] == 0
+                                and visual["contact_email_ctas"]["misplaced_count"] == 0
+                            ),
+                            "contact_cta_contrast": visual["contact_cta_contrast"],
+                            "contact_ctas_readable": bool(visual["contact_cta_contrast"]["pass"]),
+                            "image_card_labels": visual["image_card_labels"],
+                            "image_card_labels_readable": bool(visual["image_card_labels"]["pass"]),
                             "hero_cta_contrast": visual["hero_cta_contrast"],
                             "hero_ctas_readable": bool(visual["hero_cta_contrast"]["pass"]),
                             "images": resource_state,
@@ -681,8 +776,12 @@ def main() -> int:
                             "no_horizontal_overflow": False,
                             "critical_content_clipping": {"pass": False, "issues": []},
                             "no_critical_content_clipping": False,
-                            "contact_email_ctas": {"count": 0, "ungrouped_count": 0},
+                            "contact_email_ctas": {"count": 0, "ungrouped_count": 0, "misplaced_count": 0},
                             "contact_email_ctas_grouped": False,
+                            "contact_cta_contrast": {"pass": False, "issues": []},
+                            "contact_ctas_readable": False,
+                            "image_card_labels": {"count": 0, "pass": False, "issues": []},
+                            "image_card_labels_readable": False,
                             "hero_cta_contrast": {"pass": False, "issues": []},
                             "hero_ctas_readable": False,
                             "images_loaded": False,
@@ -728,6 +827,12 @@ def main() -> int:
             ),
             "contact_email_ctas_grouped": bool(
                 desktop.get("contact_email_ctas_grouped") and mobile.get("contact_email_ctas_grouped")
+            ),
+            "contact_ctas_readable_desktop_and_mobile": bool(
+                desktop.get("contact_ctas_readable") and mobile.get("contact_ctas_readable")
+            ),
+            "image_card_labels_readable_desktop_and_mobile": bool(
+                desktop.get("image_card_labels_readable") and mobile.get("image_card_labels_readable")
             ),
             "hero_ctas_readable_desktop_and_mobile": bool(
                 desktop.get("hero_ctas_readable") and mobile.get("hero_ctas_readable")
