@@ -10,13 +10,14 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-from chatgpt_automation.scripts.browser_qa import VIEWPORT_CHECKS_JS
+from chatgpt_automation.scripts.browser_qa import HEADER_NAV_AUDIT_JS, VIEWPORT_CHECKS_JS
 from chatgpt_automation.scripts.repair_contact_form import repair
 from chatgpt_automation.scripts.repair_local_links import repair as repair_local_links
 from chatgpt_automation.scripts.repair_generated_visuals import repair as repair_visuals
+from chatgpt_automation.scripts.site_quality import _PageInventory, _header_navigation_link_limit
 
 
-EDGE_PATH = Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe")
+CHROME_PATH = Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe")
 
 
 class PostGenerationRegressionTest(unittest.TestCase):
@@ -170,7 +171,7 @@ class PostGenerationRegressionTest(unittest.TestCase):
 
             result = repair(candidate)
             repaired = (candidate / "files" / "index.html").read_text(encoding="utf-8")
-            executable_path = str(EDGE_PATH) if EDGE_PATH.is_file() else None
+            executable_path = str(CHROME_PATH) if CHROME_PATH.is_file() else None
             with sync_playwright() as playwright:
                 browser = playwright.chromium.launch(headless=True, executable_path=executable_path)
                 try:
@@ -225,7 +226,7 @@ class PostGenerationRegressionTest(unittest.TestCase):
             candidate = self._candidate(Path(temporary), html)
             stylesheet = candidate / "files" / "styles.css"
             stylesheet.write_text(source_css, encoding="utf-8")
-            executable_path = str(EDGE_PATH) if EDGE_PATH.is_file() else None
+            executable_path = str(CHROME_PATH) if CHROME_PATH.is_file() else None
             with sync_playwright() as playwright:
                 browser = playwright.chromium.launch(headless=True, executable_path=executable_path)
                 try:
@@ -265,7 +266,7 @@ class PostGenerationRegressionTest(unittest.TestCase):
               <a class="button" href="mailto:hello@example.test">Email Us</a>
             </div></div></section>
         """
-        executable_path = str(EDGE_PATH) if EDGE_PATH.is_file() else None
+        executable_path = str(CHROME_PATH) if CHROME_PATH.is_file() else None
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=True, executable_path=executable_path)
             try:
@@ -306,6 +307,82 @@ class PostGenerationRegressionTest(unittest.TestCase):
             self.assertIn("alternating left/right Landed spotlight layout", result["repairs"])
             self.assertEqual(["left" if "left" in value else "right" for value in classes], ["left", "right", "left"])
             self.assertTrue(all("top" not in value and "bottom" not in value for value in classes))
+
+    def test_mobile_nav_repair_hides_separate_menu_until_it_is_open(self):
+        with tempfile.TemporaryDirectory(prefix="mobile-nav-repair-") as temporary:
+            html = """
+                <header id="header">
+                  <nav class="primary-nav" id="desktop-menu"><a href="#one">One</a></nav>
+                  <button class="menu-toggle" aria-label="Open menu" aria-controls="mobile-menu" aria-expanded="false">
+                    <span aria-hidden="true"></span><span aria-hidden="true"></span><span aria-hidden="true"></span>
+                  </button>
+                  <nav class="mobile-nav" id="mobile-menu" aria-label="Mobile menu">
+                    <a href="#one">One</a><a href="#two">Two</a><a href="#three">Three</a>
+                  </nav>
+                </header>
+                <script>document.querySelector('.menu-toggle').addEventListener('click', () => {
+                  const nav = document.getElementById('mobile-menu');
+                  nav.classList.toggle('is-open');
+                });</script>
+            """
+            candidate = self._candidate(Path(temporary), html)
+            css = """
+                #header nav { display: flex; }
+                @media (max-width: 760px) {
+                  #header nav.primary-nav { display: none; }
+                  .mobile-nav { position: absolute; }
+                  .mobile-nav.is-open { display: flex; }
+                  .menu-toggle { display: block; }
+                }
+            """
+            stylesheet = candidate / "files" / "styles.css"
+            stylesheet.write_text(css, encoding="utf-8")
+
+            result = repair_visuals(candidate)
+            repaired_css = stylesheet.read_text(encoding="utf-8")
+
+            self.assertIn("hide the controlled mobile navigation until opened", result["repairs"])
+            self.assertIn("header nav.mobile-nav { display: none !important; }", repaired_css)
+            self.assertIn("header nav.mobile-nav.is-open { display: flex !important; }", repaired_css)
+            self.assertEqual((candidate / "files" / "index.html").read_text(encoding="utf-8"), html)
+
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch(
+                    headless=True,
+                    executable_path=str(CHROME_PATH) if CHROME_PATH.is_file() else None,
+                )
+                try:
+                    page = browser.new_page(viewport={"width": 1440, "height": 900})
+                    page.set_content(f"<style>{repaired_css}</style>{html}")
+                    desktop = page.evaluate(VIEWPORT_CHECKS_JS)
+                    self.assertEqual(desktop["header_navigation"]["visible_nav_count"], 1)
+                    self.assertTrue(desktop["header_navigation"]["controlled_menu_hidden"])
+
+                    page.set_viewport_size({"width": 390, "height": 844})
+                    mobile_before = page.evaluate(HEADER_NAV_AUDIT_JS)
+                    self.assertFalse(mobile_before["controlled_nav_visible"])
+                    page.locator(".menu-toggle").click()
+                    mobile_open = page.evaluate(HEADER_NAV_AUDIT_JS)
+                    self.assertEqual(mobile_open["visible_nav_count"], 1)
+                    self.assertTrue(mobile_open["links_within_limit"])
+                finally:
+                    browser.close()
+
+    def test_header_navigation_link_limit_counts_ctas_and_separate_menus(self):
+        inventory = _PageInventory()
+        inventory.feed("""
+            <header><nav aria-label="Primary">
+              <a href="#1">One</a><a href="#2">Two</a><a href="#3">Three</a>
+              <a href="#4">Four</a><a class="button" href="#5">Call</a>
+            </nav><nav class="mobile-nav" aria-label="Mobile">
+              <a href="#1">One</a><a href="#2">Two</a><a href="#3">Three</a>
+              <a href="#4">Four</a><a href="#5">Call</a><a href="#6">Quote</a>
+            </nav></header>
+        """)
+        inventory.close()
+
+        self.assertEqual([nav["links"] for nav in inventory.header_navs], [5, 6])
+        self.assertFalse(_header_navigation_link_limit(inventory))
 
 
 if __name__ == "__main__":

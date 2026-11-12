@@ -77,6 +77,23 @@ VIEWPORT_CHECKS_JS = r"""async () => {
     return true;
   };
   const h1 = document.querySelector('h1');
+  const header = document.querySelector('#header') || document.querySelector('header');
+  const headerNavs = header ? Array.from(header.querySelectorAll('nav')) : [];
+  const menuButton = header && header.querySelector('button[aria-controls]');
+  const controlledNavId = menuButton && menuButton.getAttribute('aria-controls');
+  const controlledNav = controlledNavId && document.getElementById(controlledNavId);
+  const headerNavigation = {
+    nav_count: headerNavs.length,
+    visible_nav_count: headerNavs.filter(visible).length,
+    links_within_limit: headerNavs.every(nav => nav.querySelectorAll('a[href]').length <= 5),
+    navs: headerNavs.map(nav => ({
+      id: nav.id || '',
+      label: nav.getAttribute('aria-label') || '',
+      link_count: nav.querySelectorAll('a[href]').length,
+      visible: visible(nav)
+    })),
+    controlled_menu_hidden: !controlledNav || !controlledNav.classList.contains('mobile-nav') || !visible(controlledNav)
+  };
   const hero = h1 && (h1.closest('section') || h1.closest('[class*="hero" i]') || h1.closest('main'));
   const imageUrls = value => Array.from((value || '').matchAll(/url\((?:["']?)(.*?)(?:["']?)\)/gi))
     .map(match => match[1]).filter(Boolean);
@@ -357,6 +374,7 @@ VIEWPORT_CHECKS_JS = r"""async () => {
   const loadedVisibleAssets = new Set(visibleMediaResults.filter(item => item.loaded).map(item => assetKey(item.url)));
   return {
     hero: heroData,
+    header_navigation: headerNavigation,
     cta: {visible_first_screen: Boolean(cta), text: cta ? (cta.innerText || cta.getAttribute('aria-label') || '') : '', bottom: ctaRect ? Math.round(ctaRect.bottom) : null, arrow_issues: ctaArrowIssues.map(element => (element.innerText || element.getAttribute('aria-label') || '').trim())},
     critical_content_clipping: {pass: clippingIssues.length === 0, issues: clippingIssues},
     contact_email_ctas: {
@@ -385,6 +403,33 @@ MENU_BUTTON_JS = r"""button => {
   const nav = controls && document.getElementById(controls);
   const bars = Array.from(button.querySelectorAll(':scope > span[aria-hidden="true"]'));
   return Boolean(controls && nav && button.getAttribute('aria-expanded') !== null && bars.length === 3);
+}"""
+
+
+HEADER_NAV_AUDIT_JS = r"""() => {
+  const visible = element => {
+    if (!element) return false;
+    const rect = element.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return false;
+    for (let node = element; node && node !== document.documentElement; node = node.parentElement) {
+      const style = getComputedStyle(node);
+      if (node.getAttribute('aria-hidden') === 'true' || style.display === 'none' ||
+          style.visibility === 'hidden' || Number(style.opacity) <= 0.01) return false;
+    }
+    return true;
+  };
+  const header = document.querySelector('#header') || document.querySelector('header');
+  const navs = header ? Array.from(header.querySelectorAll('nav')) : [];
+  const button = header && header.querySelector('button[aria-controls]');
+  const id = button && button.getAttribute('aria-controls');
+  const controlled = id && document.getElementById(id);
+  return {
+    nav_count: navs.length,
+    visible_nav_count: navs.filter(visible).length,
+    links_within_limit: navs.every(nav => nav.querySelectorAll('a[href]').length <= 5),
+    controlled_nav_visible: Boolean(controlled && visible(controlled)),
+    navs: navs.map(nav => ({id: nav.id || '', link_count: nav.querySelectorAll('a[href]').length, visible: visible(nav)}))
+  };
 }"""
 
 
@@ -600,12 +645,23 @@ def _exercise_mobile_menu(page) -> dict:
             "click_closes": False, "tab_reachable": False,
             "focus_indicator_visible": False, "enter_opens": False,
             "space_toggles": False, "escape_closes": False,
-            "cta_arrows_absent_when_open": False, "pass": False,
+            "cta_arrows_absent_when_open": False, "hidden_until_open": False,
+            "only_one_nav_visible_when_open": False, "link_limit_pass": False,
+            "pass": False,
         }
 
     nav_id = button.get_attribute("aria-controls")
     result = {"found": True}
     try:
+        initial_nav_audit = page.evaluate(HEADER_NAV_AUDIT_JS)
+        result["hidden_until_open"] = not initial_nav_audit.get("controlled_nav_visible", True)
+        result["mobile_nav_link_count"] = next(
+            (item["link_count"] for item in initial_nav_audit.get("navs", []) if item.get("id") == nav_id),
+            0,
+        )
+        result["link_limit_pass"] = bool(
+            initial_nav_audit.get("links_within_limit") and result["mobile_nav_link_count"] <= 5
+        )
         result["visual"] = button.evaluate(MENU_VISUAL_JS)
         result["control_visible"] = bool(
             result["visual"].get("button_visible") and result["visual"].get("bars_visible")
@@ -616,6 +672,9 @@ def _exercise_mobile_menu(page) -> dict:
         page.wait_for_timeout(150)
         result["click_opens"] = button.get_attribute("aria-expanded") == "true" and _nav_visible(page, nav_id)
         if result["click_opens"]:
+            open_nav_audit = page.evaluate(HEADER_NAV_AUDIT_JS)
+            result["visible_nav_count_when_open"] = open_nav_audit.get("visible_nav_count")
+            result["only_one_nav_visible_when_open"] = open_nav_audit.get("visible_nav_count") == 1
             result["cta_arrows_when_open"] = page.evaluate(OPEN_MENU_CTA_ARROWS_JS)
             result["cta_arrows_absent_when_open"] = bool(result["cta_arrows_when_open"].get("pass"))
         button.click()
@@ -661,10 +720,14 @@ def _exercise_mobile_menu(page) -> dict:
         result.setdefault("escape_closes", False)
         result.setdefault("focus_indicator_visible", False)
         result.setdefault("cta_arrows_absent_when_open", False)
+        result.setdefault("hidden_until_open", False)
+        result.setdefault("only_one_nav_visible_when_open", False)
+        result.setdefault("link_limit_pass", False)
     result.setdefault("control_visible", False)
     result["pass"] = all(result.get(key, False) for key in (
         "control_visible", "click_opens", "click_closes", "tab_reachable",
-        "focus_indicator_visible", "enter_opens", "space_toggles", "escape_closes"
+        "focus_indicator_visible", "enter_opens", "space_toggles", "escape_closes",
+        "hidden_until_open", "only_one_nav_visible_when_open", "link_limit_pass"
     ))
     return result
 
@@ -742,6 +805,7 @@ def main() -> int:
                             "sections": sections,
                             "all_required_sections_visible": required_present,
                             "hero": visual["hero"],
+                            "header_navigation": visual["header_navigation"],
                             "hero_spans_viewport": bool(visual["hero"].get("spans_viewport")),
                             "hero_media_covers_hero": bool(visual["hero"].get("media_covers_hero")),
                             "hero_image_loaded": bool(visual["hero"].get("image_loaded")),
@@ -796,6 +860,7 @@ def main() -> int:
                             "error": str(error),
                             "all_required_sections_visible": False,
                             "hero_spans_viewport": False,
+                            "header_navigation": {"nav_count": 0, "visible_nav_count": 0, "links_within_limit": False, "controlled_menu_hidden": False, "navs": []},
                             "hero_media_covers_hero": False,
                             "hero_image_loaded": False,
                             "cta_visible_first_screen": False,
@@ -827,6 +892,17 @@ def main() -> int:
         mobile = report["viewports"].get("mobile", {})
         mobile_menu = report["mobile_menu"]
         report["checks"] = {
+            "desktop_navigation_has_single_visible_menu": bool(
+                desktop.get("header_navigation", {}).get("visible_nav_count") == 1
+                and desktop.get("header_navigation", {}).get("controlled_menu_hidden")
+            ),
+            "header_navigation_link_limit": bool(
+                desktop.get("header_navigation", {}).get("links_within_limit")
+                and mobile.get("header_navigation", {}).get("links_within_limit")
+                and mobile_menu.get("link_limit_pass")
+            ),
+            "mobile_navigation_hidden_until_opened": bool(mobile_menu.get("hidden_until_open")),
+            "mobile_navigation_is_only_visible_menu_when_open": bool(mobile_menu.get("only_one_nav_visible_when_open")),
             "rendered_sections_visible_desktop_and_mobile": bool(desktop.get("all_required_sections_visible") and mobile.get("all_required_sections_visible")),
             "hero_spans_viewport_desktop_and_mobile": bool(desktop.get("hero_spans_viewport") and mobile.get("hero_spans_viewport")),
             "hero_media_covers_hero_desktop_and_mobile": bool(desktop.get("hero_media_covers_hero") and mobile.get("hero_media_covers_hero")),

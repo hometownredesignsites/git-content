@@ -454,6 +454,10 @@ def _browser_qa_result(session_dir):
         "visible_content_images_load_in_browser",
         "cta_arrows_absent_desktop_and_mobile",
         "cta_visible_first_screen_desktop_and_mobile",
+        "desktop_navigation_has_single_visible_menu",
+        "header_navigation_link_limit",
+        "mobile_navigation_hidden_until_opened",
+        "mobile_navigation_is_only_visible_menu_when_open",
         "mobile_menu_clicks_work",
         "mobile_menu_control_visible",
         "mobile_menu_focus_indicator_visible",
@@ -562,6 +566,9 @@ class _PageInventory(HTMLParser):
         self.visible_text = []
         self.visible_links = []
         self._hidden_elements = []
+        self._header_depth = 0
+        self._header_nav_stack = []
+        self.header_navs = []
         self._heading = None
         self.footer_text = []
         self.footer_links = []
@@ -589,6 +596,19 @@ class _PageInventory(HTMLParser):
         self.tags.add(tag)
         self.tag_counts[tag] = self.tag_counts.get(tag, 0) + 1
         values = dict(attrs)
+        if tag == "header":
+            self._header_depth += 1
+        if tag == "nav" and self._header_depth:
+            nav = {
+                "id": (values.get("id") or "").strip(),
+                "classes": (values.get("class") or "").split(),
+                "aria_label": (values.get("aria-label") or "").strip(),
+                "links": 0,
+            }
+            self.header_navs.append(nav)
+            self._header_nav_stack.append(nav)
+        if tag == "a" and values.get("href") and self._header_nav_stack:
+            self._header_nav_stack[-1]["links"] += 1
         if tag == "html":
             self.html_lang = (values.get("lang") or "").strip()
         if tag == "meta" and (values.get("name") or "").lower() == "viewport":
@@ -755,6 +775,10 @@ class _PageInventory(HTMLParser):
 
     def handle_endtag(self, tag):
         tag = tag.lower()
+        if tag == "nav" and self._header_nav_stack:
+            self._header_nav_stack.pop()
+        if tag == "header" and self._header_depth:
+            self._header_depth -= 1
         if tag == "button" and self._button_stack:
             self._buttons.append(self._button_stack.pop())
         for index in range(len(self._cta_stack) - 1, -1, -1):
@@ -809,6 +833,7 @@ class _PageInventory(HTMLParser):
         if self._heading is not None:
             self._heading.append(data.strip())
 
+
     def has_accessible_mobile_hamburger(self):
         known_ids = set(self.ids)
         for control in self._buttons:
@@ -822,6 +847,11 @@ class _PageInventory(HTMLParser):
                     and has_menu_class and is_expanded_control and not has_visible_menu_label):
                 return True
         return False
+
+
+def _header_navigation_link_limit(parser: _PageInventory) -> bool:
+    """Require every menu inside a page header to contain at most five links."""
+    return bool(parser.header_navs) and all(nav["links"] <= 5 for nav in parser.header_navs)
 
 
 class _SectionInventory(HTMLParser):
@@ -1182,6 +1212,7 @@ def assess_website(prompt, session_dir):
         "cta_buttons_no_arrows": not parser.cta_arrow_issues,
         "telephone_cta_labels_identify_call": not telephone_cta_label_issues,
         "accessible_mobile_hamburger": parser.has_accessible_mobile_hamburger(),
+        "header_navigation_link_limit": _header_navigation_link_limit(parser),
         "css_file_present": bool(css),
         "document_has_main": parser.tag_counts.get("main", 0) == 1,
         "document_has_h1": len(h1_text) == 1 and bool(h1_text[0]),
@@ -1297,6 +1328,10 @@ def assess_website(prompt, session_dir):
         "visible_content_images_load_in_browser",
         "cta_arrows_absent_desktop_and_mobile",
         "cta_visible_first_screen_desktop_and_mobile",
+        "desktop_navigation_has_single_visible_menu",
+        "header_navigation_link_limit",
+        "mobile_navigation_hidden_until_opened",
+        "mobile_navigation_is_only_visible_menu_when_open",
         "mobile_menu_clicks_work",
         "mobile_menu_control_visible",
         "mobile_menu_focus_indicator_visible",
@@ -1419,6 +1454,10 @@ def assess_website(prompt, session_dir):
         "browser_visible_content_images_load_in_browser",
         "browser_cta_arrows_absent_desktop_and_mobile",
         "browser_cta_visible_first_screen_desktop_and_mobile",
+        "browser_desktop_navigation_has_single_visible_menu",
+        "browser_header_navigation_link_limit",
+        "browser_mobile_navigation_hidden_until_opened",
+        "browser_mobile_navigation_is_only_visible_menu_when_open",
         "browser_mobile_menu_clicks_work",
         "browser_mobile_menu_control_visible",
         "browser_mobile_menu_focus_indicator_visible",
@@ -1461,6 +1500,14 @@ def assess_website(prompt, session_dir):
         missing_sections.append("all visible content images loading in desktop and mobile browsers")
     if not checks.get("browser_cta_arrows_absent_desktop_and_mobile"):
         missing_sections.append("CTA buttons without rendered arrow characters, icons, or pseudo-elements")
+    if not checks.get("browser_desktop_navigation_has_single_visible_menu"):
+        missing_sections.append("one visible header navigation menu on desktop, with the mobile menu hidden")
+    if not checks.get("browser_header_navigation_link_limit"):
+        missing_sections.append("each header navigation menu limited to five links")
+    if not checks.get("browser_mobile_navigation_hidden_until_opened"):
+        missing_sections.append("mobile navigation hidden until its menu button opens it")
+    if not checks.get("browser_mobile_navigation_is_only_visible_menu_when_open"):
+        missing_sections.append("only the mobile menu visible when opened")
     if not checks.get("browser_critical_content_within_viewport_desktop_and_mobile"):
         missing_sections.append("headlines and CTA text fully visible within desktop and mobile containers")
     if not checks.get("browser_contact_email_ctas_grouped"):
@@ -1499,6 +1546,12 @@ def assess_website(prompt, session_dir):
         missing_sections.append("telephone links with call-specific labels: " + ", ".join(telephone_cta_label_issues))
     if not checks["accessible_mobile_hamburger"]:
         missing_sections.append("accessible three-bar mobile navigation button")
+    over_limit_header_navs = [
+        {"id": nav["id"], "label": nav["aria_label"], "links": nav["links"]}
+        for nav in parser.header_navs if nav["links"] > 5
+    ]
+    if not checks["header_navigation_link_limit"]:
+        missing_sections.append("each header navigation menu limited to five links")
     if not checks["browser_hero_media_covers_hero_desktop_and_mobile"]:
         missing_sections.append("hero image or background covering the full hero on desktop and mobile")
     blocking_mobile_checks = {
@@ -1601,6 +1654,8 @@ def assess_website(prompt, session_dir):
         "palette_validation": palette_validation,
         "cta_arrow_issues": parser.cta_arrow_issues,
         "telephone_cta_label_issues": telephone_cta_label_issues,
+        "header_navigation": parser.header_navs,
+        "header_navigation_over_limit": over_limit_header_navs,
         "complete": bool(html and css and all(checks.values())),
         "final_success": bool(
             automated_success and checks["visual_design_review_passed"]

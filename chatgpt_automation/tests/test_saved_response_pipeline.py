@@ -431,6 +431,10 @@ class SavedResponsePipelineTest(unittest.TestCase):
                 "visible_content_images_load_in_browser": True,
                 "cta_arrows_absent_desktop_and_mobile": True,
                 "cta_visible_first_screen_desktop_and_mobile": True,
+                "desktop_navigation_has_single_visible_menu": True,
+                "header_navigation_link_limit": True,
+                "mobile_navigation_hidden_until_opened": True,
+                "mobile_navigation_is_only_visible_menu_when_open": True,
                 "mobile_menu_clicks_work": True,
                 "mobile_menu_control_visible": True,
                 "mobile_menu_focus_indicator_visible": True,
@@ -456,7 +460,8 @@ class SavedResponsePipelineTest(unittest.TestCase):
                 str(SCRIPTS / "check_website.py"),
                 str(run),
                 REQUEST,
-            ], check=True, capture_output=True, text=True, encoding="utf-8")
+            ], capture_output=True, text=True, encoding="utf-8")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             report = json.loads(result.stdout)
             self.assertTrue(report["automated_success"], report["blocking_failures"])
             browser_checks["mobile_menu_control_visible"] = False
