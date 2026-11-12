@@ -199,7 +199,7 @@ VIEWPORT_CHECKS_JS = r"""async () => {
   }
   const contactSections = Array.from(document.querySelectorAll('section')).filter(section => {
     const marker = [section.id, section.className, section.getAttribute('aria-label')].join(' ');
-    return /contact|quote|estimate|booking|appointment/i.test(marker) || Boolean(
+    return /contact|quote|estimate|booking|appointment/i.test(marker) || section.hasAttribute('data-source-contact-region') || Boolean(
       section.querySelector('[class~="contact-detail"], [class~="contact-details"], [class*="contact-form" i]')
     );
   });
@@ -213,6 +213,8 @@ VIEWPORT_CHECKS_JS = r"""async () => {
     element.closest('[class~="contact-detail"], [class~="contact-details"]') || (() => {
       const group = element.closest('.source-contact-channels');
       if (!group || !group.parentElement) return false;
+      if (group.getAttribute('data-contact-channel-placement') === 'full-row') return false;
+      if (group.style.gridColumn === '1 / -1' && group.style.width === '100%') return false;
       const parent = group.parentElement;
       const parentClasses = String(parent.className || '').split(/\s+/);
       if (parentClasses.includes('contact-copy') || parentClasses.includes('contact-panel')) return false;

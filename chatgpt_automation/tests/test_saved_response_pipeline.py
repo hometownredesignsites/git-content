@@ -15,7 +15,7 @@ from chatgpt_automation.scripts.normalize_cta_arrows import normalize
 from chatgpt_automation.scripts.prepare_candidate_context import MAX_GENERATION_CONTEXT_CHARS, _fallback_pool, _is_source_image_host_allowed, _render_source_context, compact_facts
 from chatgpt_automation.scripts.fetch_source_facts import _PageParser
 from chatgpt_automation.scripts.site_quality import _category_fallback_image_urls_from_prompt, _image_source_checks, _source_image_urls_from_prompt
-from chatgpt_file_playwright_anonymous_ci import inspect_chatgpt_page_state
+from chatgpt_file_playwright_anonymous_ci import _checkpoint_resume_note, _with_resume_context, inspect_chatgpt_page_state
 from playwright_runner.browser_session import response_generation_active
 from playwright_runner.recovery import start_new_chat_from_login_gate
 
@@ -32,6 +32,24 @@ REQUEST = (
 
 
 class SavedResponsePipelineTest(unittest.TestCase):
+    def test_login_recovery_context_is_compact_and_keeps_accepted_design_choices(self):
+        with tempfile.TemporaryDirectory(prefix="compact-resume-context-") as temporary:
+            run = Path(temporary)
+            chunks = run / "chunks"
+            chunks.mkdir()
+            (chunks / "sequence_checkpoint.json").write_text(json.dumps({"accepted_parts": ["css-1", "html-1"]}), encoding="utf-8")
+            (chunks / "css-1.css").write_text(":root { --brand: #24372d; --accent: #c45a36; }\n.hero { min-height: 100vh; }\n.site-header { display:flex; }", encoding="utf-8")
+            (chunks / "html-1.html").write_text('<section id="banner"><h1>Westwood Remodel</h1></section><section id="services"><h2>Our Services</h2></section>', encoding="utf-8")
+
+            note = _checkpoint_resume_note(run)
+            resumed = _with_resume_context("Continue HTML part 2.", note)
+
+            self.assertIn("css-1", note)
+            self.assertIn("--brand: #24372d", note)
+            self.assertIn("sections=banner,services", note)
+            self.assertIn("COMPACT RESUME CONTEXT", resumed)
+            self.assertLess(len(note), 1200)
+
     def test_image_validation_accepts_source_and_category_fallback_assets(self):
         source = "https://static.wixstatic.com/media/fence-photo.jpg"
         fallback = "https://images.unsplash.com/photo-wood-fence?auto=format&w=1800"
