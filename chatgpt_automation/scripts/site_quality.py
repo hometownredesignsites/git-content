@@ -1160,6 +1160,20 @@ def assess_website(prompt, session_dir):
             template_attribution_css_ok = False
 
     telephone_cta_label_issues = _telephone_cta_label_issues(html)
+
+    palette_validation = {"status": "not_required"}
+    palette_required = False
+    try:
+        if design_reference_path.is_file():
+            palette_design_reference = json.loads(design_reference_path.read_text(encoding="utf-8"))
+            palette_required = isinstance(palette_design_reference, dict) and palette_design_reference.get("status") == "selected"
+        palette_report_path = session_dir / "debug" / "palette.json"
+        if palette_report_path.is_file():
+            loaded_palette_report = json.loads(palette_report_path.read_text(encoding="utf-8"))
+            if isinstance(loaded_palette_report, dict):
+                palette_validation = loaded_palette_report
+    except (OSError, json.JSONDecodeError):
+        palette_validation = {"status": "unavailable"}
     checks = {
         "html_file_present": bool(html),
         "no_visible_template_credit": not template_credit_visible,
@@ -1209,6 +1223,10 @@ def assess_website(prompt, session_dir):
             and len(parser.footer_links) >= 2
         ),
     }
+    if palette_required:
+        checks["palette_tokens_match_assigned_slot"] = palette_validation.get("token_values_match") is True
+        checks["palette_tokens_used_in_stylesheet"] = palette_validation.get("required_tokens_used") is True
+        checks["palette_text_contrast_adequate"] = palette_validation.get("contrast_passed") is True
     for section, present in section_results.items():
         checks[f"section_{section}"] = present
         checks[f"section_{section}_complete"] = complete_section_results.get(section, False)
@@ -1471,6 +1489,10 @@ def assess_website(prompt, session_dir):
         missing_sections.append("HTML5 UP name, source, license, and adaptation note in an HTML comment")
     if not template_attribution_css_ok:
         missing_sections.append("HTML5 UP name, source, license, and adaptation note in a CSS comment")
+    if palette_required and not all(checks.get(name, False) for name in (
+        "palette_tokens_match_assigned_slot", "palette_tokens_used_in_stylesheet", "palette_text_contrast_adequate"
+    )):
+        missing_sections.append("assigned candidate palette tokens applied, used, and contrast checked")
     if parser.cta_arrow_issues:
         missing_sections.append("CTA buttons without arrow glyphs or arrow icons")
     if telephone_cta_label_issues:
@@ -1525,6 +1547,7 @@ def assess_website(prompt, session_dir):
             "minor_repairs": {
                 "contact_form": contact_form_repair,
                 "local_links": local_link_repair,
+                "palette": palette_validation,
             },
             "human_review_pending": bool(
                 automated_success and (
@@ -1575,6 +1598,7 @@ def assess_website(prompt, session_dir):
         "contact_form_repair": contact_form_repair,
         "source_contact_form_assessment": source_form_assessment,
         "local_link_repair": local_link_repair,
+        "palette_validation": palette_validation,
         "cta_arrow_issues": parser.cta_arrow_issues,
         "telephone_cta_label_issues": telephone_cta_label_issues,
         "complete": bool(html and css and all(checks.values())),

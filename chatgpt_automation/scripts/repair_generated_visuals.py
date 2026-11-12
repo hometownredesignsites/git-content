@@ -27,8 +27,8 @@ REPAIR_CSS = """/* Generated visual repairs: CTA contrast, image-card labels, an
 #contact a.button, #contact a.btn, #contact a.cta, #contact a[href^="mailto:"], #contact a[href^="tel:"], #contact button, #contact [role="button"],
 .contact-section a.button, .contact-section a.btn, .contact-section a.cta, .contact-section a[href^="mailto:"], .contact-section a[href^="tel:"], .contact-section button, .contact-section [role="button"] {
   color: #fff !important;
-  background-color: #24372d !important;
-  border-color: #24372d !important;
+  background-color: var(--accent-dark, #24372d) !important;
+  border-color: var(--accent-dark, #24372d) !important;
 }
 
 .tiles article .eyebrow {

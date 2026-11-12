@@ -50,6 +50,12 @@ def recheck(candidate: Path) -> dict:
     )
     if local_links.returncode:
         raise RuntimeError(f"Local-link repair failed: {local_links.stderr or local_links.stdout}")
+    palette = subprocess.run(
+        [sys.executable, str(SCRIPT_DIR / "palette.py"), str(candidate)],
+        capture_output=True, text=True, encoding="utf-8",
+    )
+    if palette.returncode:
+        raise RuntimeError(f"Palette repair or contrast validation failed: {palette.stderr or palette.stdout}")
     normalized = subprocess.run(
         [sys.executable, str(SCRIPT_DIR / "normalize_cta_arrows.py"), str(candidate / "files" / "index.html"),
          "--css-file", str(candidate / "files" / "styles.css")],
@@ -59,6 +65,13 @@ def recheck(candidate: Path) -> dict:
         raise RuntimeError(f"CTA arrow normalization failed: {normalized.stderr or normalized.stdout}")
     inlined = candidate / "files" / "inlined" / "index.html"
     if inlined.is_file():
+        inlined_css = subprocess.run(
+            [sys.executable, str(SCRIPT_DIR / "inline_css.py"), str(candidate / "files" / "index.html"),
+             str(candidate / "files" / "styles.css"), str(inlined)],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+        if inlined_css.returncode:
+            raise RuntimeError(f"CSS inlining failed: {inlined_css.stderr or inlined_css.stdout}")
         normalized_inline = subprocess.run(
             [sys.executable, str(SCRIPT_DIR / "normalize_cta_arrows.py"), str(inlined)],
             capture_output=True, text=True, encoding="utf-8",
