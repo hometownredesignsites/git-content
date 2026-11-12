@@ -86,7 +86,7 @@ TEMPLATES: dict[str, dict[str, Any]] = {
             '<section class="wrapper align-center"><div class="gallery style2 medium">…</div> → '
             '<div class="items style1 medium">…</div> → contact'
         ),
-        "css_selectors": (".banner", ".spotlight", ".gallery", ".items"),
+        "css_selectors": (".banner.style1", ".spotlight.style1", ".gallery.style2", ".items.style1"),
         "signature_id": "story-divided-panels-gallery",
         "signature_note": (
             "Keep the shared full-screen hero as .banner.fullscreen. Below it, preserve "
