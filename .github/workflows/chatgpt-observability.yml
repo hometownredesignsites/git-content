@@ -1,0 +1,57 @@
+name: Refresh private ChatGPT content dashboard
+run-name: Refresh ChatGPT content dashboard (${{ github.event_name }})
+
+on:
+  schedule:
+    - cron: "23 * * * *"
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - ChatGPT Private Queue
+      - Queue completed High sites for ChatGPT
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: chatgpt-content-dashboard
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.head_branch == 'chatgpt'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out dashboard builder
+        uses: actions/checkout@v5
+      - name: Check out private ChatGPT content data
+        uses: actions/checkout@v5
+        with:
+          repository: hometownredesignsites/git-content-private
+          ref: chatgpt
+          path: content-data
+          token: ${{ secrets.PRIVATE_RESULTS_TOKEN }}
+      - name: Build private HTML and CSV reports
+        run: >-
+          python private_automation/build_content_dashboard.py
+          --content content-data
+          --output content-data/observability/chatgpt
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+      - name: Commit refreshed report to the private content branch
+        working-directory: content-data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin chatgpt
+          git add observability/chatgpt
+          if git diff --cached --quiet; then
+            echo "Dashboard is unchanged."
+            exit 0
+          fi
+          git commit -m "observability: refresh ChatGPT content dashboard"
+          git push origin HEAD:chatgpt
