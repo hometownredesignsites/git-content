@@ -435,6 +435,15 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -- "private_automation/queue/jobs/${JOB_ID}.json" "results/${result_slug}" results/README.md results/successful.csv
           git commit -m "private: save ChatGPT result ${JOB_ID} [skip ci]"
+          evidence_branch="run-evidence/chatgpt-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          if ! git push origin "HEAD:refs/heads/${evidence_branch}"; then
+            echo "Could not save the private per-run evidence branch ${evidence_branch}."
+            exit 1
+          fi
+          echo "Saved private per-run evidence to branch ${evidence_branch}."
+          if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+            printf '\n- Private evidence backup: `git-content-private/%s`\n' "$evidence_branch" >> "$GITHUB_STEP_SUMMARY"
+          fi
           for retry in 1 2 3 4 5; do
             git fetch origin "$TARGET_BRANCH"
             if ! git rebase "origin/$TARGET_BRANCH"; then
