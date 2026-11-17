@@ -853,6 +853,7 @@ def run() -> None:
     turn_log = {"source_audit_chat_url": "", "generation_chat_url": "", "turns": []}
     source_assessment: dict = {}
     source_brief = ""
+    verified_source_assets: list[dict] = []
     retry_guidance = _previous_retry_guidance(int(CANDIDATE_INDEX))
     CURRENT_STAGE = "browser_startup"
     with sync_playwright() as playwright:
@@ -891,7 +892,8 @@ def run() -> None:
                     validate_source_assessment(assessment, source_url)
                     source_assessment = assessment
                     compact_assessment = dict(assessment)
-                    compact_assessment["source_assets"] = _verified_source_assets(assessment)
+                    verified_source_assets = _verified_source_assets(assessment)
+                    compact_assessment["source_assets"] = verified_source_assets
                     fallback_images = _verified_category_fallbacks(industry_category)
                     source_brief = build_compact_source_brief(compact_assessment, fallback_images, source_url)
                     if not source_brief:
@@ -941,7 +943,7 @@ def run() -> None:
                         if not has_generation_chunk
                         else build_next_prompt(kind, part)
                     )
-                    if not turn_log.get("generation_prompt_chars") and prompt.startswith("Website request:"):
+                    if not turn_log.get("generation_prompt_chars"):
                         (RUN_DIR / "debug" / "generation_prompt.txt").write_text(prompt, encoding="utf-8")
                         turn_log["generation_prompt_chars"] = len(prompt)
                         turn_log["retry_guidance_included"] = bool(retry_guidance)
@@ -986,9 +988,9 @@ def run() -> None:
         "source_audit_chat_url": turn_log.get("source_audit_chat_url") or None,
         "source_url": source_url or None,
         "source_assessment_status": "pass" if source_url else "not_requested",
-        "validated_source_photo_count": len(source_image_report.get("source_assets", [])),
-        "source_photo_extraction_errors": len(source_image_report.get("errors", [])),
-        "initial_generation_prompt_characters": len(initial_generation_prompt),
+        "validated_source_photo_count": len(verified_source_assets),
+        "source_photo_extraction_errors": 0,
+        "initial_generation_prompt_characters": turn_log.get("generation_prompt_chars", 0),
         "design_reference": (
             source_assessment.get("design_reference")
             if source_url
