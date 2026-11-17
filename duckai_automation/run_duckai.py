@@ -666,7 +666,7 @@ def _previous_retry_guidance(candidate_index: int) -> str:
         except OSError:
             continue
         if guidance and not guidance.startswith("No targeted repair guidance"):
-        return guidance[:2500]
+            return guidance[:2500]
     return ""
 
 
