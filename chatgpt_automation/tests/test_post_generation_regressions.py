@@ -14,8 +14,9 @@ from unittest.mock import patch
 
 from playwright.sync_api import sync_playwright
 
-from chatgpt_automation.scripts.browser_qa import HEADER_NAV_AUDIT_JS, VIEWPORT_CHECKS_JS
+from chatgpt_automation.scripts.browser_qa import HEADER_NAV_AUDIT_JS, TEMPLATE_LAYOUT_JS, VIEWPORT_CHECKS_JS
 from chatgpt_automation.scripts.repair_contact_form import repair
+from chatgpt_automation.scripts.repair_candidate_quality import _repair_template_layout
 from chatgpt_automation.scripts.repair_local_links import repair as repair_local_links
 from chatgpt_automation.scripts.repair_generated_visuals import repair as repair_visuals
 from chatgpt_automation.scripts.run_html_assessment_qa import run as run_html_assessment_qa
@@ -529,6 +530,59 @@ class PostGenerationRegressionTest(unittest.TestCase):
             self.assertIn("alternating left/right Landed spotlight layout", result["repairs"])
             self.assertEqual(["left" if "left" in value else "right" for value in classes], ["left", "right", "left"])
             self.assertTrue(all("top" not in value and "bottom" not in value for value in classes))
+
+    def test_bounded_landed_repair_corrects_measured_media_positions(self):
+        with tempfile.TemporaryDirectory(prefix="bounded-landed-layout-repair-") as temporary:
+            candidate = self._candidate(Path(temporary), """
+                <main>
+                  <section id="banner"><h1>Flooring</h1></section>
+                  <section class="spotlight style1 right"><div class="content">One</div><div class="image"></div></section>
+                  <section class="spotlight style2 right"><div class="content">Two</div><div class="image"></div></section>
+                  <section class="spotlight style3 left"><div class="content">Three</div><div class="image"></div></section>
+                </main>
+            """)
+            stylesheet = candidate / "files" / "styles.css"
+            stylesheet.write_text("""
+                main { width: 1200px; }
+                .spotlight { display: flex; flex-direction: row; }
+                .spotlight > .content, .spotlight > .image { flex: 0 0 50%; min-height: 100px; }
+                .spotlight.style1 > .content, .spotlight.style2 > .content { order: 1; }
+                .spotlight.style1 > .image, .spotlight.style2 > .image { order: 2; }
+                .spotlight.style3 > .image { order: 1; }
+                .spotlight.style3 > .content { order: 2; }
+            """, encoding="utf-8")
+            layout = {
+                "profile": "landed",
+                "slug": "landed",
+                "signature_id": "landed-alternating-spotlights",
+                "spotlight_count": 3,
+                "spotlight_media_sides": ["right", "right", "left"],
+                "spotlight_side_alternations": 1,
+            }
+
+            repairs = _repair_template_layout(candidate, layout)
+            html = (candidate / "files" / "index.html").read_text(encoding="utf-8")
+            css = stylesheet.read_text(encoding="utf-8")
+
+            self.assertTrue(any("from right/right/left to left/right/left" in repair for repair in repairs))
+            self.assertIn("QA repair pass: measured Landed media order", css)
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch(
+                    headless=True,
+                    executable_path=str(CHROME_PATH) if CHROME_PATH.is_file() else None,
+                )
+                try:
+                    page = browser.new_page(viewport={"width": 1440, "height": 900})
+                    page.set_content(f"<style>{css}</style>{html}")
+                    result = page.evaluate(TEMPLATE_LAYOUT_JS, {
+                        "profile": "landed",
+                        "slug": "landed",
+                        "signature_id": "landed-alternating-spotlights",
+                    })
+                    self.assertEqual(result["spotlight_media_sides"], ["left", "right", "left"])
+                    self.assertTrue(result["pass"])
+                finally:
+                    browser.close()
 
     def test_mobile_nav_repair_hides_separate_menu_until_it_is_open(self):
         with tempfile.TemporaryDirectory(prefix="mobile-nav-repair-") as temporary:

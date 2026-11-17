@@ -19,6 +19,7 @@ from site_quality import (
 
 REPAIR_MARKER = "/* QA repair pass: measured primary CTA contrast. */"
 LAYOUT_REPAIR_MARKER = "/* QA repair pass: selected scaffold layout. */"
+LANDED_MEDIA_ORDER_REPAIR_MARKER = "/* QA repair pass: measured Landed media order. */"
 REPAIRABLE_IMAGE_CHECKS = {
     "images_use_source_or_category_assets",
     "hero_uses_source_or_category_asset",
@@ -55,7 +56,19 @@ class _LayoutTags(HTMLParser):
         }
         classes = values.get("class", "").split()
         if "spotlight" in classes:
+            node["has_direct_content"] = False
+            node["has_direct_media"] = False
             self.spotlights.append(node)
+        parent = self.stack[-1] if self.stack else None
+        if parent and "spotlight" in parent["attrs"].get("class", "").split():
+            if "content" in classes:
+                parent["has_direct_content"] = True
+            if (
+                "image" in classes
+                or tag.lower() in {"img", "picture", "video"}
+                or "background-image" in values.get("style", "").casefold()
+            ):
+                parent["has_direct_media"] = True
         if "tiles" in classes:
             self.tiles.append(node)
         if tag.lower() == "h1":
@@ -152,6 +165,48 @@ def _repair_template_layout(candidate: Path, layout: dict) -> list[str]:
                 spotlight_changed = True
         if spotlight_changed:
             repairs.append(f"aligned the selected {profile} spotlight structure")
+
+        # The browser signature measures where the media actually renders. A
+        # left/right class change alone can be ineffective when generated CSS
+        # still orders the image and copy incorrectly. If browser QA measured a
+        # failed Landed alternation, use a small desktop flex-order override on
+        # the existing direct content/media children; the normal browser QA
+        # recheck remains the authority on whether it worked.
+        measured_sides = layout.get("spotlight_media_sides")
+        measured_alternations = int(layout.get("spotlight_side_alternations", 0) or 0)
+        if (
+            profile == "landed"
+            and isinstance(measured_sides, list)
+            and len(measured_sides) >= 3
+            and measured_alternations < 2
+            and all(side in {"left", "right"} for side in measured_sides[:3])
+            and all(node.get("has_direct_content") and node.get("has_direct_media") for node in parser.spotlights[:3])
+        ):
+            target_sides = min(
+                (("left", "right", "left"), ("right", "left", "right")),
+                key=lambda pattern: sum(actual != expected for actual, expected in zip(measured_sides[:3], pattern)),
+            )
+            css = css_path.read_text(encoding="utf-8", errors="replace")
+            if LANDED_MEDIA_ORDER_REPAIR_MARKER not in css:
+                rules = [LANDED_MEDIA_ORDER_REPAIR_MARKER, "@media (min-width: 701px) {"]
+                for index, side in enumerate(target_sides, start=1):
+                    image_order = 1 if side == "left" else 2
+                    content_order = 3 - image_order
+                    section = f".spotlight.style{index}"
+                    media = (
+                        f"{section} > .image, {section} > picture, {section} > img, "
+                        f"{section} > video, {section} > [style*='background-image']"
+                    )
+                    rules.extend([
+                        f"  {section} {{ display: flex !important; flex-direction: row !important; }}",
+                        f"  {media} {{ order: {image_order} !important; flex: 1 1 50% !important; min-width: 0 !important; }}",
+                        f"  {section} > .content {{ order: {content_order} !important; flex: 1 1 50% !important; min-width: 0 !important; }}",
+                    ])
+                rules.append("}")
+                css_path.write_text(css.rstrip() + "\n\n" + "\n".join(rules) + "\n", encoding="utf-8")
+                before = "/".join(measured_sides[:3])
+                after = "/".join(target_sides)
+                repairs.append(f"corrected measured Landed media order from {before} to {after}")
 
     if profile == "story" and not layout.get("has_gallery_or_items") and parser.tiles:
         node = parser.tiles[0]
