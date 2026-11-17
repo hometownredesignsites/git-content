@@ -4,11 +4,12 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 AUTOMATION = Path(__file__).resolve().parents[1]
 REPO = AUTOMATION.parent
 sys.path.insert(0, str(AUTOMATION))
-from run_duckai import MAX_INITIAL_PROMPT_CHARS, build_initial_prompt
+from run_duckai import MAX_INITIAL_PROMPT_CHARS, _verified_source_assets, build_initial_prompt
 from scripts.summarize_candidate_failure import summarize
 
 
@@ -35,6 +36,19 @@ class PromptAndWorkflowTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Compact generation prompt"):
             build_initial_prompt("x" * 12000, "brief")
 
+    def test_compacted_prompt_fits_with_max_brief_retry_and_template_notes(self):
+        prompt = build_initial_prompt(
+            (REPO / "duckai_automation" / "website_request.txt").read_text(encoding="utf-8"),
+            (REPO / "duckai_automation" / "design_brief.txt").read_text(encoding="utf-8"),
+            "https://example.com/",
+            {"name": "Landed", "url": "https://html5up.net/landed", "license_url": "https://html5up.net/license",
+             "patterns_to_adapt": ["pattern " + "x" * 500 for _ in range(5)]},
+            "Example Business", "Category", "Somewhere",
+            "x" * 4200,
+            "y" * 1800,
+        )
+        self.assertLessEqual(len(prompt), MAX_INITIAL_PROMPT_CHARS)
+
     def test_workflow_checkpoints_each_candidate_on_private_duckai_branch(self):
         workflow = (REPO / ".github" / "workflows" / "duckai-private-queue.yml").read_text(encoding="utf-8")
         self.assertIn('CANDIDATE_ATTEMPT_LIMIT:-12', workflow)
@@ -47,6 +61,23 @@ class PromptAndWorkflowTests(unittest.TestCase):
         self.assertIn("MAX_TOTAL_ATTEMPTS = 24", continuation)
         self.assertNotIn("refs/heads/fallback", workflow)
         self.assertLess(workflow.index("Check out private Duck.ai evidence branch before generation"), workflow.index("Generate candidate sites"))
+
+    def test_source_audit_and_generation_use_separate_clean_profiles(self):
+        runner = (AUTOMATION / "run_duckai.py").read_text(encoding="utf-8")
+        self.assertIn("duckai-source-audit-profile-", runner)
+        self.assertIn("duckai-generation-profile-", runner)
+        self.assertIn('"source_audit_chat_url"', runner)
+        self.assertIn('"generation_chat_url"', runner)
+
+    def test_source_asset_urls_must_pass_image_byte_validation(self):
+        assets = {
+            "source_assets": [
+                {"url": "https://example.com/good.jpg", "type": "photo"},
+                {"url": "https://example.com/broken.jpg", "type": "photo"},
+            ]
+        }
+        with patch("run_duckai._image_loads_ok", side_effect=lambda url: url.endswith("good.jpg")):
+            self.assertEqual(_verified_source_assets(assets), [assets["source_assets"][0]])
 
     def test_failure_summary_uses_non_sensitive_category(self):
         with tempfile.TemporaryDirectory() as temp:

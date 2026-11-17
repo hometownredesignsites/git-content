@@ -44,13 +44,13 @@ INLINE_SCRIPT = ROOT / "scripts" / "inline_css.py"
 BROWSER_QA_SCRIPT = ROOT / "scripts" / "browser_qa.py"
 CHECK_SCRIPT = ROOT / "scripts" / "check_website.py"
 
-BASE_CONTRACT = """Create an original, polished, responsive redesign using only verified facts. Never invent contact details, hours, services, metrics, reviews, credentials, or claims. Preserve the source conversion path and exact contact-form fields/required states when provided; do not imply a static form submits. Reproduce every verified phone number in full in visible text and its matching tel: link; never mask, truncate, or omit digits.
+BASE_CONTRACT = """Keep every verified phone number complete in visible text and its matching `tel:` link. Use only facts and assets from the cited brief.
 
-Return exactly CSS PARTS 1-3, then HTML PARTS 1-3, one complete fenced block per response (`css` for CSS, `text` for raw HTML). State the exact part label outside the block. Its first nonblank line must be `/* CSS PART n OF 3 */` or `<!-- HTML PART n OF 3 -->`. Keep parts compatible; link styles.css once. HTML 1 starts the full document, header/nav, and complete hero. HTML 2 adds new sections. HTML 3 adds remaining sections and semantic footer, then closes `</body></html>`. Never repeat prior sections or the shell.
+Return CSS PARTS 1–3, then HTML PARTS 1–3. Each turn has one complete fenced block (`css` or raw-HTML `text`), its exact visible part label outside, and the required first-line marker. Keep parts compatible and link `styles.css` once. HTML 1 starts the document, head, header/nav, full hero, and CTA; HTML 2 adds new sections; HTML 3 adds remaining content and the semantic footer, then closes the document. Never repeat prior parts.
 
-Use CSS tokens for colors/type/spacing/width. Build varied, business-specific sections and at least three distinct, relevant, directly loadable image assets with accurate alt text. Prefer listed source photos; otherwise use stable category-relevant image URLs. Use a full-width cover-cropped hero image with readable overlay and first-screen primary CTA on desktop/mobile. Keep CTA text free of arrows. Mobile nav must be an accessible three-bar button with a name, matching aria-controls, aria-expanded, and exactly three child spans; no visible Menu label. Preserve source form fields. Footer must be visibly styled, semantic, include brand, two useful links, supported contact/location details, and copyright. Avoid generic repeated card grids, filler, unsupported claims, and decorative effects without purpose. For a selected HTML5 UP reference, adapt its distinct structure and include template/source/CC BY 3.0 attribution only in an HTML comment; no visible credit. Return only the requested part."""
+Let cited brand colors, logo, photography, language, and motifs lead; category is secondary. Avoid assumed audiences or preset styles; build a coherent palette, type, spacing, and motif from source cues. Use CSS variables and at least three distinct, relevant photo URLs from the supplied source/fallback lists (logo only as branding), with accurate alt text. Keep the hero full-width, readable, and CTA-visible on desktop/mobile. The mobile menu is a named button with matching `aria-controls`/`aria-expanded` and exactly three child spans; no visible Menu label. The styled semantic footer includes brand, two useful links, verified contact/location, and copyright. Put selected template attribution in an HTML comment, never visible copy. Return only the requested part."""
 MAX_INITIAL_PROMPT_CHARS = 11000
-MAX_DESIGN_BRIEF_CHARS = 1400
+MAX_DESIGN_BRIEF_CHARS = 700
 CURRENT_STAGE = "initialization"
 
 
@@ -77,6 +77,27 @@ def _verified_category_fallbacks(category: str) -> list[dict]:
         return []
     with ThreadPoolExecutor(max_workers=min(3, len(candidates))) as pool:
         loaded = list(pool.map(lambda item: _image_loads_ok(item["url"]), candidates))
+    return [item for item, valid in zip(candidates, loaded) if valid]
+
+
+def _verified_source_assets(assessment: dict) -> list[dict]:
+    assets = assessment.get("source_assets", [])
+    candidates = []
+    seen = set()
+    if isinstance(assets, list):
+        for item in assets:
+            if not isinstance(item, dict):
+                continue
+            url = str(item.get("url", "")).strip()
+            if url.startswith(("https://", "http://")) and url not in seen:
+                seen.add(url)
+                candidates.append(item)
+            if len(candidates) >= 5:
+                break
+    if not candidates:
+        return []
+    with ThreadPoolExecutor(max_workers=min(5, len(candidates))) as pool:
+        loaded = list(pool.map(lambda item: _image_loads_ok(str(item.get("url", ""))), candidates))
     return [item for item, valid in zip(candidates, loaded) if valid]
 
 
@@ -370,13 +391,15 @@ def send_source_assessment(
         + """Include: access_status; pages_reviewed:[{url,page_title,content}]; sources:[exact reviewed page URLs];
 organization_facts: up to 8 [{fact,source_urls}] for identity, services, locations;
 selling_points: up to 3 [{fact,source_urls}]; contact_details: verified phone/email/address/conversion path as [{fact,source_urls}];
-contact_form_fields: each field [{label,required:true|false|unknown,source_urls}]; faq_answers: up to 3 [{question,answer,source_urls}];
+contact_form_fields: up to 16 [{name,type,label,required:true|false|unknown,placeholder,options,source_urls}] preserving exact observed field details;
+navigation_links: up to 3 [{label,url,source_urls}] for useful internal destinations only; faq_answers: up to 3 [{question,answer,source_urls}];
 audience_and_goals:{primary_conversion_path,source_urls,audience_inference}; brand_and_visual_observations:[{observation,source_urls}] (brief, separate observation from opinion);
 source_assets: up to 5 [{url,type,page_url,context}] for exact public logo/photo/image URLs actually seen;
 content_structure: up to 4 [{section,source_urls}]; unknown_or_verify: concise list; design_reference: verified fitting HTML5 UP {name,url,license_url,patterns_to_adapt}, or null.
 
 Every fact and asset must cite an exact reviewed page URL. Do not invent facts, claim unreviewed pages, copy paragraphs, or claim asset rights. Keep it short and traceable."""
     )
+    (RUN_DIR / "debug" / "source_audit_request.txt").write_text(prompt, encoding="utf-8")
 
     composer = wait_for_guest_composer(page)
     before_text = main_text(page)
@@ -578,11 +601,17 @@ def build_initial_prompt(
     )
     template_context = ""
     if design_reference:
+        patterns = [
+            " ".join(str(pattern).split())[:120]
+            for pattern in design_reference.get("patterns_to_adapt", [])[:3]
+            if str(pattern).strip()
+        ]
         template_context = (
-            "Verified structural reference only: "
-            f"{design_reference['name']} ({design_reference['url']}); license {design_reference['license_url']}. "
-            f"Adapt: {json.dumps(design_reference['patterns_to_adapt'], ensure_ascii=False, separators=(',', ':'))}. "
-            "Add required attribution in a non-rendering HTML comment.\n"
+            "Use this verified HTML5 UP design reference selected after the source assessment: "
+            f"{design_reference['name']} ({design_reference['url']}); license: {design_reference['license_url']}. "
+            f"Adapt these patterns to the source organization: {json.dumps(patterns, ensure_ascii=False)}. "
+            "Do not copy template branding or unrelated template copy. Include the template name, source URL, "
+            "CC BY 3.0 license URL, and adaptation note in a non-rendering HTML source comment.\n\n"
         )
     category_fallbacks = category_image_fallbacks(industry_category)
     source_photo_records = []
@@ -835,7 +864,7 @@ def run() -> None:
     if not website_request:
         fail("WEBSITE_REQUEST is required.")
     if not design_brief:
-        fail("DESIGN_BRIEF is required. Include verified facts and the named template/source/license, if using HTML5 UP.")
+        fail("DESIGN_BRIEF is required. Include concise, source-informed visual direction.")
     if source_url:
         parsed_source = urlparse(source_url)
         if parsed_source.scheme not in {"http", "https"} or not parsed_source.hostname:
@@ -863,43 +892,63 @@ def run() -> None:
         ) + "\n",
         encoding="utf-8",
     )
-    source_image_report = {"requested_url": source_url, "source_assets": [], "errors": []}
-    if source_url:
-        source_cache_path = REPO / "duckai-runs" / (
-            f"run-{RUN_ID}-{RUN_ATTEMPT}-site-{SITE_INDEX}-source-images.json"
-        )
-        source_cache_loaded = False
-        if source_cache_path.is_file():
-            try:
-                cached_report = json.loads(source_cache_path.read_text(encoding="utf-8"))
-                if cached_report.get("requested_url") == source_url:
-                    source_image_report = cached_report
-                    source_cache_loaded = True
-            except (OSError, json.JSONDecodeError):
-                pass
-        if not source_cache_loaded or source_image_report.get("errors"):
-            try:
-                source_image_report = collect_source_images(source_url)
-                if source_image_report.get("source_assets") or not source_image_report.get("errors"):
-                    source_cache_path.parent.mkdir(parents=True, exist_ok=True)
-                    source_cache_path.write_text(
-                        json.dumps(source_image_report, indent=2, ensure_ascii=False) + "\n",
-                        encoding="utf-8",
-                    )
-            except Exception as error:
-                source_image_report["errors"] = [{"error": str(error)[:500]}]
-        (RUN_DIR / "debug" / "source_images.json").write_text(
-            json.dumps(source_image_report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
-        )
-    turn_log = {"chat_url": "", "turns": []}
+    turn_log = {"source_audit_chat_url": "", "generation_chat_url": "", "turns": []}
     source_assessment: dict = {}
     source_brief = ""
     retry_guidance = _previous_retry_guidance(int(CANDIDATE_INDEX))
     CURRENT_STAGE = "browser_startup"
-    with tempfile.TemporaryDirectory(prefix="duckai-website-profile-") as profile_dir:
-        with sync_playwright() as playwright:
+    with sync_playwright() as playwright:
+        if source_url:
+            with tempfile.TemporaryDirectory(prefix="duckai-source-audit-profile-") as source_profile:
+                source_context = playwright.chromium.launch_persistent_context(
+                    user_data_dir=source_profile,
+                    headless=False,
+                    args=["--disable-blink-features=AutomationControlled"],
+                    viewport={"width": 1440, "height": 900},
+                )
+                source_page = source_context.pages[0] if source_context.pages else source_context.new_page()
+                source_page.set_default_timeout(15000)
+                try:
+                    source_page.goto("https://duck.ai/", wait_until="domcontentloaded", timeout=60000)
+                    wait_for_guest_composer(source_page)
+                    CURRENT_STAGE = "source_assessment"
+                    print(f"Candidate {CANDIDATE_INDEX}: starting isolated source assessment.")
+                    enable_web_search(source_page)
+                    response, source_chat_url, assessment = send_source_assessment(
+                        source_page, source_url, business_name, industry_category, location
+                    )
+                    (RUN_DIR / "debug" / "source_assessment.json").write_text(
+                        json.dumps(assessment, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+                    )
+                    (RUN_DIR / "debug" / "source_assessment.md").write_text(response, encoding="utf-8")
+                    turn_log["source_audit_chat_url"] = source_chat_url
+                    turn_log["source_audit_prompt_chars"] = len(
+                        (RUN_DIR / "debug" / "source_audit_request.txt").read_text(encoding="utf-8")
+                    )
+                    turn_log["turns"].append({
+                        "type": "source_site_assessment", "conversation": "source_audit",
+                        "chat_url": source_chat_url, "source_url": source_url,
+                        "assistant_response_completed": True,
+                    })
+                    validate_source_assessment(assessment, source_url)
+                    source_assessment = assessment
+                    compact_assessment = dict(assessment)
+                    compact_assessment["source_assets"] = _verified_source_assets(assessment)
+                    fallback_images = _verified_category_fallbacks(industry_category)
+                    source_brief = build_compact_source_brief(compact_assessment, fallback_images, source_url)
+                    if not source_brief:
+                        fail("Source assessment returned no factual items with traceable page citations.")
+                    (RUN_DIR / "debug" / "website_context.md").write_text(source_brief + "\n", encoding="utf-8")
+                    print(f"Captured and validated source assessment; compact brief is {len(source_brief)} characters.")
+                finally:
+                    source_context.close()
+
+        # Use a separate clean browser profile so the raw source audit and its
+        # page excerpts are not part of the generation conversation history.
+        CURRENT_STAGE = "generation_browser_startup"
+        with tempfile.TemporaryDirectory(prefix="duckai-generation-profile-") as generation_profile:
             context = playwright.chromium.launch_persistent_context(
-                user_data_dir=profile_dir,
+                user_data_dir=generation_profile,
                 headless=False,
                 args=["--disable-blink-features=AutomationControlled"],
                 viewport={"width": 1440, "height": 900},
@@ -910,52 +959,28 @@ def run() -> None:
             try:
                 page.goto("https://duck.ai/", wait_until="domcontentloaded", timeout=60000)
                 wait_for_guest_composer(page)
-                if source_url:
-                    CURRENT_STAGE = "source_assessment"
-                    print(f"Candidate {CANDIDATE_INDEX}: starting source assessment.")
-                    enable_web_search(page)
-                    response, current_url, assessment = send_source_assessment(
-                        page, source_url, business_name, industry_category, location
-                    )
-                    if chat_url and current_url != chat_url:
-                        fail("Duck.ai conversation URL changed during source assessment.")
-                    chat_url = current_url
-                    (RUN_DIR / "debug" / "source_assessment.json").write_text(
-                        json.dumps(assessment, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
-                    )
-                    (RUN_DIR / "debug" / "source_assessment.md").write_text(response, encoding="utf-8")
-                    turn_log["chat_url"] = chat_url
-                    turn_log["turns"].append(
-                        {"type": "source_site_assessment", "source_url": source_url, "assistant_response_completed": True}
-                    )
-                    validate_source_assessment(assessment, source_url)
-                    source_assessment = assessment
-                    fallback_images = _verified_category_fallbacks(industry_category)
-                    source_brief = build_compact_source_brief(assessment, fallback_images)
-                    if not source_brief:
-                        fail("Source assessment returned no factual items with traceable page citations.")
-                    (RUN_DIR / "debug" / "website_context.md").write_text(source_brief + "\n", encoding="utf-8")
-                    print(f"Captured and validated source assessment; compact brief is {len(source_brief)} characters.")
                 for kind, part in [("css", 1), ("css", 2), ("css", 3), ("html", 1), ("html", 2), ("html", 3)]:
                     CURRENT_STAGE = f"{kind}_part_{part}"
                     if kind == "html" and part == 1:
                         send_acknowledgment_and_wait(page, chat_url)
-                        turn_log["turns"].append({"type": "user_acknowledgment", "text": "acknowledged", "assistant_response_completed": True})
+                        turn_log["turns"].append({
+                            "type": "user_acknowledgment", "conversation": "generation",
+                            "text": "acknowledged", "assistant_response_completed": True,
+                        })
+                    has_generation_chunk = any(turn.get("type") == "captured_chunk" for turn in turn_log["turns"])
                     prompt = (
                         build_initial_prompt(
                             website_request,
                             design_brief,
                             source_url,
-                            json.loads((RUN_DIR / "debug" / "source_assessment.json").read_text(encoding="utf-8")).get("design_reference")
-                            if source_url
-                            else None,
+                            source_assessment.get("design_reference") if source_url else None,
                             business_name,
                             industry_category,
                             location,
                             source_brief,
                             retry_guidance,
                         )
-                        if not turn_log["turns"] or turn_log["turns"][-1].get("type") == "source_site_assessment"
+                        if not has_generation_chunk
                         else build_next_prompt(kind, part)
                     )
                     if not turn_log.get("generation_prompt_chars") and prompt.startswith("Website request:"):
@@ -965,11 +990,15 @@ def run() -> None:
                         print(f"Candidate {CANDIDATE_INDEX}: generation prompt is {len(prompt)} characters; retry guidance included={bool(retry_guidance)}.")
                     response, current_url = send_and_capture(page, prompt, kind, part)
                     if chat_url and current_url != chat_url:
-                        fail("Duck.ai conversation URL changed during capture; refusing to mix chats.")
+                        fail("Duck.ai generation conversation URL changed during capture; refusing to mix chats.")
                     chat_url = current_url
-                    turn_log["chat_url"] = chat_url
+                    turn_log["generation_chat_url"] = chat_url
                     capture_chunk(kind, part, chat_url, response)
-                    turn_log["turns"].append({"type": "captured_chunk", "kind": kind, "part": part})
+                    turn_log["turns"].append({
+                        "type": "captured_chunk", "conversation": "generation",
+                        "chat_url": chat_url, "kind": kind, "part": part,
+                        "user_prompt": prompt,
+                    })
                     print(f"Captured {kind.upper()} PART {part} OF 3")
             finally:
                 context.close()
@@ -996,6 +1025,7 @@ def run() -> None:
             else "automated_checks_failed"
         ),
         "chat_url": chat_url,
+        "source_audit_chat_url": turn_log.get("source_audit_chat_url") or None,
         "source_url": source_url or None,
         "source_assessment_status": "pass" if source_url else "not_requested",
         "validated_source_photo_count": len(source_image_report.get("source_assets", [])),

@@ -12,7 +12,7 @@ class SourceBriefTests(unittest.TestCase):
     def setUp(self):
         self.home = "https://example.com/"
         self.assessment = {
-            "sources": [self.home, "https://example.com/services/"],
+            "sources": [self.home, "https://example.com/services/", "https://other.invalid/"],
             "pages_reviewed": [{"url": self.home}, {"url": "https://example.com/services/"}],
             "organization_facts": [
                 {"fact": "Family-owned flooring installer", "source_urls": [self.home]},
@@ -20,8 +20,18 @@ class SourceBriefTests(unittest.TestCase):
             ],
             "selling_points": [{"fact": "Free estimates", "source_urls": ["https://example.com/services/"]}],
             "contact_form_fields": [
-                {"label": "Phone", "required": True, "source_urls": [self.home]},
-                {"label": "Project details", "required": False, "source_urls": [self.home]},
+                {"name": "phone", "type": "tel", "label": "Phone", "required": True,
+                 "placeholder": "Your phone number", "source_urls": [self.home]},
+                {"type": "textarea", "label": "Project details", "required": False,
+                 "placeholder": "Describe your project", "source_urls": [self.home]},
+                {"type": "select", "label": "Floor type", "required": False,
+                 "options": ["wood", "tile"], "source_urls": [self.home]},
+            ],
+            "navigation_links": [
+                {"label": "Services", "url": "https://example.com/services/?utm_source=nav", "source_urls": [self.home]},
+                {"label": "Services duplicate", "url": "https://www.example.com/services/", "source_urls": [self.home]},
+                {"label": "Contact", "url": "https://example.com/contact/", "source_urls": [self.home]},
+                {"label": "Other site", "url": "https://other.invalid/", "source_urls": [self.home]},
             ],
             "faq_answers": [{"question": "Do you install tile?", "answer": "Yes", "source_urls": ["https://example.com/services/"]}],
             "audience_and_goals": {"primary_conversion_path": "Call to request an estimate", "source_urls": [self.home]},
@@ -36,8 +46,13 @@ class SourceBriefTests(unittest.TestCase):
         self.assertIn("Family-owned flooring installer", brief)
         self.assertIn("source: https://example.com/", brief)
         self.assertNotIn("Unsupported claim", brief)
-        self.assertIn("Phone [required]", brief)
-        self.assertIn("Project details [optional]", brief)
+        self.assertIn('Phone (type=tel; required; placeholder="Your phone number"; name=phone)', brief)
+        self.assertIn('Project details (type=textarea; optional; placeholder="Describe your project")', brief)
+        self.assertIn('Floor type (type=select; optional; options=["wood", "tile"])', brief)
+        self.assertIn("https://example.com/services/ (observed on: https://example.com/)", brief)
+        self.assertEqual(brief.count("https://example.com/services/ (observed on:"), 1)
+        self.assertNotIn("utm_source", brief)
+        self.assertNotIn("other.invalid", brief)
         self.assertIn("Q: Do you install tile? A: Yes", brief)
 
     def test_image_allowlist_excludes_logo_and_keeps_exact_url(self):

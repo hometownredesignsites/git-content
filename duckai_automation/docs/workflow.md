@@ -21,15 +21,15 @@ Additional CSV columns are passed through as `CSV_FIELD_<HEADER>` environment va
 
 ## Candidate flow
 
-Each site run seeks three automated passes from at most twelve complete candidate attempts. If all twelve finish without three passes and no access gate was detected, the private coordinator can queue one continuation with up to twelve more attempts. The continuation inherits prior passing candidates; total attempts are capped at 24. Each candidate uses a fresh, logged-out Duck.ai chat. With Web Search enabled, the runner asks for a source assessment, builds a compact cited source brief, then requests CSS parts 1–3, sends `acknowledged` as a separate user turn, and requests HTML parts 1–3 in that same chat. It validates each response before assembly, creates the inlined HTML, renders desktop/mobile views, and runs structural checks. One bounded measured repair/recheck can correct disallowed image URLs, CTA contrast under 4.5:1, and selected template layout. Remaining failures create targeted guidance for the next attempt. Candidate progress notices include concise, privacy-safe failure categories.
+Each site run seeks three automated passes from at most twelve complete candidate attempts. If all twelve finish without three passes and no access gate was detected, the private coordinator can queue one continuation with up to twelve more attempts. The continuation inherits prior passing candidates; total attempts are capped at 24. Each candidate uses separate clean, logged-out Duck.ai chats for research and generation. The Web Search audit runs first; the runner validates and compacts its cited findings, closes that profile, then sends the shared ChatGPT-aligned website/design request plus the compact brief in a fresh generation profile. The generation chat receives CSS parts 1–3, `acknowledged` as a separate user turn, and HTML parts 1–3. It validates each response before assembly, creates the inlined HTML, renders desktop/mobile views, and runs structural checks. One bounded measured repair/recheck can correct disallowed image URLs, CTA contrast under 4.5:1, and selected template layout. Remaining failures create targeted guidance for the next attempt. Candidate progress notices include concise, privacy-safe failure categories.
 
 A successful automated check does not establish visual polish, image relevance, or factual accuracy. Human review remains necessary. If the guest chat is blocked by sign-in, usage, or human verification, stop the candidate and retain available failure evidence; do not bypass the gate.
 
 ## Source assessment
 
-The runner sends the business name, category, and optional location as unverified context, then requests a source assessment. The assessment should cite pages on the requested domain, distinguish observed facts from inferences and unknowns, describe visible brand elements, and identify public logo/photo assets. The runner validates the source domain and any selected design reference before code generation. If source validation fails, that candidate stops.
+The runner sends the business name, category, and optional location as unverified context, then requests a source assessment. The assessment should cite pages on the requested domain, distinguish observed facts from inferences and unknowns, identify source navigation, record exact contact form labels/types/required states/placeholders/options, describe visible brand elements, and identify public logo/photo assets. The runner validates citations, checks source-image bytes, and validates any selected design reference before code generation. If source validation fails, that candidate stops.
 
-The source assessment is Duck.ai's cited report, not independent human verification. The compact generation brief retains cited identity, services/locations, contact details, exact form fields and required states, a few selling points/FAQ answers, and a short allowlist of verified image URLs. Location and other CSV clues must be confirmed by the website before they appear as fact. A template reference is optional; if one is used, preserve required attribution in a non-rendering HTML comment and internal run notes, not visible page content.
+The source assessment is Duck.ai's cited report, not independent human verification. The compact generation brief retains cited identity, services/locations, contact details, source-backed internal navigation, exact form fields and supplied attributes, a few selling points/FAQ answers, and a small allowlist of byte-validated source and category images. Raw audit text remains only in the audit profile and private evidence; it is not carried into the generation conversation. Location and other CSV clues must be confirmed by the website before they appear as fact. A template reference is optional; if one is used, preserve required attribution in a non-rendering HTML comment and internal run notes, not visible page content.
 
 ## Multi-turn capture and assembly
 
@@ -61,6 +61,8 @@ git-content-private (branch: duckai)/results/<site-slug>/run-<workflow-id>-<atte
         browser_qa.json
         checker_report.json
         inputs.json
+        source_audit_request.txt
+        generation_prompt.txt
         source_assessment.json
         source_assessment.md
         screenshots/

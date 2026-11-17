@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 
 MAX_BRIEF_CHARS = 4200
-MAX_FACTS = 14
 MAX_ASSETS = 5
+MAX_SOURCE_PHOTOS = 3
+MAX_CONTACT_FIELDS = 16
+MAX_NAVIGATION_LINKS = 3
+TRACKING_QUERY_KEYS = {"fbclid", "gclid", "dclid", "msclkid", "yclid", "igshid", "mc_cid", "mc_eid", "share"}
 
 FALLBACK_IMAGES = {
     "fence": [
@@ -105,19 +108,91 @@ def _render_items(title: str, values: object, valid_sources: set[str], limit: in
     return [f"{title}:\n" + "\n".join(result)] if result else []
 
 
-def build_compact_source_brief(assessment: dict, category_fallback_images: list[dict] | None = None) -> str:
+def _render_contact_form(values: object, valid_sources: set[str]) -> list[str]:
+    if not isinstance(values, list):
+        return []
+    fields = []
+    for item in values[:MAX_CONTACT_FIELDS]:
+        if not isinstance(item, dict):
+            continue
+        raw_label = item.get("label") or item.get("field")
+        label = " ".join(raw_label.split()) if isinstance(raw_label, str) else ""
+        sources = _source_urls(item, valid_sources)
+        if not label or not sources:
+            continue
+        details = []
+        field_type = _text(item.get("type") or item.get("input_type"), 40)
+        if field_type:
+            details.append(f"type={field_type}")
+        required = item.get("required")
+        details.append("required" if required is True else "optional" if required is False else "required status unknown")
+        placeholder = item.get("placeholder")
+        if isinstance(placeholder, str) and placeholder:
+            details.append(f"placeholder={json.dumps(placeholder, ensure_ascii=False)}")
+        options = item.get("options")
+        if isinstance(options, list) and options:
+            details.append("options=" + json.dumps(options, ensure_ascii=False))
+        name = item.get("name")
+        name = " ".join(name.split()) if isinstance(name, str) else ""
+        if name:
+            details.append(f"name={name}")
+        fields.append(f"- {label} ({'; '.join(details)}) (source: {', '.join(sources)})")
+    return ["CONTACT FORM (preserve exact fields and supplied attributes):\n" + "\n".join(fields)] if fields else []
+
+
+def _render_navigation(values: object, valid_sources: set[str], source_host: str) -> list[str]:
+    if not isinstance(values, list):
+        return []
+    links = []
+    seen = set()
+    for item in values:
+        if not isinstance(item, dict):
+            continue
+        label = _text(item.get("label"), 80)
+        target = str(item.get("url") or item.get("href") or "").strip()
+        cited_pages = _source_urls({"source_urls": item.get("source_urls") or item.get("page_url")}, valid_sources)
+        parsed = urlsplit(target)
+        host = (parsed.hostname or "").casefold().removeprefix("www.")
+        if not label or not cited_pages or parsed.scheme not in {"http", "https"} or host != source_host:
+            continue
+        query = urlencode([
+            (key, value) for key, value in parse_qsl(parsed.query, keep_blank_values=True)
+            if key.casefold() not in TRACKING_QUERY_KEYS and not key.casefold().startswith("utm_")
+        ])
+        clean_url = urlunsplit((parsed.scheme, parsed.netloc, parsed.path or "/", query, ""))
+        dedupe_key = (
+            parsed.scheme.casefold(), host, (parsed.path.rstrip("/") or "/").casefold(),
+            tuple(sorted(parse_qsl(query, keep_blank_values=True))),
+        )
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        links.append(f"- {label}: {clean_url} (observed on: {cited_pages[0]})")
+        if len(links) >= MAX_NAVIGATION_LINKS:
+            break
+    return ["SOURCE NAVIGATION (verified internal links):\n" + "\n".join(links)] if links else []
+
+
+def build_compact_source_brief(
+    assessment: dict,
+    category_fallback_images: list[dict] | None = None,
+    expected_source_url: str = "",
+) -> str:
     """Keep only source-backed facts and URLs from pages the audit says it reviewed."""
     if not isinstance(assessment, dict):
         return ""
+    reviewed_pages = assessment.get("pages_reviewed", [])
+    base_url = expected_source_url or next(
+        (str(item.get("url", "")) for item in reviewed_pages if isinstance(item, dict)), ""
+    )
+    source_host = (urlsplit(base_url).hostname or "").casefold().removeprefix("www.")
     valid_sources = {
         str(item.get("url", ""))
-        for item in assessment.get("pages_reviewed", [])
-        if isinstance(item, dict) and urlsplit(str(item.get("url", ""))).scheme in {"http", "https"}
+        for item in reviewed_pages
+        if isinstance(item, dict)
+        and urlsplit(str(item.get("url", ""))).scheme in {"http", "https"}
+        and (urlsplit(str(item.get("url", ""))).hostname or "").casefold().removeprefix("www.") == source_host
     }
-    valid_sources.update(
-        value for value in assessment.get("sources", [])
-        if isinstance(value, str) and urlsplit(value).scheme in {"http", "https"}
-    )
     sections = []
     core_facts = _render_items("IDENTITY / SERVICES / LOCATIONS", assessment.get("organization_facts"), valid_sources, 6)
     if not core_facts:
@@ -126,11 +201,12 @@ def build_compact_source_brief(assessment: dict, category_fallback_images: list[
     for title, key, limit in (
         ("SELLING POINTS", "selling_points", 3),
         ("CONTACT DETAILS", "contact_details", 5),
-        ("CONTACT FORM (preserve exact labels and required status)", "contact_form_fields", 12),
         ("FAQ ANSWERS", "faq_answers", 3),
         ("IMPORTANT SOURCE SECTIONS", "content_structure", 4),
     ):
         sections.extend(_render_items(title, assessment.get(key), valid_sources, limit))
+    sections.extend(_render_contact_form(assessment.get("contact_form_fields"), valid_sources))
+    sections.extend(_render_navigation(assessment.get("navigation_links"), valid_sources, source_host))
 
     visual = assessment.get("brand_and_visual_observations")
     visual_items = visual if isinstance(visual, list) else [visual]
@@ -158,18 +234,20 @@ def build_compact_source_brief(assessment: dict, category_fallback_images: list[
             if not url.startswith(("https://", "http://")):
                 continue
             cited_pages = _source_urls(asset, valid_sources)
-            if not cited_pages and not any(urlsplit(url).hostname == urlsplit(source).hostname for source in valid_sources):
+            if not cited_pages:
                 continue
             kind = _text(asset.get("type"), 40) or "image"
+            if any(term in kind.casefold() for term in ("icon", "social", "favicon")) and "logo" not in kind.casefold():
+                continue
             where = _text(asset.get("where_it_appears") or asset.get("context"), 80)
             cite = cited_pages[0] if cited_pages else ""
             asset_lines.append(f"- {kind}: {url}" + (f" (found on: {cite})" if cite else "") + (f" ({where})" if where else ""))
-            if not any(term in kind.casefold() for term in ("logo", "icon", "social")) and url not in approved_image_urls:
+            if not any(term in kind.casefold() for term in ("logo", "icon", "social")) and url not in approved_image_urls and len(approved_image_urls) < MAX_SOURCE_PHOTOS:
                 approved_image_urls.append(url)
             if len(asset_lines) >= MAX_ASSETS:
                 break
     if asset_lines:
-        sections.append("VERIFIED SOURCE IMAGE URLS (only these are approved source assets):\n" + "\n".join(asset_lines))
+        sections.append("VERIFIED SOURCE ASSETS (logo and relevant photos only; each URL was observed on a cited source page):\n" + "\n".join(asset_lines))
         source_asset_urls = [line.split(": ", 1)[1].split(" (", 1)[0] for line in asset_lines]
         sections.append("VERIFIED_SOURCE_ASSET_URLS:\n" + "\n".join(f"- {url}" for url in source_asset_urls))
     if approved_image_urls:
