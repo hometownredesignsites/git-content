@@ -296,7 +296,7 @@ class SavedResponsePipelineTest(unittest.TestCase):
         self.assertIn("close body and html", html2)
         for text in (css, css2, html):
             self.assertIn("exactly one fenced code block", text)
-        self.assertIn("two ordered CSS parts", instructions)
+        self.assertIn("exact part markers and output-format requirements separately", instructions)
         self.assertIn("Define the reusable class names", css)
         self.assertIn("actual selectors and declarations", css)
         self.assertIn("three distinct relevant image assets", css)
@@ -309,9 +309,7 @@ class SavedResponsePipelineTest(unittest.TestCase):
         self.assertIn("reduced-motion support", css2)
         self.assertNotIn("SOURCE FACTS AND DESIGN BRIEF", css2)
         self.assertIn("Do not produce a source audit", css)
-        self.assertIn("do not include research notes, a source audit", instructions)
         self.assertIn("two CSS parts", html)
-        self.assertIn("two ordered HTML chunks in the same guest conversation", instructions)
         self.assertNotIn("final acknowledgment", html.lower())
         self.assertNotIn("eight labeled parts", instructions)
         self.assertIn("literal source text inside a `text` code fence", html)

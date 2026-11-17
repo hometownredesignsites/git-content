@@ -460,9 +460,11 @@ jobs:
           print(slug)
           PY
           )"
-          mkdir -p "private-results/private_automation/queue/jobs"
-          cp "$PRIVATE_SOURCE_ROOT/private_automation/queue/jobs/${JOB_ID}.json" "private-results/private_automation/queue/jobs/${JOB_ID}.json"
-          result_dir="private-results/results/${result_slug}/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          private_source_root="$(cd "$PRIVATE_SOURCE_ROOT" && pwd)"
+          private_results_root="$(cd private-results && pwd)"
+          mkdir -p "$private_results_root/private_automation/queue/jobs"
+          cp "$private_source_root/private_automation/queue/jobs/${JOB_ID}.json" "$private_results_root/private_automation/queue/jobs/${JOB_ID}.json"
+          result_dir="$private_results_root/results/${result_slug}/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           mkdir -p "$result_dir/candidates"
           shopt -s nullglob
           run_dirs=(chatgpt-runs/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-site-1-*)
@@ -490,7 +492,7 @@ jobs:
           saved_job="${RUNNER_TEMP}/chatgpt-job-${JOB_ID}.json"
           mkdir -p "$saved_result"
           cp -a "$result_dir/." "$saved_result/"
-          cp "$PRIVATE_SOURCE_ROOT/private_automation/queue/jobs/${JOB_ID}.json" "$saved_job"
+          cp "$private_source_root/private_automation/queue/jobs/${JOB_ID}.json" "$saved_job"
           for retry in 1 2 3 4 5 6 7 8 9 10; do
             git fetch origin "$TARGET_BRANCH"
             git reset --hard "origin/$TARGET_BRANCH"
