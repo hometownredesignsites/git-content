@@ -561,6 +561,15 @@ def screenshot_paths(page: dict, stage: str) -> list[Path]:
     return [page[f"{stage}_{key}"] for key in ("hero", "section", "mobile")]
 
 
+def preserve_original_inline_html(source_html: Path, inline_dir: Path) -> Path:
+    """Save the staged, unmodified source once before replacing candidate HTML."""
+    inline_dir.mkdir(parents=True, exist_ok=True)
+    old_inline = inline_dir / "index-old.html"
+    if not old_inline.exists():
+        shutil.copy2(source_html, old_inline)
+    return old_inline
+
+
 def validate_qa_report(text: str, concept: str, stage: str) -> dict:
     report = model_json(text)
     if report.get("status") not in {"pass", "revise"}:
@@ -1058,13 +1067,12 @@ def run(args: argparse.Namespace) -> Path:
                 (debug_dir / name).unlink(missing_ok=True)
         else:
             attempt_dir = debug_dir
+        # Preserve the staged original before writing back to the in-place source path.
+        original_source = source_dir / f"{pages[0]['name']}.html"
+        preserve_original_inline_html(original_source, inline_dir)
         html_text = read_html(final_html)
         (files_dir / "index.html").write_text(html_text, encoding="utf-8")
         (inline_dir / "index.html").write_text(html_text, encoding="utf-8")
-        old_inline = inline_dir / "index-old.html"
-        if not old_inline.exists():
-            original_source = Path(args.source_html_file).resolve() if args.source_html_file else source_dir / f"{pages[0]['name']}.html"
-            shutil.copy2(original_source, old_inline)
         styles = re.findall(r"<style\b[^>]*>([\s\S]*?)</style\s*>", html_text, flags=re.IGNORECASE)
         (files_dir / "styles.css").write_text("\n\n".join(styles), encoding="utf-8")
         evidence_zip = attempt_dir / "assessment-run.zip"

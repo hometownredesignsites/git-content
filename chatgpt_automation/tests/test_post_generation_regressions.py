@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import runpy
 import subprocess
 import tempfile
 import unittest
@@ -38,6 +39,26 @@ class PostGenerationRegressionTest(unittest.TestCase):
             }],
         }), encoding="utf-8")
         return candidate
+
+    def test_assessment_export_preserves_source_before_overwriting_inline_html(self):
+        assessor_path = Path(__file__).resolve().parents[1] / "html_assessment" / "html_assessment.py"
+        preserve_source = runpy.run_path(str(assessor_path))["preserve_original_inline_html"]
+        with tempfile.TemporaryDirectory(prefix="assessment-source-backup-") as temporary:
+            root = Path(temporary)
+            staged_source = root / "source.html"
+            inline_dir = root / "candidate" / "files" / "inlined"
+            inline_dir.mkdir(parents=True)
+            live_inline = inline_dir / "index.html"
+            original_html = "<html><body><h1>Original source</h1></body></html>"
+            staged_source.write_text(original_html, encoding="utf-8")
+            live_inline.write_text(original_html, encoding="utf-8")
+
+            backup = preserve_source(staged_source, inline_dir)
+            live_inline.write_text("<html><body><h1>Revised page</h1></body></html>", encoding="utf-8")
+
+            self.assertEqual(backup.name, "index-old.html")
+            self.assertEqual(backup.read_text(encoding="utf-8"), original_html)
+            self.assertIn("Revised page", live_inline.read_text(encoding="utf-8"))
 
     def test_repository_qa_approves_assessment_without_human_review(self):
         with tempfile.TemporaryDirectory(prefix="assessment-qa-approval-") as temporary:
