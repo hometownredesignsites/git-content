@@ -659,14 +659,17 @@ def run_website_chunks(
             state["conversation_url"] = conversation_url()
         _atomic_json(state_path, state)
         started = time.monotonic()
+        failure_class = "exchange_error"
         try:
             raw_response, metadata = _response_text(exchange(reference_prompt))
+            failure_class = "design_reference_error"
             assessment = _parse_design_reference_or_fallback(raw_response)
         except Exception as error:
             state["last_error"] = {
                 "at_utc": _now(),
                 "part": "DESIGN REFERENCE ASSESSMENT",
-                "classification": getattr(error, "failure_class", "design_reference_error"),
+                # Keep browser/submission failures distinct from an invalid assessment.
+                "classification": getattr(error, "failure_class", failure_class),
                 "error": str(error),
                 "page_observation": getattr(error, "observation", {}),
             }

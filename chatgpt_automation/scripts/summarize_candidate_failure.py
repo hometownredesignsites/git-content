@@ -17,6 +17,7 @@ FAILURE_LABELS = {
     "conversation_gated": "ChatGPT conversation is gated or unavailable",
     "service_error": "ChatGPT reported a service or connection error",
     "empty_response": "ChatGPT returned an empty response",
+    "composer_not_found": "ChatGPT composer was not found before prompt submission",
     "response_format_rejected": "response did not match the required format",
     "design_reference_error": "design-reference assessment failed",
     "exchange_error": "ChatGPT response exchange failed",

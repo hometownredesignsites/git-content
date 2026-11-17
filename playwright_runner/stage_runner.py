@@ -20,6 +20,12 @@ class EmptyAssistantResponseError(RuntimeError):
     """The submitted turn produced no capturable assistant response."""
 
 
+class ComposerNotFoundError(RuntimeError):
+    """The ChatGPT composer was unavailable before the prompt was submitted."""
+
+    failure_class = "composer_not_found"
+
+
 def run_stage_once(
     page,
     timeout_ms: int,
@@ -78,7 +84,7 @@ def run_stage_once(
     def _single_attempt():
         composer = find_chat_composer(page, timeout_ms=timeout_ms)
         if composer is None:
-            raise RuntimeError("Could not find composer for stage execution.")
+            raise ComposerNotFoundError("Could not find composer before prompt submission.")
         assistant_messages = assistant_turns(page)
         before_count = assistant_messages.count()
         before_last_text = ""
