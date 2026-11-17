@@ -652,6 +652,7 @@ def build_initial_prompt(
         f"LOCATION HINT: {json.dumps(location, ensure_ascii=False)}\n\n"
     )
     compact_design = " ".join(design_brief.split())[:MAX_DESIGN_BRIEF_CHARS]
+    retry_guidance = " ".join(retry_guidance.split())
     retry_context = (
         f"MEASURED CORRECTIONS FROM THE PREVIOUS CANDIDATE:\n{retry_guidance}\n\n"
         if retry_guidance else ""
@@ -660,17 +661,32 @@ def build_initial_prompt(
         f"COMPACT, CITED SOURCE BRIEF (use only these verified facts and URLs):\n{source_brief}\n\n"
         if source_brief else ""
     )
-    prompt = (
-        f"{identity}"
-        f"Website request:\n{website_request.strip()}\n\n"
-        f"Design guidance:\n{compact_design}\n\n"
-        f"{retry_context}"
-        f"{source_facts}"
-        f"{template_context}"
-        f"{hard_requirements}"
-        f"{BASE_CONTRACT}\n\n"
-        "Begin with CSS PART 1 OF 3 only."
-    )
+    def assemble_prompt() -> str:
+        return (
+            f"{identity}"
+            f"Website request:\n{website_request.strip()}\n\n"
+            f"Design guidance:\n{compact_design}\n\n"
+            f"{retry_context}"
+            f"{source_facts}"
+            f"{template_context}"
+            f"{hard_requirements}"
+            f"{BASE_CONTRACT}\n\n"
+            "Begin with CSS PART 1 OF 3 only."
+        )
+
+    prompt = assemble_prompt()
+    if len(prompt) > MAX_INITIAL_PROMPT_CHARS and retry_guidance:
+        overflow = len(prompt) - MAX_INITIAL_PROMPT_CHARS
+        retry_guidance = retry_guidance[: max(0, len(retry_guidance) - overflow)]
+        retry_context = (
+            f"MEASURED CORRECTIONS FROM THE PREVIOUS CANDIDATE:\n{retry_guidance}\n\n"
+            if retry_guidance else ""
+        )
+        prompt = assemble_prompt()
+    if len(prompt) > MAX_INITIAL_PROMPT_CHARS:
+        overflow = len(prompt) - MAX_INITIAL_PROMPT_CHARS
+        compact_design = compact_design[: max(0, len(compact_design) - overflow)]
+        prompt = assemble_prompt()
     if len(prompt) > MAX_INITIAL_PROMPT_CHARS:
         raise ValueError(
             f"Compact generation prompt is {len(prompt)} characters; limit is {MAX_INITIAL_PROMPT_CHARS}. "

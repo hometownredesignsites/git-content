@@ -101,7 +101,7 @@ class PromptAndWorkflowTests(unittest.TestCase):
             {"name": "Landed", "url": "https://html5up.net/landed", "license_url": "https://html5up.net/license",
              "patterns_to_adapt": ["pattern " + "x" * 500 for _ in range(5)]},
             "Example Business", "Category", "Somewhere",
-            "x" * 4200,
+            "x" * 4800,
             "y" * 1800,
         )
         self.assertLessEqual(len(prompt), MAX_INITIAL_PROMPT_CHARS)

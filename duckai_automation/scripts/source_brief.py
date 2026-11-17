@@ -6,7 +6,7 @@ import json
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 
-MAX_BRIEF_CHARS = 4200
+MAX_BRIEF_CHARS = 4800
 MAX_ASSETS = 5
 MAX_SOURCE_PHOTOS = 3
 MAX_CONTACT_FIELDS = 16
