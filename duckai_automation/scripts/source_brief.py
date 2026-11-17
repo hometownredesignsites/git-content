@@ -241,7 +241,8 @@ def build_compact_source_brief(
                 continue
             where = _text(asset.get("where_it_appears") or asset.get("context"), 80)
             cite = cited_pages[0] if cited_pages else ""
-            asset_lines.append(f"- {kind}: {url}" + (f" (found on: {cite})" if cite else "") + (f" ({where})" if where else ""))
+            distinct_context = f" ({where})" if where and where not in cited_pages else ""
+            asset_lines.append(f"- {kind}: {url}" + (f" (found on: {cite})" if cite else "") + distinct_context)
             if not any(term in kind.casefold() for term in ("logo", "icon", "social")) and url not in approved_image_urls and len(approved_image_urls) < MAX_SOURCE_PHOTOS:
                 approved_image_urls.append(url)
             if len(asset_lines) >= MAX_ASSETS:

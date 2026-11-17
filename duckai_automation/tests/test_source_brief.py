@@ -72,6 +72,17 @@ class SourceBriefTests(unittest.TestCase):
         self.assertIn("https://cdn.example.com/source-floor.jpg", brief)
         self.assertIn("VERIFIED_SOURCE_IMAGE_URLS:\n- https://cdn.example.com/source-floor.jpg", brief)
 
+    def test_inventory_page_is_not_repeated_as_asset_context(self):
+        assessment = dict(self.assessment)
+        assessment["source_assets"] = [{
+            "url": "https://cdn.example.com/source-floor.jpg",
+            "type": "photo",
+            "where_it_appears": "https://example.com/services/",
+        }]
+        brief = build_compact_source_brief(assessment)
+        self.assertIn("(found on: https://example.com/services/)", brief)
+        self.assertNotIn("(https://example.com/services/)", brief)
+
     def test_compact_brief_includes_byte_validated_category_fallbacks(self):
         fallbacks = category_fallback_candidates("flooring and tile")
         brief = build_compact_source_brief(self.assessment, fallbacks)
