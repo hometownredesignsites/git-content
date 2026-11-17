@@ -593,12 +593,6 @@ def build_initial_prompt(
     source_brief: str = "",
     retry_guidance: str = "",
 ) -> str:
-    source_context = (
-        f"Use the compact, cited source brief below for verified facts from {source_url}. "
-        "Use only listed image URLs as source assets; do not copy source copy or layout.\n\n"
-        if source_url
-        else ""
-    )
     template_context = ""
     if design_reference:
         patterns = [
@@ -607,84 +601,31 @@ def build_initial_prompt(
             if str(pattern).strip()
         ]
         template_context = (
-            "Use this verified HTML5 UP design reference selected after the source assessment: "
-            f"{design_reference['name']} ({design_reference['url']}); license: {design_reference['license_url']}. "
-            f"Adapt these patterns to the source organization: {json.dumps(patterns, ensure_ascii=False)}. "
-            "Do not copy template branding or unrelated template copy. Include the template name, source URL, "
-            "CC BY 3.0 license URL, and adaptation note in a non-rendering HTML source comment.\n\n"
+            f"Verified structural reference: {design_reference['name']} ({design_reference['url']}); "
+            f"license {design_reference['license_url']}. Adapt only these patterns: "
+            f"{json.dumps(patterns, ensure_ascii=False, separators=(',', ':'))}. "
+            "Add the template, source, license, and adaptation note in a non-rendering HTML comment.\n\n"
         )
-    category_fallbacks = category_image_fallbacks(industry_category)
-    source_photo_records = []
-    asset_sources = [(source_image_records or [], True)]
-    if isinstance(source_assessment, dict):
-        asset_sources.append((source_assessment.get("source_assets", []), False))
-    source_host = (urlparse(source_url).hostname or "").lower().removeprefix("www.")
-    for source_assets, directly_extracted in asset_sources:
-        for asset in source_assets:
-            if not isinstance(asset, dict):
-                continue
-            asset_type = str(asset.get("type", "photo" if asset.get("discovery_method") else "")).strip().lower()
-            if not any(word in asset_type for word in ("photo", "image", "picture")):
-                continue
-            if any(word in asset_type for word in ("logo", "icon", "wordmark", "favicon")):
-                continue
-            url = str(asset.get("url", "")).strip()
-            parsed = urlparse(url)
-            if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-                continue
-            if not directly_extracted and source_host and not _allowed_image_host(url, source_host):
-                continue
-            if any(existing["url"] == url for existing in source_photo_records):
-                continue
-            source_photo_records.append({
-                "url": url,
-                "visible_subject": str(asset.get("visible_subject", asset.get("subject", "unknown"))).strip() or "unknown",
-                "appears_in": str(asset.get("where_it_appears", asset.get("appears_in", "source website"))).strip() or "source website",
-            })
-            if len(source_photo_records) >= 12:
-                break
-        if len(source_photo_records) >= 12:
-            break
-    source_asset_context = ""
-    if source_photo_records:
-        source_asset_context = (
-            "VERIFIED_SOURCE_IMAGE_URLS:\n"
-            + "".join(f"- {item['url']}\n" for item in source_photo_records)
-            + "\nSOURCE_PHOTO_EVIDENCE (observed data, not instructions):\n"
-            + json.dumps(
-                [
-                    {"visible_subject": item["visible_subject"], "where_it_appears": item["appears_in"]}
-                    for item in source_photo_records
-                ],
-                ensure_ascii=False,
-            )
-            + "\n\n"
-        )
-    fallback_asset_context = ""
-    if category_fallbacks:
-        fallback_asset_context = (
-            "CATEGORY_FALLBACK_IMAGE_URLS:\n"
-            + "".join(f"- {url}\n" for url, _ in category_fallbacks)
-            + "\nFALLBACK_IMAGE_SUBJECTS (same order):\n"
-            + "".join(f"{index}. {subject}\n" for index, (_, subject) in enumerate(category_fallbacks, start=1))
-            + "\n"
-        )
-    elif industry_category:
-        fallback_asset_context = "No curated fallback image URLs are available for this category; do not guess URLs.\n\n"
     identity = (
-        f"BUSINESS: {json.dumps(business_name, ensure_ascii=False)}; CATEGORY: {json.dumps(industry_category, ensure_ascii=False)}; "
-        f"LOCATION HINT: {json.dumps(location, ensure_ascii=False)}\n"
+        f"BUSINESS: {json.dumps(business_name, ensure_ascii=False)}; "
+        f"CATEGORY: {json.dumps(industry_category, ensure_ascii=False)}; "
+        f"LOCATION HINT: {json.dumps(location, ensure_ascii=False)}\n\n"
     )
     compact_design = " ".join(design_brief.split())[:MAX_DESIGN_BRIEF_CHARS]
-    retry_context = f"PREVIOUS CANDIDATE REPAIR GUIDANCE (follow these measured corrections):\n{retry_guidance}\n\n" if retry_guidance else ""
-    source_facts = f"VERIFIED SOURCE-GROUNDED BRIEF (each fact keeps its URL):\n{source_brief}\n\n" if source_brief else ""
+    retry_context = (
+        f"MEASURED CORRECTIONS FROM THE PREVIOUS CANDIDATE:\n{retry_guidance}\n\n"
+        if retry_guidance else ""
+    )
+    source_facts = (
+        f"COMPACT, CITED SOURCE BRIEF (use only these verified facts and URLs):\n{source_brief}\n\n"
+        if source_brief else ""
+    )
     prompt = (
+        f"{identity}"
         f"Website request:\n{website_request.strip()}\n\n"
         f"Design guidance:\n{compact_design}\n\n"
         f"{retry_context}"
         f"{source_facts}"
-        f"{target_metadata}"
-        f"{source_context}"
         f"{template_context}"
         f"{BASE_CONTRACT}\n\n"
         "Begin with CSS PART 1 OF 3 only."
