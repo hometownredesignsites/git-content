@@ -9,6 +9,8 @@ A reusable Python workflow that downloads customer HTML pages, audits the origin
 
 The local edit applier blocks model edits that add, remove, or change an `<img>` `src` or `srcset`. Image URL changes need a separate asset-validation workflow; this prevents an unverified model suggestion from introducing a broken image. Screenshot review also checks image relevance and alt-text accuracy: a loaded image can still be the wrong subject or be stretched into the wrong role. Git Content's browser QA checks CTA visibility and contrast and reports broken images; unmeasured contrast fails closed. QA subprocesses run without provider credentials.
 
+When Pass 1 fails its final deterministic gate, the assessor sends the exact failed checks, measured CTA contrast, missing source form fields, current HTML, original HTML, and fresh desktop/mobile screenshots into up to three focused HTML/CSS correction rounds. Git Content QA reruns after each round. The assessor keeps the candidate pending if the final verification still fails; it does not publish based on a model claim.
+
 The selected remote provider performs assessment, prioritization, design direction, and QA. Python downloads source HTML, sends a code-only audit first, then captures local screenshots and requests a visual supplement before prioritization or edits. It validates JSON and exact edit anchors, applies edits, and saves evidence. Source page text, code, and screenshots are treated as untrusted data.
 
 ## Providers

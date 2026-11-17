@@ -741,6 +741,7 @@ def repository_qa_prompt(report: dict) -> str:
     checks = report.get("checks", {})
     browser = report.get("browser_qa_checks", {})
     viewport_reports = (report.get("browser_qa") or {}).get("viewports", {})
+    template_layout = (report.get("browser_qa") or {}).get("template_layout", {})
     cta_measurements = {
         viewport: {
             key: details.get(key)
@@ -762,6 +763,18 @@ def repository_qa_prompt(report: dict) -> str:
         },
         "cta_measurements_by_viewport": cta_measurements,
         "failed_image_urls": report.get("failed_image_urls", []),
+        "source_contact_form_fields_missing": report.get("source_form_fields_missing", []),
+        "source_contact_form_required_fields_missing": report.get("source_form_required_fields_missing", []),
+        "template_layout": {
+            key: template_layout.get(key)
+            for key in (
+                "status", "signature_id", "profile", "below_hero_section_count",
+                "spotlight_count", "spotlight_media_sides", "spotlight_side_alternations",
+                "divided_page", "has_gallery_or_items", "has_both_orientations",
+            )
+            if key in template_layout
+        },
+        "failed_structural_checks": [name for name, passed in checks.items() if passed is False],
         "source_contact_form": {
             name: value for name, value in checks.items()
             if name.startswith("source_contact_form")
@@ -1083,7 +1096,9 @@ def run(args: argparse.Namespace) -> Path:
         if reuse_pass1:
             continue
         pass1_verification = None
-        for attempt in range(3):
+        # Allow three model correction rounds, with deterministic QA rerun after
+        # each one. The fourth QA pass is verification only; failure stays pending.
+        for attempt in range(4):
             verify_instruction = "STATE E2 — PASS 1 FINAL CODE-ONLY GATE. No visual claims." if args.code_only else "STATE E2 — PASS 1 FINAL GATE. Verify the final repaired HTML and attached desktop hero, desktop section, and mobile hero screenshots. Pass only when every previously supported issue is resolved. Do not suggest design enhancements."
             current_repo_qa = run_repository_qa(
                 page["pass1"], f"{name}-pass1-attempt-{attempt + 1}", page["url"], run_dir, source_candidate_dir,
@@ -1101,7 +1116,7 @@ def run(args: argparse.Namespace) -> Path:
             if pass1_verification["status"] == "pass" and current_repo_qa.get("automated_success") is not False:
                 pass1_qa_reports[name] = verification_text
                 break
-            if attempt == 2:
+            if attempt == 3:
                 unresolved = list(pass1_verification.get("remaining_issues", []))
                 if current_repo_qa.get("automated_success") is False:
                     unresolved.append({
@@ -1115,8 +1130,9 @@ def run(args: argparse.Namespace) -> Path:
                 pass1_qa_reports[name] = json.dumps(pass1_verification, indent=2, ensure_ascii=False)
                 (audit_dir / f"pass1-final-qa-blocked-{name}.json").write_text(pass1_qa_reports[name] + "\n", encoding="utf-8")
                 break
-            fix_user = f"STATE E3 — REPAIR PASS 1 GATE FINDINGS FOR {name}\nPass 1 final QA report (retain unresolved findings until fixed):\n{verification_text}\nGit Content deterministic QA blockers (all are authoritative):\n{repo_qa_text}\nCurrent corrected HTML:\n<page_html>\n{read_html(page['pass1'])}\n</page_html>\nApply only evidence-supported Pass 1 repairs. Do not invent sections, form fields, endpoints, or behavior. Return exact JSON edits using repair criterion IDs."
-            gate_edits = invoke_workers_ai(f"pass1-gate-repair-{name}-{attempt + 1}", repair_prompt, fix_user, [], audit_dir, model, account_id, token, 5000)
+            fix_user = f"STATE E3 — REPAIR PASS 1 GATE FINDINGS FOR {name}\nPass 1 final QA report (retain unresolved findings until fixed):\n{verification_text}\nGit Content deterministic QA blockers (all are authoritative):\n{repo_qa_text}\nOriginal customer HTML (restoration reference; preserve its demonstrated sections, copy, forms, fields, contact details, and links):\n<source_html>\n{read_html(page['source'])}\n</source_html>\nCurrent corrected HTML to edit:\n<page_html>\n{read_html(page['pass1'])}\n</page_html>\nUse the failed checks as a concrete repair list. Fix each blocker with the smallest valid HTML/CSS edits. You may restore omitted content only from the original source above; do not invent copy, sections, fields, endpoints, or behavior. For contrast failures, change the relevant foreground/background CSS colors and verify the measured target; hiding or relabeling the CTA is not a fix. Preserve every image src and srcset value exactly. If an issue cannot be resolved from supplied evidence, do not guess; leave it for review. Return exact JSON edits using repair criterion IDs."
+            gate_images = [] if args.code_only else screenshot_paths(page, "pass1")
+            gate_edits = invoke_workers_ai(f"pass1-gate-repair-{name}-{attempt + 1}", repair_prompt, fix_user, gate_images, audit_dir, model, account_id, token, 5000)
             gate_html = apply_model_edits_with_anchor_repair(read_html(page["pass1"]), gate_edits, audit_dir / f"rejected-pass1-gate-repair-{name}-{attempt + 1}.json", f"pass1-gate-repair-{name}-{attempt + 1}", repair_prompt, audit_dir, model, account_id, token)
             page["pass1"].write_text(gate_html, encoding="utf-8")
             if not args.code_only:

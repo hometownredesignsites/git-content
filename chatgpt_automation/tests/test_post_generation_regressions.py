@@ -169,6 +169,24 @@ class PostGenerationRegressionTest(unittest.TestCase):
         self.assertIn("a.hero-cta", prompt)
         self.assertIn("broken.jpg", prompt)
 
+    def test_repository_qa_prompt_includes_concrete_repair_context(self):
+        prompt = repository_qa_prompt({
+            "available": True,
+            "automated_success": False,
+            "blocking_failures": ["browser_template_layout_signature_matches"],
+            "checks": {"styles_css_linked": False, "section_services": True},
+            "source_form_fields_missing": ["phone"],
+            "source_form_required_fields_missing": ["phone"],
+            "browser_qa": {"template_layout": {
+                "status": "fail", "signature_id": "story-divided-panels-gallery",
+                "profile": "story", "spotlight_side_alternations": 0,
+            }},
+        })
+        self.assertIn('"styles_css_linked"', prompt)
+        self.assertIn('"phone"', prompt)
+        self.assertIn('"story-divided-panels-gallery"', prompt)
+        self.assertIn('"spotlight_side_alternations": 0', prompt)
+
     def test_source_audit_drops_a_missing_attribute_claim_contradicted_by_its_exact_evidence(self):
         report = {
             "concept": "page-1", "summary": "Menu button exists.",
