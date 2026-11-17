@@ -433,30 +433,33 @@ jobs:
           git config --global --add safe.directory "$GITHUB_WORKSPACE/private-results"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- "private_automation/queue/jobs/${JOB_ID}.json" "results/${result_slug}" results/README.md results/successful.csv
-          git commit -m "private: save ChatGPT result ${JOB_ID} [skip ci]"
-          for retry in 1 2 3 4 5; do
+          saved_result="${RUNNER_TEMP}/chatgpt-result-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          saved_job="${RUNNER_TEMP}/chatgpt-job-${JOB_ID}.json"
+          mkdir -p "$saved_result"
+          cp -a "$result_dir/." "$saved_result/"
+          cp "$PRIVATE_SOURCE_ROOT/private_automation/queue/jobs/${JOB_ID}.json" "$saved_job"
+          for retry in 1 2 3 4 5 6 7 8 9 10; do
             git fetch origin "$TARGET_BRANCH"
-            if ! git rebase "origin/$TARGET_BRANCH"; then
-              git rebase --abort || true
-              sleep 2
-              continue
+            git reset --hard "origin/$TARGET_BRANCH"
+            result_dir="results/${result_slug}/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            mkdir -p "$result_dir"
+            cp -a "$saved_result/." "$result_dir/"
+            mkdir -p "private_automation/queue/jobs"
+            cp "$saved_job" "private_automation/queue/jobs/${JOB_ID}.json"
+            python private_automation/scripts/build_results_index.py --provider chatgpt
+            git add -- "private_automation/queue/jobs/${JOB_ID}.json" "results/${result_slug}" results/README.md results/successful.csv
+            if git diff --cached --quiet; then
+              echo "Private evidence for workflow ${GITHUB_RUN_ID} is already present on ${TARGET_BRANCH}."
+              exit 0
             fi
+            git commit -m "private: save ChatGPT result ${JOB_ID} [skip ci]"
             if git push origin "HEAD:refs/heads/${TARGET_BRANCH}"; then
               echo "Saved ChatGPT candidate evidence to the private repository."
               exit 0
             fi
             sleep 2
           done
-          evidence_branch="run-evidence/chatgpt-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          if git push origin "HEAD:refs/heads/${evidence_branch}"; then
-            echo "The shared results branch could not be updated, but private evidence is available on ${evidence_branch}."
-            if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
-              printf '\n- Shared results index update failed; private evidence backup: `git-content-private/%s`\n' "$evidence_branch" >> "$GITHUB_STEP_SUMMARY"
-            fi
-            exit 0
-          fi
-          echo "Could not save private ChatGPT evidence after five attempts."
+          echo "Could not save private ChatGPT evidence to ${TARGET_BRANCH} after ten attempts."
           exit 1
 
       - name: Require three automated passes
