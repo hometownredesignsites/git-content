@@ -83,6 +83,22 @@ class SourceBriefTests(unittest.TestCase):
         self.assertIn("(found on: https://example.com/services/)", brief)
         self.assertNotIn("(https://example.com/services/)", brief)
 
+    def test_scanned_same_site_page_can_cite_images_without_citing_unreviewed_facts(self):
+        assessment = dict(self.assessment)
+        assessment["source_assets"] = [{
+            "url": "https://cdn.example.com/deep-floor.jpg",
+            "type": "photo",
+            "where_it_appears": "https://example.com/gallery/",
+        }]
+        brief = build_compact_source_brief(
+            assessment,
+            expected_source_url=self.home,
+            verified_asset_source_pages=["https://example.com/gallery/", "https://other.invalid/gallery/"],
+        )
+        self.assertIn("https://cdn.example.com/deep-floor.jpg", brief)
+        self.assertIn("(found on: https://example.com/gallery/)", brief)
+        self.assertNotIn("gallery", brief.split("IDENTITY / SERVICES / LOCATIONS:", 1)[1].split("SELLING POINTS:", 1)[0])
+
     def test_compact_brief_includes_byte_validated_category_fallbacks(self):
         fallbacks = category_fallback_candidates("flooring and tile")
         brief = build_compact_source_brief(self.assessment, fallbacks)

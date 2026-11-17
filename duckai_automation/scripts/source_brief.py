@@ -177,6 +177,7 @@ def build_compact_source_brief(
     assessment: dict,
     category_fallback_images: list[dict] | None = None,
     expected_source_url: str = "",
+    verified_asset_source_pages: list[str] | None = None,
 ) -> str:
     """Keep only source-backed facts and URLs from pages the audit says it reviewed."""
     if not isinstance(assessment, dict):
@@ -226,6 +227,13 @@ def build_compact_source_brief(
     assets = assessment.get("source_assets", [])
     asset_lines = []
     approved_image_urls = []
+    valid_asset_sources = set(valid_sources)
+    for page_url in verified_asset_source_pages or []:
+        if not isinstance(page_url, str) or urlsplit(page_url).scheme not in {"http", "https"}:
+            continue
+        page_host = (urlsplit(page_url).hostname or "").casefold().removeprefix("www.")
+        if page_host == source_host:
+            valid_asset_sources.add(page_url)
     if isinstance(assets, list):
         for asset in assets:
             if not isinstance(asset, dict):
@@ -233,7 +241,7 @@ def build_compact_source_brief(
             url = str(asset.get("url", "")).strip()
             if not url.startswith(("https://", "http://")):
                 continue
-            cited_pages = _source_urls(asset, valid_sources)
+            cited_pages = _source_urls(asset, valid_asset_sources)
             if not cited_pages:
                 continue
             kind = _text(asset.get("type"), 40) or "image"

@@ -984,7 +984,13 @@ def run() -> None:
                     verified_source_assets = _verified_source_assets({"source_assets": combined_source_assets})
                     compact_assessment["source_assets"] = verified_source_assets
                     fallback_images = _verified_category_fallbacks(industry_category)
-                    source_brief = build_compact_source_brief(compact_assessment, fallback_images, source_url)
+                    scanned_asset_pages = source_image_inventory.get("pages_scanned", [])
+                    source_brief = build_compact_source_brief(
+                        compact_assessment,
+                        fallback_images,
+                        source_url,
+                        verified_asset_source_pages=scanned_asset_pages if isinstance(scanned_asset_pages, list) else [],
+                    )
                     if not source_brief:
                         fail("Source assessment returned no factual items with traceable page citations.")
                     (RUN_DIR / "debug" / "website_context.md").write_text(source_brief + "\n", encoding="utf-8")
