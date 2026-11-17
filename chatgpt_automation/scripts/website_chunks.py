@@ -1021,6 +1021,57 @@ def finalize_candidate(run_folder: str | Path, request_text: str) -> dict[str, A
     except json.JSONDecodeError as error:
         raise RuntimeError(f"Website checker did not emit JSON: {check.stderr or check.stdout}") from error
     _atomic_json(debug / "checker_report.json", quality_report)
+    repair_started = time.monotonic()
+    repair_step = subprocess.run(
+        [sys.executable, str(SCRIPT_DIR / "repair_candidate_quality.py"), str(run)],
+        capture_output=True, text=True, encoding="utf-8",
+    )
+    step_results["bounded_quality_repair"] = {
+        "exit_code": repair_step.returncode,
+        "duration_seconds": round(time.monotonic() - repair_started, 3),
+        "stdout": repair_step.stdout[-12000:],
+        "stderr": repair_step.stderr[-12000:],
+    }
+    _atomic_json(debug / "bounded_quality_repair_step.json", step_results["bounded_quality_repair"])
+    if repair_step.returncode:
+        raise RuntimeError(f"Bounded candidate repair failed; evidence is saved under {debug}.")
+    try:
+        repair_report = json.loads((debug / "quality_repair.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        repair_report = {}
+    if repair_report.get("changed"):
+        repair_commands = [
+            [sys.executable, str(SCRIPT_DIR / "inline_css.py"), str(files / "index.html"),
+             str(files / "styles.css"), str(files / "inlined" / "index.html")],
+            [sys.executable, str(SCRIPT_DIR / "normalize_cta_arrows.py"), str(files / "inlined" / "index.html")],
+            [sys.executable, str(SCRIPT_DIR / "browser_qa.py"), str(run), request_text],
+        ]
+        for repair_index, command in enumerate(repair_commands, start=1):
+            repair_started = time.monotonic()
+            result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
+            step_results[f"bounded_repair_recheck_{repair_index}"] = {
+                "exit_code": result.returncode,
+                "duration_seconds": round(time.monotonic() - repair_started, 3),
+                "stdout": result.stdout[-12000:],
+                "stderr": result.stderr[-12000:],
+            }
+            _atomic_json(debug / f"bounded_repair_recheck_{repair_index}_step.json", step_results[f"bounded_repair_recheck_{repair_index}"])
+            if result.returncode:
+                raise RuntimeError(f"Bounded repair recheck step {repair_index} failed; evidence is saved under {debug}.")
+        try:
+            browser_report = json.loads(browser_report_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            browser_report = {"status": "unavailable"}
+        check = subprocess.run(
+            [sys.executable, str(SCRIPT_DIR / "check_website.py"), str(run), request_text],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+        try:
+            quality_report = json.loads(check.stdout)
+        except json.JSONDecodeError as error:
+            raise RuntimeError(f"Repaired website checker did not emit JSON: {check.stderr or check.stdout}") from error
+        quality_report["bounded_quality_repair"] = repair_report
+        _atomic_json(debug / "checker_report.json", quality_report)
     review_templates = debug / "review_templates"
     image_review = {
         "status": "pending",

@@ -368,6 +368,29 @@ VIEWPORT_CHECKS_JS = r"""async () => {
     const classes = String(element.className || '');
     return ctaWords.test(label) || /(?:^|[\s_-])(?:button|btn|cta|primary|call[-_]?to[-_]?action)(?:$|[\s_-])/i.test(classes);
   });
+  const stableSelector = element => {
+    if (element.id) {
+      const idSelector = `#${CSS.escape(element.id)}`;
+      if (document.querySelectorAll(idSelector).length === 1) return idSelector;
+    }
+    const parts = [];
+    for (let node = element; node && node.nodeType === 1; node = node.parentElement) {
+      let part = node.tagName.toLowerCase();
+      const classes = Array.from(node.classList || []).slice(0, 2);
+      if (classes.length) part += classes.map(name => `.${CSS.escape(name)}`).join('');
+      const parent = node.parentElement;
+      if (parent) {
+        const peers = Array.from(parent.children).filter(child => child.tagName === node.tagName);
+        if (peers.length > 1) part += `:nth-of-type(${peers.indexOf(node) + 1})`;
+      }
+      parts.unshift(part);
+      const selector = parts.join(' > ');
+      try {
+        if (document.querySelectorAll(selector).length === 1) return selector;
+      } catch (_) {}
+    }
+    return parts.join(' > ');
+  };
   const primaryCtaContrastIssues = primaryCtas.flatMap(element => {
     const foreground = luminance(rgb(getComputedStyle(element).color));
     const backgroundColor = effectiveBackground(element);
@@ -378,6 +401,7 @@ VIEWPORT_CHECKS_JS = r"""async () => {
     if (ratio !== null && ratio >= 4.5) return [];
     return [{
       text: (element.innerText || element.getAttribute('aria-label') || element.getAttribute('value') || '').trim().slice(0, 100),
+      selector: stableSelector(element),
       color: getComputedStyle(element).color,
       background: backgroundColor ? `rgb(${backgroundColor.join(',')})` : 'unknown',
       contrast_ratio: ratio === null ? null : Math.round(ratio * 100) / 100,

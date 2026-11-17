@@ -244,6 +244,50 @@ jobs:
           target=3
           batch_limit="${CANDIDATE_ATTEMPT_LIMIT:-12}"
           max_total_attempts=$((batch_limit * 2))
+          target_branch="chatgpt"
+          result_slug="$(python - "$JOB_ID" <<'PY'
+          import json, os, pathlib, re, sys
+          job_path = pathlib.Path(os.environ.get("PRIVATE_SOURCE_ROOT", "private-source")) / "private_automation/queue/jobs" / f"{sys.argv[1]}.json"
+          job = json.loads(job_path.read_text(encoding="utf-8"))
+          slug = job.get("result_slug", "")
+          if job.get("provider") != "chatgpt" or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", slug):
+              raise SystemExit("The private ChatGPT job record has no valid result slug.")
+          print(slug)
+          PY
+          )"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE/private-results"
+          git -C private-results config user.name "github-actions[bot]"
+          git -C private-results config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          persist_candidate_evidence() {
+            local candidate_dir="$1"
+            local candidate_name
+            candidate_name="$(basename "$candidate_dir")"
+            local payload="${RUNNER_TEMP}/chatgpt-candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${candidate_name}"
+            local relative_candidate="results/${result_slug}/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/candidates/${candidate_name}"
+            mkdir -p "$payload"
+            cp -a "$candidate_dir/." "$payload/"
+            for save_retry in 1 2 3 4 5 6 7 8 9 10; do
+              git -C private-results fetch origin "$target_branch"
+              git -C private-results reset --hard "origin/$target_branch"
+              mkdir -p "private-results/${relative_candidate}"
+              cp -a "$payload/." "private-results/${relative_candidate}/"
+              mkdir -p "private-results/private_automation/queue/jobs"
+              cp "$PRIVATE_SOURCE_ROOT/private_automation/queue/jobs/${JOB_ID}.json" "private-results/private_automation/queue/jobs/${JOB_ID}.json"
+              git -C private-results add -- "$relative_candidate" "private_automation/queue/jobs/${JOB_ID}.json"
+              if git -C private-results diff --cached --quiet; then
+                echo "Candidate evidence already exists on private ${target_branch}: ${candidate_name}."
+                return 0
+              fi
+              git -C private-results commit -m "private: checkpoint ChatGPT candidate ${JOB_ID} ${candidate_name} [skip ci]"
+              if git -C private-results push origin "HEAD:refs/heads/${target_branch}"; then
+                echo "Checkpointed ${candidate_name} on the private ${target_branch} branch."
+                return 0
+              fi
+              sleep 2
+            done
+            echo "Could not checkpoint ${candidate_name} to private ${target_branch} after ten attempts."
+            return 1
+          }
           candidate_dirs=()
           previous_candidate_dir=""
           prior_job_id="${PRIOR_JOB_ID:-}"
@@ -289,6 +333,10 @@ jobs:
                 printf '{"status":"generation_failed","automated_success":false,"final_success":false,"human_visual_review_status":"pending"}\n' > "$run_dir/run_notes.json"
                 previous_candidate_dir="$run_dir"
                 echo "::notice title=Candidate failure::Batch attempt ${batch_attempt} failed before generation: source-context preparation failed; ${successful} of ${target} distinct-template passes so far."
+                if ! persist_candidate_evidence "$run_dir"; then
+                  echo "::error title=Private evidence checkpoint failed::Stopping generation so the final evidence save can retry."
+                  exit 1
+                fi
                 continue
               fi
               if [[ "$candidate_index" -eq $((prior_attempts + 1)) ]]; then
@@ -349,6 +397,10 @@ jobs:
               else
                 echo "::notice title=Candidate failure::Batch attempt ${batch_attempt} of ${batch_attempt_limit} did not pass (candidate ${attempt} overall): ${failure_summary}; ${successful} of ${target} distinct-template passes so far."
               fi
+              if ! persist_candidate_evidence "$run_dir"; then
+                echo "::error title=Private evidence checkpoint failed::Stopping generation so the final evidence save can retry."
+                exit 1
+              fi
             done
             if [[ "$successful" -ge "$target" || "$attempt" -ge "$max_total_attempts" ]]; then break; fi
             if ! python - "$successful" "$attempt" <<'PY'
@@ -382,7 +434,7 @@ jobs:
           PY
           echo "Generation finished: ${successful}/${target} automated passes after ${attempt} attempt(s)."
           if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
-            printf '## Private ChatGPT candidate batch\n\n- Distinct-template automated passes: **%s/%s**\n- Attempts: **%s** total, **%s** in this run\n- Candidate files are intended for private storage; check the save step below for confirmation.\n' "$successful" "$target" "$attempt" "$new_attempts" >> "$GITHUB_STEP_SUMMARY"
+            printf '## Private ChatGPT candidate batch\n\n- Distinct-template automated passes: **%s/%s**\n- Attempts: **%s** total, **%s** in this run\n- Candidate evidence is checkpointed to the private `chatgpt` branch after each completed attempt.\n' "$successful" "$target" "$attempt" "$new_attempts" >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Save all candidate evidence to the private repository

@@ -105,6 +105,14 @@ def _is_source_image_host_allowed(image_url: str, source_domain: str) -> bool:
     return any(host == suffix or host.endswith("." + suffix) for suffix in SOURCE_IMAGE_CDN_SUFFIXES)
 
 
+def _read_json(path: Path) -> dict:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
 def _canonical_source_image_url(image_url: str) -> str:
     """Drop Wix resize transforms so the prompt carries a compact original asset URL."""
     parsed = urlsplit(image_url)
@@ -140,6 +148,11 @@ def _retry_guidance(previous_candidate: Path | None) -> str:
     corrections = []
     if failures & {"image_coverage", "image_alt_text_present", "hero_has_image", "hero_images_load_ok", "source_site_hero_photo_used", "source_site_photos_used", "source_site_photos_load_ok", "browser_visible_content_images_load_in_browser", "browser_hero_image_loads_desktop_and_mobile"}:
         corrections.append("Use three distinct image assets that load successfully. Prefer validated source photos; use the validated fallback URLs supplied in the brief when source photos are insufficient. Do not emit empty or incomplete image paths.")
+    if failures & {"images_use_source_or_category_assets", "hero_uses_source_or_category_asset"}:
+        corrections.append(
+            "Use only the exact URLs already listed under DESIGN INPUT project_images for every img/src/srcset and CSS background-image. "
+            "Do not invent, transform, proxy, or substitute image URLs. Use a verified source photo when relevant and a validated category fallback otherwise."
+        )
     if "browser_hero_media_covers_hero_desktop_and_mobile" in failures:
         corrections.append("Place a loaded background or image across the full hero container at desktop and mobile sizes; do not use a split-column hero.")
     if failures & {"cta_buttons_no_arrows", "browser_cta_arrows_absent_desktop_and_mobile"}:
@@ -160,6 +173,50 @@ def _retry_guidance(previous_candidate: Path | None) -> str:
         corrections.append("Include every requested section with its own clear heading and substantial supporting content; missing or incomplete sections fail the candidate.")
     if "browser_mobile_has_no_horizontal_overflow" in failures:
         corrections.append("Prevent any element from creating horizontal page overflow at the mobile viewport.")
+    if "browser_primary_ctas_readable_desktop_and_mobile" in failures:
+        browser_report = _read_json(previous_candidate / "debug" / "browser_qa.json")
+        measured = []
+        viewports = browser_report.get("viewports", {}) if isinstance(browser_report, dict) else {}
+        if isinstance(viewports, dict):
+            for viewport_name in ("desktop", "mobile"):
+                viewport = viewports.get(viewport_name, {})
+                contrast = viewport.get("primary_cta_contrast", {}) if isinstance(viewport, dict) else {}
+                for issue in contrast.get("issues", []) if isinstance(contrast, dict) else []:
+                    if isinstance(issue, dict):
+                        label = " ".join(str(issue.get("text", "")).split())[:80]
+                        ratio = issue.get("contrast_ratio")
+                        measured.append(f"{viewport_name} CTA {label!r}: measured {ratio}:1 ({issue.get('reason', 'contrast failure')})")
+        detail = " Measured failures: " + "; ".join(measured[:6]) + "." if measured else ""
+        corrections.append(
+            "Give every visible primary CTA an opaque, solid button surface and foreground color that measures at least 4.5:1 "
+            "at both desktop and mobile sizes; preserve its label and action." + detail
+        )
+    if "browser_template_layout_signature_matches" in failures:
+        browser_report = _read_json(previous_candidate / "debug" / "browser_qa.json")
+        layout = browser_report.get("template_layout", {}) if isinstance(browser_report, dict) else {}
+        if isinstance(layout, dict):
+            required_layout = {
+                "forty": "#banner.major hero; at least three media tiles inside main .tiles; desktop grid/flex with at least two columns",
+                "landed": "#banner hero; at least three .spotlight sections carrying style1/style2/style3; at least two alternating media sides",
+                "story": ".banner.fullscreen hero; at least two .spotlight sections; a .gallery or .items region; orient-left and orient-right sections with alternating media sides",
+            }.get(str(layout.get("profile", "")), "match the selected template reference's defining hero and section structure")
+            expected = {
+                "profile": layout.get("profile"),
+                "template": layout.get("slug"),
+                "signature_id": layout.get("signature_id"),
+                "required_structure": required_layout,
+            }
+            actual = {
+                key: value for key, value in layout.items()
+                if key not in {"status", "pass", "profile", "slug", "signature_id"}
+            }
+            corrections.append(
+                "Correct the template structure to match the selected reference. Expected signature: "
+                + json.dumps(expected, ensure_ascii=False, separators=(",", ":"))
+                + "; actual rendered signature: "
+                + json.dumps(actual, ensure_ascii=False, separators=(",", ":"))
+                + ". Make only the structural changes needed to satisfy the missing signature elements."
+            )
     if not corrections:
         corrections.append("Correct the previous candidate's automated quality failures and keep the required HTML/CSS part markers exact.")
     return "\n\nRETRY GUIDANCE (specific automated failures from the previous candidate):\n- " + "\n- ".join(corrections)
