@@ -332,6 +332,7 @@ jobs:
                 "${retry_flags[@]}" > "${RUNNER_TEMP}/chatgpt-private/context-${candidate_index}.log" 2>&1; then
                 printf '{"status":"generation_failed","automated_success":false,"final_success":false,"human_visual_review_status":"pending"}\n' > "$run_dir/run_notes.json"
                 previous_candidate_dir="$run_dir"
+                cp "${RUNNER_TEMP}/chatgpt-private/context-${candidate_index}.log" "$run_dir/debug/context-preparation.log" 2>/dev/null || true
                 echo "::notice title=Candidate failure::Batch attempt ${batch_attempt} failed before generation: source-context preparation failed; ${successful} of ${target} distinct-template passes so far."
                 if ! persist_candidate_evidence "$run_dir"; then
                   echo "::error title=Private evidence checkpoint failed::Stopping generation so the final evidence save can retry."
