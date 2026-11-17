@@ -114,6 +114,21 @@ class PromptAndWorkflowTests(unittest.TestCase):
         self.assertNotIn("refs/heads/fallback", workflow)
         self.assertLess(workflow.index("Check out private Duck.ai evidence branch before generation"), workflow.index("Generate candidate sites"))
 
+    def test_queue_only_private_checkouts_use_blob_filter_and_sparse_paths(self):
+        workflow = (REPO / ".github" / "workflows" / "duckai-private-queue.yml").read_text(encoding="utf-8")
+        queue_checkout_names = (
+            "Check out private input records",
+            "Check out legacy private input records",
+            "Check out private input records for live checkpoints",
+        )
+        for name in queue_checkout_names:
+            step = workflow.split(f"- name: {name}", 1)[1].split("\n      - name:", 1)[0]
+            self.assertIn("filter: blob:none", step, name)
+            self.assertIn("sparse-checkout: private_automation/queue/", step, name)
+        evidence_checkout = workflow.split("- name: Check out private Duck.ai evidence branch before generation", 1)[1].split("\n      - name:", 1)[0]
+        self.assertIn("fetch-depth: 0", evidence_checkout)
+        self.assertNotIn("sparse-checkout:", evidence_checkout)
+
     def test_source_audit_and_generation_use_separate_clean_profiles(self):
         runner = (AUTOMATION / "run_duckai.py").read_text(encoding="utf-8")
         self.assertIn("duckai-source-audit-profile-", runner)

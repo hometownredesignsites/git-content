@@ -73,6 +73,8 @@ jobs:
           token: ${{ secrets.PRIVATE_RESULTS_TOKEN }}
           path: private-source
           fetch-depth: 1
+          filter: blob:none
+          sparse-checkout: private_automation/queue/
 
       - name: Check out legacy private input records
         if: steps.validate_marker.outcome == 'success'
@@ -83,6 +85,8 @@ jobs:
           token: ${{ secrets.PRIVATE_RESULTS_TOKEN }}
           path: private-source-main
           fetch-depth: 1
+          filter: blob:none
+          sparse-checkout: private_automation/queue/
 
       - name: Load and mask private target fields
         env:
@@ -173,6 +177,8 @@ jobs:
           token: ${{ secrets.PRIVATE_RESULTS_TOKEN }}
           path: private-source-live
           fetch-depth: 1
+          filter: blob:none
+          sparse-checkout: private_automation/queue/
 
       - name: Check out private Duck.ai evidence branch before generation
         if: steps.validate_marker.outcome == 'success'
