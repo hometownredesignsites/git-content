@@ -299,13 +299,14 @@ jobs:
             action_log="${RUNNER_TEMP}/duckai-private-${attempt}.log"
             new_attempt=$((attempt - prior_attempts))
             batch_attempt_limit="$((max_total_attempts - prior_attempts))"
-            echo "::notice title=Candidate progress::Batch attempt ${new_attempt} of ${batch_attempt_limit} started (candidate ${attempt} overall); ${successful} of ${target} passes so far."
+            template_slot="$(python duckai_automation/scripts/continuation.py next-slot --candidates-dir duckai-runs)"
+            echo "::notice title=Candidate progress::Batch attempt ${new_attempt} of ${batch_attempt_limit} started (candidate ${attempt} overall; HTML5 UP slot ${template_slot}); ${successful} of ${target} distinct-template passes so far."
             set +e
-            CANDIDATE_INDEX="$attempt" GITHUB_STEP_SUMMARY="" xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' python -u duckai_automation/run_duckai.py > "$action_log" 2>&1
+            CANDIDATE_INDEX="$attempt" DESIGN_TEMPLATE_SLOT="$template_slot" GITHUB_STEP_SUMMARY="" xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' python -u duckai_automation/run_duckai.py > "$action_log" 2>&1
             candidate_exit=$?
             set -e
             attempt_outcome="did not pass"
-            if [[ "$candidate_exit" -eq 0 ]] && python -c 'import json,sys; n=json.load(open(sys.argv[1], encoding="utf-8")); raise SystemExit(0 if n.get("counted_as_pass", n.get("automated_success")) is True else 1)' "$run_dir/run_notes.json" >/dev/null 2>&1; then
+            if [[ "$candidate_exit" -eq 0 ]] && python -c 'import json,sys; n=json.load(open(sys.argv[1], encoding="utf-8")); ok=n.get("counted_as_pass", n.get("automated_success")) is True and n.get("template_layout_passed") is True and n.get("template_slot") in (1,2,3); raise SystemExit(0 if ok else 1)' "$run_dir/run_notes.json" >/dev/null 2>&1; then
               attempt_outcome="passed"
               successful="$(python duckai_automation/scripts/continuation.py pass-count --candidates-dir duckai-runs)"
             fi

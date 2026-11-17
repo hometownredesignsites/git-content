@@ -809,9 +809,38 @@ def assess_website(prompt, session_dir):
         or re.search(r"html5up\.net", visible_links, re.IGNORECASE)
     )
 
+    debug_dir = session_dir / "debug"
+    template_audit = {}
+    palette_audit = {}
+    try:
+        template_audit = json.loads((debug_dir / "design_reference.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        pass
+    try:
+        palette_audit = json.loads((debug_dir / "palette.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        pass
+    selected_template = template_audit.get("design_reference", {}) if isinstance(template_audit, dict) else {}
+    template_values = [
+        str(selected_template.get("name", "")).strip(),
+        str(selected_template.get("template_url", "")).strip(),
+        str(selected_template.get("license_url", "")).strip(),
+    ]
+    html_comments = "\n".join(re.findall(r"<!--[\s\S]*?-->", html))
+    css_comments = "\n".join(re.findall(r"/\*[\s\S]*?\*/", css))
+    template_selected = bool(template_audit.get("status") == "selected" and all(template_values))
+    template_attribution_html = template_selected and all(value.casefold() in html_comments.casefold() for value in template_values)
+    template_attribution_css = template_selected and all(value.casefold() in css_comments.casefold() for value in template_values)
+
     checks = {
         "html_file_present": bool(html),
         "no_visible_template_credit": not template_credit_visible,
+        "selected_html5up_template_recorded": template_selected,
+        "html5up_attribution_in_html_comment": template_attribution_html,
+        "html5up_attribution_in_css_comment": template_attribution_css,
+        "assigned_palette_tokens_match": palette_audit.get("token_values_match") is True,
+        "assigned_palette_tokens_used": palette_audit.get("required_tokens_used") is True,
+        "assigned_palette_contrast_passes": palette_audit.get("contrast_passed") is True,
         "cta_buttons_no_arrows": not parser.cta_arrow_issues,
         "accessible_mobile_hamburger": parser.has_accessible_mobile_hamburger(),
         "css_file_present": bool(css),

@@ -23,10 +23,14 @@ try:
     from .scripts.source_brief import build_compact_source_brief, category_fallback_candidates, format_retry_guidance
     from .scripts.source_images import collect_source_images
     from .scripts.site_quality import _image_loads_ok
+    from .scripts.template_scaffolds import TEMPLATES, scaffold_context, supported_references, template_slug
+    from .scripts.palette import PALETTES
 except ImportError:  # Direct execution from duckai_automation/run_duckai.py.
     from scripts.source_brief import build_compact_source_brief, category_fallback_candidates, format_retry_guidance
     from scripts.source_images import collect_source_images
     from scripts.site_quality import _image_loads_ok
+    from scripts.template_scaffolds import TEMPLATES, scaffold_context, supported_references, template_slug
+    from scripts.palette import PALETTES
 
 
 ROOT = Path(__file__).resolve().parent
@@ -614,16 +618,21 @@ def build_initial_prompt(
 ) -> str:
     template_context = ""
     if design_reference:
-        patterns = [
-            " ".join(str(pattern).split())[:120]
-            for pattern in design_reference.get("patterns_to_adapt", [])[:3]
-            if str(pattern).strip()
-        ]
-        template_context = (
-            f"Verified structural reference: {design_reference['name']} ({design_reference['url']}); "
-            f"license {design_reference['license_url']}. Adapt only these patterns: "
-            f"{json.dumps(patterns, ensure_ascii=False, separators=(',', ':'))}. "
-            "Add the template, source, license, and adaptation note in a non-rendering HTML comment.\n\n"
+        design_reference = dict(design_reference)
+        design_reference.setdefault("template_url", design_reference.get("url", ""))
+        slug = template_slug(design_reference)
+        canonical = next((item for item in supported_references() if template_slug(item) == slug), None)
+        if canonical:
+            design_reference = {**canonical, **design_reference}
+        default_slot = next((index for index, key in enumerate(TEMPLATES, start=1) if key == slug), 1)
+        slot = int(design_reference.get("slot") or default_slot)
+        design_reference["slot"] = slot
+        template_context = scaffold_context(design_reference) if slug else ""
+        palette = PALETTES[slot]
+        template_context += (
+            f"PALETTE SLOT {slot} ({palette['name']}): define and use CSS variables "
+            "--ink, --ink-soft, --paper, --surface, --accent, --accent-dark, "
+            "--accent-soft, --accent-warm, and --line. Keep text contrast at least 4.5:1.\n\n"
         )
     identity = (
         f"BUSINESS: {json.dumps(business_name, ensure_ascii=False)}; "
@@ -655,6 +664,17 @@ def build_initial_prompt(
             "Reduce boilerplate while preserving verified facts and source URLs."
         )
     return prompt
+
+
+def assigned_design_reference(candidate_index: int, slot: int | None = None) -> dict:
+    """Assign one of the maintained HTML5 UP scaffold slots to a candidate."""
+    slot = slot or (((candidate_index - 1) % len(TEMPLATES)) + 1)
+    if isinstance(slot, bool) or slot not in {1, 2, 3}:
+        raise ValueError("design template slot must be 1, 2, or 3")
+    reference = dict(supported_references()[slot - 1])
+    reference["url"] = reference["template_url"]
+    reference["slot"] = slot
+    return reference
 
 
 def _previous_retry_guidance(candidate_index: int) -> str:
@@ -911,6 +931,18 @@ def run() -> None:
 
     RUN_DIR.mkdir(parents=True, exist_ok=False)
     (RUN_DIR / "debug").mkdir(parents=True)
+    slot_override = os.environ.get("DESIGN_TEMPLATE_SLOT", "").strip()
+    design_reference = assigned_design_reference(
+        int(CANDIDATE_INDEX), int(slot_override) if slot_override else None
+    )
+    design_plan = {"status": "selected", "design_references": supported_references()}
+    design_audit = {"status": "selected", "template_slot": design_reference["slot"], "design_reference": design_reference}
+    (RUN_DIR / "debug" / "design_references.json").write_text(
+        json.dumps(design_plan, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+    (RUN_DIR / "debug" / "design_reference.json").write_text(
+        json.dumps(design_audit, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
     (RUN_DIR / "debug" / "inputs.json").write_text(
         json.dumps(
             {
@@ -921,6 +953,9 @@ def run() -> None:
                 "industry_category": industry_category,
                 "location": location,
                 "site_index": int(SITE_INDEX),
+                "template_slot": design_reference["slot"],
+                "template_name": design_reference["name"],
+                "template_url": design_reference["template_url"],
             },
             indent=2,
             ensure_ascii=False,
@@ -1035,7 +1070,7 @@ def run() -> None:
                             website_request,
                             design_brief,
                             source_url,
-                            source_assessment.get("design_reference") if source_url else None,
+                            design_reference,
                             business_name,
                             industry_category,
                             location,
@@ -1067,6 +1102,15 @@ def run() -> None:
 
     CURRENT_STAGE = "assemble"
     subprocess.run([sys.executable, str(ASSEMBLE_SCRIPT), str(RUN_DIR)], check=True, cwd=REPO)
+    CURRENT_STAGE = "template_and_palette_repairs"
+    subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "palette.py"), str(RUN_DIR)],
+        check=True, cwd=REPO,
+    )
+    subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "ensure_template_attribution.py"), str(RUN_DIR)],
+        check=True, cwd=REPO,
+    )
     CURRENT_STAGE = "browser_qa_and_repair"
     print(f"Candidate {CANDIDATE_INDEX}: running browser QA, checker, and at most one measured repair pass.")
     report, repair_result, quality_gate = run_quality_with_repair(website_request, source_brief)
@@ -1078,6 +1122,12 @@ def run() -> None:
         "business_name": business_name,
         "industry_category": industry_category,
         "location": location,
+        "template_slot": design_reference["slot"],
+        "template_name": design_reference["name"],
+        "template_url": design_reference["template_url"],
+        "template_layout_passed": bool(
+            _read_json(RUN_DIR / "debug" / "browser_qa_final.json").get("template_layout", {}).get("pass")
+        ),
         "automated_success": bool(report.get("automated_success")),
         "counted_as_pass": bool(quality_gate.get("candidate_passed")),
         "success_gate": {

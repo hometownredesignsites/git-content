@@ -12,6 +12,7 @@ sys.path.insert(0, str(AUTOMATION))
 from run_duckai import (
     MAX_INITIAL_PROMPT_CHARS,
     _verified_source_assets,
+    assigned_design_reference,
     build_initial_prompt,
     build_quality_prompt,
     validate_source_assessment,
@@ -20,6 +21,15 @@ from scripts.summarize_candidate_failure import summarize
 
 
 class PromptAndWorkflowTests(unittest.TestCase):
+    def test_candidate_indices_cycle_the_three_html5up_templates(self):
+        references = [assigned_design_reference(index) for index in range(1, 4)]
+        self.assertEqual([item["name"] for item in references], ["Forty", "Landed", "Story"])
+        for item in references:
+            prompt = build_initial_prompt("Redesign this site.", "Use source-led visuals.", design_reference=item)
+            self.assertIn(item["name"], prompt)
+            self.assertIn(item["template_url"], prompt)
+            self.assertIn("REQUIRED LAYOUT SIGNATURE", prompt)
+
     def test_quality_prompt_uses_the_same_verified_asset_allowlist_as_generation(self):
         prompt = build_quality_prompt(
             "Redesign the flooring company website.",

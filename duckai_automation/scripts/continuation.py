@@ -32,7 +32,7 @@ def candidate_indices(prior_attempts: int, batch_limit: int = MAX_ATTEMPTS_PER_B
     return list(range(prior_attempts + 1, prior_attempts + batch_limit + 1))
 
 
-def passing_candidates(candidates_dir: Path) -> list[Path]:
+def automated_passing_candidates(candidates_dir: Path) -> list[Path]:
     found = []
     if candidates_dir.is_dir():
         for candidate in sorted(candidates_dir.glob("run-*-site-1-candidate-*")):
@@ -40,6 +40,38 @@ def passing_candidates(candidates_dir: Path) -> list[Path]:
             if notes and notes.get("counted_as_pass", notes.get("automated_success")) is True:
                 found.append(candidate)
     return found
+
+
+def passing_candidates(candidates_dir: Path) -> list[Path]:
+    found = []
+    covered_slots: set[int] = set()
+    for candidate in automated_passing_candidates(candidates_dir):
+        notes = read_json(candidate / "run_notes.json") or {}
+        slot = notes.get("template_slot")
+        if (
+            notes.get("template_layout_passed") is True
+            and isinstance(slot, int) and not isinstance(slot, bool) and slot in {1, 2, 3}
+            and slot not in covered_slots
+        ):
+            found.append(candidate)
+            covered_slots.add(slot)
+    return found
+
+
+def next_template_slot(candidates_dir: Path) -> int:
+    """Choose the least-tried slot that still lacks a qualifying pass."""
+    tried = {1: 0, 2: 0, 3: 0}
+    passed_slots = {
+        (read_json(candidate / "run_notes.json") or {}).get("template_slot")
+        for candidate in passing_candidates(candidates_dir)
+    }
+    if candidates_dir.is_dir():
+        for candidate in candidates_dir.glob("run-*-site-1-candidate-*"):
+            slot = (read_json(candidate / "run_notes.json") or {}).get("template_slot")
+            if isinstance(slot, int) and not isinstance(slot, bool) and slot in tried:
+                tried[slot] += 1
+    eligible = [slot for slot in tried if slot not in passed_slots]
+    return min(eligible or tried.keys(), key=lambda slot: (tried[slot], slot))
 
 
 def access_gate_evidence(candidates_dir: Path) -> list[str]:
@@ -93,7 +125,10 @@ def inherit_passing_candidates(
         or int(status.get("successful_candidates", -1) or 0) != expected_passes
     ):
         raise ValueError("Parent run status does not authorize this continuation")
-    source_candidates = passing_candidates(parent_dir / "candidates")
+    # Preserve earlier automated candidates in continuation evidence, even if
+    # they predate template-slot qualification. They are not counted toward
+    # the new three-distinct-template success gate.
+    source_candidates = automated_passing_candidates(parent_dir / "candidates")
     if len(source_candidates) != expected_passes:
         raise ValueError("Parent passing-candidate folders do not match its status")
     prefix = destination_root / f"run-{current_run_id}-{current_run_attempt}-site-1-candidate-inherited"
@@ -166,6 +201,8 @@ def main() -> None:
     inherit.add_argument("--current-run-attempt", type=int, required=True)
     count = subparsers.add_parser("pass-count")
     count.add_argument("--candidates-dir", type=Path, required=True)
+    next_slot = subparsers.add_parser("next-slot")
+    next_slot.add_argument("--candidates-dir", type=Path, required=True)
     status = subparsers.add_parser("status")
     status.add_argument("--output", type=Path, required=True)
     status.add_argument("--job-id", required=True)
@@ -187,6 +224,8 @@ def main() -> None:
         print(json.dumps([str(path) for path in paths]))
     elif args.command == "pass-count":
         print(len(passing_candidates(args.candidates_dir)))
+    elif args.command == "next-slot":
+        print(next_template_slot(args.candidates_dir))
     elif args.command == "status":
         write_status_from_args(args)
 

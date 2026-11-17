@@ -8,10 +8,38 @@ from pathlib import Path
 
 AUTOMATION = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(AUTOMATION))
-from scripts.continuation import candidate_indices, inherit_passing_candidates, write_batch_status
+from scripts.continuation import (candidate_indices, inherit_passing_candidates, next_template_slot,
+                                  passing_candidates, write_batch_status)
 
 
 class ContinuationTests(unittest.TestCase):
+    def test_success_count_requires_a_distinct_verified_template_slot(self):
+        with tempfile.TemporaryDirectory() as temp:
+            candidates = Path(temp)
+            for index, slot, verified in ((1, 1, True), (2, 1, True), (3, 2, True), (4, 3, False)):
+                candidate = candidates / f"run-1-1-site-1-candidate-{index}"
+                candidate.mkdir()
+                (candidate / "run_notes.json").write_text(json.dumps({
+                    "counted_as_pass": True,
+                    "template_slot": slot,
+                    "template_layout_passed": verified,
+                }), encoding="utf-8")
+            self.assertEqual(len(passing_candidates(candidates)), 2)
+
+    def test_next_slot_prioritizes_templates_without_a_qualifying_pass(self):
+        with tempfile.TemporaryDirectory() as temp:
+            candidates = Path(temp)
+            entries = ((1, True), (1, False), (2, False), (3, False))
+            for index, (slot, passed) in enumerate(entries, start=1):
+                candidate = candidates / f"run-1-1-site-1-candidate-{index}"
+                candidate.mkdir()
+                (candidate / "run_notes.json").write_text(json.dumps({
+                    "counted_as_pass": passed,
+                    "template_slot": slot,
+                    "template_layout_passed": passed,
+                }), encoding="utf-8")
+            self.assertEqual(next_template_slot(candidates), 2)
+
     def test_candidate_indices_continue_at_13_and_stop_at_24(self):
         self.assertEqual(candidate_indices(0, 12), list(range(1, 13)))
         self.assertEqual(candidate_indices(12, 12), list(range(13, 25)))

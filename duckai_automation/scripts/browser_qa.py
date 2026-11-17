@@ -15,6 +15,66 @@ from playwright.sync_api import sync_playwright
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 from site_quality import SECTION_ALIASES, _required_sections  # noqa: E402
+from template_scaffolds import qa_profile  # noqa: E402
+
+
+TEMPLATE_LAYOUT_JS = r"""profile => {
+  const main = document.querySelector('main') || document.body;
+  const h1 = document.querySelector('h1');
+  const hero = h1 && (h1.closest('section') || h1.closest('[class*="hero" i]') || h1.closest('main'));
+  const sections = Array.from(main.querySelectorAll(':scope > section, :scope > div > section'))
+    .filter(section => section !== hero && !(hero && hero.contains(section)));
+  const mediaSide = section => {
+    const media = section.querySelector('.image, picture, img, video, [style*="background-image"]');
+    if (!media) return null;
+    const sr = section.getBoundingClientRect(), mr = media.getBoundingClientRect();
+    if (!sr.width || mr.width < sr.width * 0.18) return null;
+    return mr.left + mr.width / 2 < sr.left + sr.width / 2 ? 'left' : 'right';
+  };
+  const spotlights = sections.filter(section => section.matches('.spotlight'));
+  const sides = spotlights.map(mediaSide);
+  const alternations = sides.slice(1).reduce((n, side, i) => n + (side && sides[i] && side !== sides[i] ? 1 : 0), 0);
+  let evidence = {}, pass = false;
+  if (profile.profile === 'forty') {
+    const tiles = main.querySelector('.tiles');
+    const articles = tiles ? Array.from(tiles.querySelectorAll(':scope > article')) : [];
+    const display = tiles ? getComputedStyle(tiles).display : 'missing';
+    const columns = display === 'grid' ? getComputedStyle(tiles).gridTemplateColumns.split(/\s+/).length :
+      new Set(articles.map(item => Math.round(item.getBoundingClientRect().left / 16))).size;
+    const mediaCount = articles.filter(item => item.querySelector('img,picture,video,.image,[style*="background-image"]')).length;
+    evidence = {tile_count: articles.length, media_tile_count: mediaCount, tile_display: display, desktop_columns: columns};
+    pass = !!(hero && hero.id === 'banner' && hero.classList.contains('major') && articles.length >= 3 && mediaCount >= 3 && columns >= 2);
+  } else if (profile.profile === 'landed') {
+    const styles = ['style1','style2','style3'].every(name => spotlights.some(section => section.classList.contains(name)));
+    evidence = {spotlight_count: spotlights.length, has_three_styles: styles, spotlight_media_sides: sides,
+      spotlight_side_alternations: alternations, media_sides: sides, side_alternations: alternations};
+    pass = !!(hero && hero.id === 'banner' && spotlights.length >= 3 && styles && alternations >= 2);
+  } else if (profile.profile === 'story') {
+    const gallery = !!main.querySelector('.gallery,.items');
+    const orientations = !!(main.querySelector('.orient-left') && main.querySelector('.orient-right'));
+    evidence = {divided_page: !!document.querySelector('.divided,#wrapper.divided'), gallery_or_items: gallery,
+      both_orientations: orientations, spotlight_count: spotlights.length, spotlight_media_sides: sides,
+      spotlight_side_alternations: alternations, media_sides: sides, side_alternations: alternations};
+    pass = !!(hero && hero.classList.contains('banner') && hero.classList.contains('fullscreen') &&
+      evidence.divided_page && gallery && orientations && spotlights.length >= 2 && alternations >= 1);
+  }
+  const expected = profile.profile === 'forty' ? {hero: '#banner.major', tiles: '>=3 image-backed articles in a 2+ column grid'} :
+    profile.profile === 'landed' ? {hero: '#banner', spotlights: '>=3 sections with style1/style2/style3 and >=2 media-side alternations'} :
+    {hero: '.banner.fullscreen', spotlights: '>=2 alternating orient-left/orient-right panels', gallery: '.gallery or .items'};
+  return {status: pass ? 'pass' : 'fail', pass, profile: profile.profile, slug: profile.slug,
+    signature_id: profile.signature_id, expected, actual: evidence, ...evidence};
+}""";
+
+
+def _selected_template_profile(run_dir: Path):
+    try:
+        audit = json.loads((run_dir / "debug" / "design_reference.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None, {"status": "fail", "pass": False, "reason": "selected HTML5 UP template audit is missing"}
+    profile = qa_profile(audit.get("design_reference") if isinstance(audit, dict) else None)
+    if not profile or audit.get("status") != "selected":
+        return None, {"status": "fail", "pass": False, "reason": "selected HTML5 UP template is unsupported"}
+    return profile, {"status": "pending", "pass": False, "slug": profile["slug"], "signature_id": profile["signature_id"]}
 
 
 SECTION_VISIBILITY_JS = r"""(required) => {
