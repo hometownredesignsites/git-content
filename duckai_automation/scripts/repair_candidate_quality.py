@@ -19,6 +19,7 @@ except ImportError:  # Direct execution from the workflow script directory.
 
 
 IMAGE_CHECKS = {
+    "hero_has_image", "hero_images_load_ok", "all_images_load_ok", "image_coverage",
     "source_site_hero_photo_used", "source_site_photos_used", "source_site_photos_load_ok",
     "images_use_source_or_category_assets", "hero_uses_source_or_category_asset",
 }
@@ -27,6 +28,7 @@ LAYOUT_CHECK = "browser_template_layout_signature_matches"
 SAFE_SELECTOR = re.compile(r"^[A-Za-z0-9_#.:,>+~*()\s-]+$")
 CTA_MARKER = "/* QA repair pass: measured primary CTA contrast. */"
 LAYOUT_MARKER = "/* QA repair pass: measured template layout. */"
+HERO_IMAGE_MARKER = "/* QA repair pass: verified hero fallback. */"
 
 
 class _Nodes(HTMLParser):
@@ -152,6 +154,33 @@ def _repair_images(candidate: Path, checker: dict, context: str) -> list[dict]:
         if next_source != source or next_css != css:
             replacements.append({"from": url, "to": new_url, "hero": url in hero})
             source, css = next_source, next_css
+    if not hero and checker.get("hero_image_present") is False and repair_images:
+        parser = _Nodes(source)
+        try:
+            parser.feed(source)
+        except Exception:
+            parser.hero = None
+        hero_node = parser.hero
+        if hero_node and (
+            hero_node["tag"] == "section"
+            or {"hero", "banner"} & set(hero_node["attrs"].get("class", "").casefold().split())
+        ) and HERO_IMAGE_MARKER not in css:
+            hero_url = repair_images[0]
+            start, end = hero_node["start"], hero_node["end"]
+            opening = _classes(hero_node["raw"], {"quality-repair-hero"}, set())
+            media = f'<img class="quality-repair-hero-media" src="{html.escape(hero_url, quote=True)}" alt="" aria-hidden="true">'
+            source = source[:start] + opening + media + source[end:]
+            css = css.rstrip() + (
+                f"\n{HERO_IMAGE_MARKER}\n"
+                ".quality-repair-hero{position:relative!important;isolation:isolate!important;overflow:hidden!important}"
+                ".quality-repair-hero>.quality-repair-hero-media{position:absolute!important;inset:0!important;"
+                "z-index:-1!important;width:100%!important;height:100%!important;object-fit:cover!important;"
+                "object-position:center!important;pointer-events:none!important}\n"
+            )
+            replacements.append({
+                "from": None, "to": hero_url, "hero": True,
+                "action": "inserted verified category/source image into a measured empty hero",
+            })
     if replacements:
         html_path.write_text(source, encoding="utf-8")
         css_path.write_text(css, encoding="utf-8")
@@ -240,7 +269,7 @@ def repair(candidate: Path) -> dict:
     checker, browser = _read(debug / "checker_report.json"), _read(debug / "browser_qa.json")
     context_path = debug / "website_context.md"
     context = context_path.read_text(encoding="utf-8", errors="replace") if context_path.is_file() else ""
-    failures = set(checker.get("blocking_failures", []))
+    failures = set(checker.get("repair_checks", checker.get("blocking_failures", [])))
     image_replacements = _repair_images(candidate, checker, context) if failures & IMAGE_CHECKS else []
     cta_selectors = _repair_cta(candidate, browser) if CTA_CHECK in failures else []
     layout = browser.get("template_layout", {})
@@ -250,6 +279,23 @@ def repair(candidate: Path) -> dict:
         "changed": bool(image_replacements or cta_selectors or layout_repairs),
         "triggered_failures": sorted(failures & (IMAGE_CHECKS | {CTA_CHECK, LAYOUT_CHECK})),
         "image_replacements": image_replacements,
+        "image_evidence": {
+            "failed_urls": checker.get("failed_image_urls", []),
+            "observed_hero_urls": checker.get("hero_image_urls", []),
+            "observed_image_urls": checker.get("image_urls", []),
+            "approved_source_urls": _source_image_urls_from_prompt(context),
+            "approved_category_urls": _category_fallback_image_urls_from_prompt(context),
+        } if failures & IMAGE_CHECKS else None,
+        "primary_cta_evidence": {
+            "issues": [
+                issue
+                for data in browser.get("viewports", {}).values()
+                if isinstance(data, dict)
+                for issue in data.get("primary_cta_contrast", {}).get("issues", [])
+                if isinstance(issue, dict)
+            ],
+            "minimum_text_contrast_ratio": 4.5,
+        } if CTA_CHECK in failures else None,
         "cta_selectors": cta_selectors,
         "layout_repairs": layout_repairs,
         "template_layout": {

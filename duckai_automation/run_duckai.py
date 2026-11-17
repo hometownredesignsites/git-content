@@ -21,9 +21,11 @@ from playwright.sync_api import sync_playwright
 
 try:
     from .scripts.source_brief import build_compact_source_brief, category_fallback_candidates, format_retry_guidance
+    from .scripts.source_images import collect_source_images
     from .scripts.site_quality import _image_loads_ok
 except ImportError:  # Direct execution from duckai_automation/run_duckai.py.
     from scripts.source_brief import build_compact_source_brief, category_fallback_candidates, format_retry_guidance
+    from scripts.source_images import collect_source_images
     from scripts.site_quality import _image_loads_ok
 
 
@@ -92,13 +94,13 @@ def _verified_source_assets(assessment: dict) -> list[dict]:
             if url.startswith(("https://", "http://")) and url not in seen:
                 seen.add(url)
                 candidates.append(item)
-            if len(candidates) >= 5:
+            if len(candidates) >= 24:
                 break
     if not candidates:
         return []
     with ThreadPoolExecutor(max_workers=min(5, len(candidates))) as pool:
         loaded = list(pool.map(lambda item: _image_loads_ok(str(item.get("url", ""))), candidates))
-    return [item for item, valid in zip(candidates, loaded) if valid]
+    return [item for item, valid in zip(candidates, loaded) if valid][:6]
 
 
 def fail(message: str) -> None:
@@ -664,7 +666,7 @@ def _previous_retry_guidance(candidate_index: int) -> str:
         except OSError:
             continue
         if guidance and not guidance.startswith("No targeted repair guidance"):
-            return guidance[:1800]
+        return guidance[:2500]
     return ""
 
 
@@ -738,15 +740,40 @@ def run_checker(website_request: str, generation_prompt: str = "") -> dict:
     except json.JSONDecodeError:
         report = {"final_success": False, "checker_exit_code": result.returncode, "stdout": result.stdout, "stderr": result.stderr}
     report["checker_exit_code"] = result.returncode
-    report["blocking_failures"] = [name for name, value in report.get("checks", {}).items() if value is False]
+    false_checks = [name for name, value in report.get("checks", {}).items() if value is False]
+    advisory_checks = {
+        "source_site_hero_photo_used", "source_site_photos_used", "source_site_photos_load_ok",
+    }
+    report["repair_checks"] = false_checks
+    report["non_blocking_issues"] = [name for name in false_checks if name in advisory_checks]
+    report["pending_reviews"] = [name for name in false_checks if name == "visual_design_review_passed"]
+    report["blocking_failures"] = [
+        name for name in false_checks if name not in advisory_checks and name != "visual_design_review_passed"
+    ]
     report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return report
 
 
-def run_quality_with_repair(website_request: str, source_brief: str) -> tuple[dict, dict]:
-    """Allow exactly one measured repair pass, then render and recheck once."""
+def _read_json(path: Path) -> dict:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def run_quality_with_repair(website_request: str, source_brief: str) -> tuple[dict, dict, dict]:
+    """Independently assess, make at most one measured repair, and assess again."""
     run_browser_qa(website_request)
-    report = run_checker(website_request)
+    browser_path = RUN_DIR / "debug" / "browser_qa.json"
+    initial_browser = _read_json(browser_path)
+    (RUN_DIR / "debug" / "browser_qa_initial.json").write_text(
+        json.dumps(initial_browser, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+    report = run_checker(website_request, source_brief)
+    (RUN_DIR / "debug" / "checker_report_initial.json").write_text(
+        json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
     repair_path = ROOT / "scripts" / "repair_candidate_quality.py"
     repair_result = {"status": "not_needed", "changed": False}
     if not report.get("automated_success"):
@@ -769,16 +796,18 @@ def run_quality_with_repair(website_request: str, source_brief: str) -> tuple[di
             )
         if repair_result.get("changed"):
             run_browser_qa(website_request)
-            report = run_checker(website_request)
+            report = run_checker(website_request, source_brief)
             repair_result["rechecked"] = True
         else:
             repair_result["rechecked"] = False
 
-    browser_path = RUN_DIR / "debug" / "browser_qa.json"
-    try:
-        browser_report = json.loads(browser_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        browser_report = {}
+    browser_report = _read_json(browser_path)
+    (RUN_DIR / "debug" / "browser_qa_final.json").write_text(
+        json.dumps(browser_report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+    (RUN_DIR / "debug" / "checker_report_final.json").write_text(
+        json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
     approved_images = []
     marker = source_brief.split("VERIFIED_SOURCE_IMAGE_URLS:\n", 1)
     if len(marker) == 2:
@@ -803,7 +832,48 @@ def run_quality_with_repair(website_request: str, source_brief: str) -> tuple[di
         )
     else:
         (RUN_DIR / "debug" / "retry_guidance.txt").unlink(missing_ok=True)
-    return report, repair_result
+    initial_checker = _read_json(RUN_DIR / "debug" / "checker_report_initial.json")
+    initial_browser = _read_json(RUN_DIR / "debug" / "browser_qa_initial.json")
+    initial_failures = initial_checker.get("blocking_failures", [])
+    final_failures = report.get("blocking_failures", [])
+    passed = bool(report.get("automated_success"))
+    quality_gate = {
+        "assessment_method": "independent_playwright_and_static_checker",
+        "acceptance_gate": "automated_success",
+        "candidate_passed": passed,
+        "final_success": bool(report.get("final_success")),
+        "initial": {
+            "automated_success": bool(initial_checker.get("automated_success")),
+            "blocking_failures": initial_checker.get("blocking_failures", []),
+            "non_blocking_issues": initial_checker.get("non_blocking_issues", []),
+            "pending_reviews": initial_checker.get("pending_reviews", []),
+            "browser_qa_status": initial_browser.get("status", "missing"),
+            "evidence": ["debug/checker_report_initial.json", "debug/browser_qa_initial.json"],
+        },
+        "repair": repair_result,
+        "final": {
+            "automated_success": passed,
+            "blocking_failures": final_failures,
+            "non_blocking_issues": report.get("non_blocking_issues", []),
+            "pending_reviews": report.get("pending_reviews", []),
+            "browser_qa_status": browser_report.get("status", "missing"),
+            "evidence": ["debug/checker_report_final.json", "debug/browser_qa_final.json"],
+        },
+        "counted_as_pass_reason": (
+            (
+                "The final independent browser and static checks passed after the bounded repair/recheck."
+                if repair_result.get("changed") else
+                "The initial independent browser and static checks passed; no repair was needed."
+            ) if passed else "The final independent browser or static checks still have blocking failures."
+        ),
+    }
+    # Keep the initial/final comparison explicit even when the first assessment passed.
+    quality_gate["resolved_failures"] = sorted(set(initial_failures) - set(final_failures))
+    quality_gate["remaining_failures"] = list(final_failures)
+    (RUN_DIR / "debug" / "quality_gate.json").write_text(
+        json.dumps(quality_gate, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+    return report, repair_result, quality_gate
 
 
 def run() -> None:
@@ -854,6 +924,8 @@ def run() -> None:
     source_assessment: dict = {}
     source_brief = ""
     verified_source_assets: list[dict] = []
+    source_image_inventory: dict = {"source_assets": [], "pages_scanned": [], "errors": []}
+    fallback_images: list[dict] = []
     retry_guidance = _previous_retry_guidance(int(CANDIDATE_INDEX))
     CURRENT_STAGE = "browser_startup"
     with sync_playwright() as playwright:
@@ -892,7 +964,24 @@ def run() -> None:
                     validate_source_assessment(assessment, source_url)
                     source_assessment = assessment
                     compact_assessment = dict(assessment)
-                    verified_source_assets = _verified_source_assets(assessment)
+                    try:
+                        source_image_inventory = collect_source_images(source_url)
+                    except Exception as error:
+                        source_image_inventory = {
+                            "requested_url": source_url,
+                            "source_assets": [],
+                            "pages_scanned": [],
+                            "errors": [{"url": source_url[:500], "error": str(error)[:240]}],
+                        }
+                    (RUN_DIR / "debug" / "source_image_inventory.json").write_text(
+                        json.dumps(source_image_inventory, indent=2, ensure_ascii=False) + "\n",
+                        encoding="utf-8",
+                    )
+                    combined_source_assets = [
+                        *(assessment.get("source_assets", []) if isinstance(assessment.get("source_assets"), list) else []),
+                        *(source_image_inventory.get("source_assets", []) if isinstance(source_image_inventory.get("source_assets"), list) else []),
+                    ]
+                    verified_source_assets = _verified_source_assets({"source_assets": combined_source_assets})
                     compact_assessment["source_assets"] = verified_source_assets
                     fallback_images = _verified_category_fallbacks(industry_category)
                     source_brief = build_compact_source_brief(compact_assessment, fallback_images, source_url)
@@ -967,7 +1056,7 @@ def run() -> None:
     subprocess.run([sys.executable, str(ASSEMBLE_SCRIPT), str(RUN_DIR)], check=True, cwd=REPO)
     CURRENT_STAGE = "browser_qa_and_repair"
     print(f"Candidate {CANDIDATE_INDEX}: running browser QA, checker, and at most one measured repair pass.")
-    report, repair_result = run_quality_with_repair(website_request, source_brief)
+    report, repair_result, quality_gate = run_quality_with_repair(website_request, source_brief)
     if report.get("blocking_failures"):
         print("Candidate quality blockers: " + ", ".join(report["blocking_failures"][:8]))
     notes = {
@@ -977,7 +1066,15 @@ def run() -> None:
         "industry_category": industry_category,
         "location": location,
         "automated_success": bool(report.get("automated_success")),
+        "counted_as_pass": bool(quality_gate.get("candidate_passed")),
+        "success_gate": {
+            "name": quality_gate.get("acceptance_gate"),
+            "passed": bool(quality_gate.get("candidate_passed")),
+            "reason": quality_gate.get("counted_as_pass_reason"),
+        },
+        "quality_gate_report": "debug/quality_gate.json",
         "quality_repair": repair_result,
+        "initial_blocking_failures": quality_gate.get("initial", {}).get("blocking_failures", []),
         "blocking_failures": report.get("blocking_failures", []),
         "status": (
             "automated_checks_passed_pending_human_review"
@@ -988,8 +1085,22 @@ def run() -> None:
         "source_audit_chat_url": turn_log.get("source_audit_chat_url") or None,
         "source_url": source_url or None,
         "source_assessment_status": "pass" if source_url else "not_requested",
-        "validated_source_photo_count": len(verified_source_assets),
-        "source_photo_extraction_errors": 0,
+        "validated_source_photo_count": sum(
+            1 for item in verified_source_assets
+            if not any(term in str(item.get("type", "")).casefold() for term in ("logo", "icon", "social", "favicon"))
+        ),
+        "verified_category_fallback_count": len(fallback_images),
+        "validated_source_image_urls": [
+            str(item.get("url", "")) for item in verified_source_assets
+            if isinstance(item, dict) and item.get("url")
+            and not any(term in str(item.get("type", "")).casefold() for term in ("logo", "icon", "social", "favicon"))
+        ],
+        "verified_category_fallback_urls": [
+            str(item.get("url", "")) for item in fallback_images
+            if isinstance(item, dict) and item.get("url")
+        ],
+        "source_image_inventory_pages_scanned": len(source_image_inventory.get("pages_scanned", [])),
+        "source_photo_extraction_errors": len(source_image_inventory.get("errors", [])),
         "initial_generation_prompt_characters": turn_log.get("generation_prompt_chars", 0),
         "design_reference": (
             source_assessment.get("design_reference")
@@ -1008,8 +1119,15 @@ def run() -> None:
         with summary.open("a", encoding="utf-8") as handle:
             handle.write(f"## Duck.ai website candidate {CANDIDATE_INDEX} for site {SITE_INDEX}\n\n")
             handle.write(f"- Output: `{RUN_DIR.relative_to(REPO).as_posix()}/`\n")
-            handle.write(f"- Automated checks passed: `{str(bool(report.get('automated_success'))).lower()}`\n")
+            handle.write(f"- Counted as batch pass: `{str(bool(quality_gate.get('candidate_passed'))).lower()}` by `{quality_gate.get('acceptance_gate')}`\n")
+            handle.write(f"- Initial blockers: `{', '.join(quality_gate.get('initial', {}).get('blocking_failures', [])) or 'none'}`\n")
+            handle.write(f"- Final blockers: `{', '.join(quality_gate.get('final', {}).get('blocking_failures', [])) or 'none'}`\n")
+            handle.write("- Quality gate evidence: `debug/quality_gate.json` (initial/final browser and checker reports are saved separately).\n")
             handle.write(f"- Browser QA: `{report.get('browser_qa_status', 'missing')}`\n")
+            handle.write(
+                f"- Verified image assets: `{notes['validated_source_photo_count']}` source photo(s), "
+                f"`{notes['verified_category_fallback_count']}` category fallback(s).\n"
+            )
             if source_url:
                 handle.write(f"- Source assessment: completed in this chat for `{source_url}`; evidence saved in `debug/source_assessment.json`.\n")
                 handle.write("- Design reference: recorded in the source assessment, with its license.\n")
@@ -1037,6 +1155,12 @@ if __name__ == "__main__":
                 notes = {"candidate_index": int(CANDIDATE_INDEX), "site_index": int(SITE_INDEX)}
             notes.update({
                 "automated_success": False,
+                "counted_as_pass": False,
+                "success_gate": {
+                    "name": "automated_success",
+                    "passed": False,
+                    "reason": f"Candidate ended during {CURRENT_STAGE} before the final automated quality gate passed.",
+                },
                 "status": f"{CURRENT_STAGE}_failed",
                 "failed_stage": CURRENT_STAGE,
                 "failure_category": category,

@@ -299,7 +299,7 @@ jobs:
             candidate_exit=$?
             set -e
             attempt_outcome="did not pass"
-            if [[ "$candidate_exit" -eq 0 ]] && python -c 'import json,sys; raise SystemExit(0 if json.load(open(sys.argv[1], encoding="utf-8")).get("automated_success") else 1)' "$run_dir/run_notes.json" >/dev/null 2>&1; then
+            if [[ "$candidate_exit" -eq 0 ]] && python -c 'import json,sys; n=json.load(open(sys.argv[1], encoding="utf-8")); raise SystemExit(0 if n.get("counted_as_pass", n.get("automated_success")) is True else 1)' "$run_dir/run_notes.json" >/dev/null 2>&1; then
               attempt_outcome="passed"
               successful="$(python duckai_automation/scripts/continuation.py pass-count --candidates-dir duckai-runs)"
             fi

@@ -277,12 +277,32 @@ def format_retry_guidance(checker: dict, browser: dict, approved_images: list[st
     lines = []
     if failed:
         lines.append("Measured failures from the previous candidate: " + ", ".join(failed[:8]) + ".")
-    image_checks = {"source_site_hero_photo_used", "source_site_photos_used", "source_site_photos_load_ok",
-                    "images_use_source_or_category_assets", "hero_uses_source_or_category_asset"}
+    image_checks = {
+        "hero_has_image", "hero_images_load_ok", "all_images_load_ok", "image_coverage",
+        "image_alt_text_present", "source_site_hero_photo_used", "source_site_photos_used",
+        "source_site_photos_load_ok", "images_use_source_or_category_assets",
+        "hero_uses_source_or_category_asset",
+    }
     if any(name in image_checks and value is False for name, value in checker.get("checks", {}).items()):
         all_allowed = list(dict.fromkeys([*approved_images, *(category_fallback_images or [])]))
+        failed_urls = list(checker.get("failed_image_urls", []))
+        for viewport, data in browser.get("viewports", {}).items():
+            images = data.get("images", {}) if isinstance(data, dict) else {}
+            for issue in images.get("failures", []) if isinstance(images, dict) else []:
+                url = issue.get("src") or issue.get("url") if isinstance(issue, dict) else ""
+                if isinstance(url, str) and url and url not in failed_urls:
+                    failed_urls.append(url)
+        observed = list(checker.get("image_urls", []))
+        for url in checker.get("hero_image_urls", []):
+            if isinstance(url, str) and url and url not in observed:
+                observed.append(url)
+        unapproved_urls = [url for url in observed if isinstance(url, str) and url and url not in all_allowed]
+        if failed_urls:
+            lines.append("These exact image URLs failed to load: " + "; ".join(failed_urls[:3]) + ". Replace each with an approved URL below and recheck it in the browser.")
+        if unapproved_urls:
+            lines.append("These image URLs are outside the approved source/category set: " + "; ".join(unapproved_urls[:3]) + ". Replace them; do not alter or invent an asset URL.")
         if all_allowed:
-            lines.append("Use only these approved source or category image URLs, and use a verified source photo in the hero when one is available: " + "; ".join(all_allowed[:6]))
+            lines.append("Use only these exact approved source or category image URLs, and place a verified source photo in the hero when one is available: " + "; ".join(all_allowed[:6]))
         else:
             lines.append("No source image URLs were verified; use stable, directly loadable category-relevant image files and do not invent source asset URLs.")
     cta_issues = []
@@ -290,16 +310,23 @@ def format_retry_guidance(checker: dict, browser: dict, approved_images: list[st
         contrast = data.get("primary_cta_contrast", {}) if isinstance(data, dict) else {}
         for issue in contrast.get("issues", []) if isinstance(contrast, dict) else []:
             if isinstance(issue, dict):
-                cta_issues.append(f"{viewport} {issue.get('selector', 'CTA')}: {issue.get('contrast_ratio', 'unmeasurable')} (required {issue.get('threshold', 4.5)}:1)")
+                ratio = issue.get("contrast_ratio")
+                measured = f"{ratio}:1" if isinstance(ratio, (int, float)) else "unmeasurable"
+                cta_issues.append(
+                    f"{viewport} {issue.get('selector', 'CTA')}: {measured} "
+                    f"(required {issue.get('threshold', 4.5)}:1)"
+                )
     if cta_issues:
-        lines.append("Primary CTA contrast failed the 4.5:1 text threshold: " + "; ".join(cta_issues[:4]) + ". Use a solid, high-contrast CTA treatment.")
+        lines.append("Primary CTA contrast failed the measured threshold: " + "; ".join(cta_issues[:4]) + ". Set a solid foreground/background pair that reaches at least 4.5:1, then recheck desktop and mobile.")
     layout = browser.get("template_layout", {})
     if layout and layout.get("status") == "fail":
+        expected = json.dumps(layout.get("expected", {}), ensure_ascii=False, separators=(",", ":"))[:550]
+        actual = json.dumps(layout.get("actual", {}), ensure_ascii=False, separators=(",", ":"))[:550]
         lines.append(
             "Preserve the selected template structure. Expected: "
-            + json.dumps(layout.get("expected", {}), ensure_ascii=False, separators=(",", ":"))
+            + expected
             + "; actual: "
-            + json.dumps(layout.get("actual", {}), ensure_ascii=False, separators=(",", ":"))
+            + actual
             + ". Correct these structural mismatches without flattening the template rhythm."
         )
-    return "\n".join(lines)[:1800]
+    return "\n".join(lines)[:2500]

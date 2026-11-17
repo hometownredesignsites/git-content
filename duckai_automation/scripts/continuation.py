@@ -37,7 +37,7 @@ def passing_candidates(candidates_dir: Path) -> list[Path]:
     if candidates_dir.is_dir():
         for candidate in sorted(candidates_dir.glob("run-*-site-1-candidate-*")):
             notes = read_json(candidate / "run_notes.json")
-            if notes and notes.get("automated_success") is True:
+            if notes and notes.get("counted_as_pass", notes.get("automated_success")) is True:
                 found.append(candidate)
     return found
 

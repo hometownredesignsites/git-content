@@ -29,7 +29,7 @@ A successful automated check does not establish visual polish, image relevance, 
 
 The runner sends the business name, category, and optional location as unverified context, then requests a source assessment. The assessment should cite pages on the requested domain, distinguish observed facts from inferences and unknowns, identify source navigation, record exact contact form labels/types/required states/placeholders/options, describe visible brand elements, and identify public logo/photo assets. The runner validates citations, checks source-image bytes, and validates any selected design reference before code generation. If source validation fails, that candidate stops.
 
-The source assessment is Duck.ai's cited report, not independent human verification. The compact generation brief retains cited identity, services/locations, contact details, source-backed internal navigation, exact form fields and supplied attributes, a few selling points/FAQ answers, and a small allowlist of byte-validated source and category images. Raw audit text remains only in the audit profile and private evidence; it is not carried into the generation conversation. Location and other CSV clues must be confirmed by the website before they appear as fact. A template reference is optional; if one is used, preserve required attribution in a non-rendering HTML comment and internal run notes, not visible page content.
+The source assessment is Duck.ai's cited report, not independent human verification. The worker also scans a bounded set of public source pages for direct photo URLs, checks that each URL returns image bytes, and validates a small category fallback list before generation. For flooring sites with no usable source photos, this supplies a short, approved interior/flooring set. The compact brief retains cited identity, services/locations, contact details, source-backed internal navigation, exact form fields and supplied attributes, a few selling points/FAQ answers, and only the validated image URLs. Raw audit text remains only in the audit profile and private evidence; it is not carried into the generation conversation. Location and other CSV clues must be confirmed by the website before they appear as fact. A template reference is optional; if one is used, preserve required attribution in a non-rendering HTML comment and internal run notes, not visible page content.
 
 ## Multi-turn capture and assembly
 
@@ -39,9 +39,9 @@ The assembled files are `files/styles.css` and `files/index.html`. The runner em
 
 ## Automated QA and human review
 
-Playwright checks the inlined page at desktop and mobile viewports. Browser evidence covers rendered sections, a full-width hero, first-screen CTA, mobile menu click/keyboard behavior, horizontal overflow, and browser font/image loading. The structural checker also evaluates the generated markup, including the CTA-arrow rule.
+Playwright checks the inlined page at desktop and mobile viewports. Browser evidence covers rendered sections, a full-width hero, first-screen CTA, mobile menu click/keyboard behavior, horizontal overflow, and browser font/image loading. The structural checker also evaluates the generated markup, including the CTA-arrow rule. The first Playwright report and static checker report are saved before repair. If a measurable image, CTA-contrast, or template-layout check fails, a single targeted repair uses the checker evidence and verified asset allowlist; both checks then run again on the revised page.
 
-These deterministic checks set `automated_success`; they do not call an AI model and do not approve visual quality or factual correctness. Browser evidence includes primary CTA contrast and (when a supported template is selected) expected/actual layout signatures. Review candidate screenshots and source assessment in the private results repo. Treat a page as approved only after a human has reviewed the design, imagery, and factual content.
+These deterministic checks set the batch pass gate `counted_as_pass` (`automated_success` for older candidate records); they do not call an AI model and do not approve visual polish or factual accuracy. `debug/quality_gate.json` records initial failures, any repair, final failures, the final browser/static results, and why the candidate did or did not count as a pass. Initial and final reports are saved separately, so a repaired candidate does not hide its first failure. Browser evidence includes measured CTA contrast and, for supported templates, expected/actual layout signatures. `final_success` remains a separate review state and requires the screenshot-backed visual and image review. Review candidate screenshots and source assessment in the private results repo before using a page.
 
 ## Private result layout
 
@@ -59,7 +59,13 @@ git-content-private (branch: duckai)/results/<site-slug>/run-<workflow-id>-<atte
       debug/
         action.log
         browser_qa.json
+        browser_qa_initial.json
+        browser_qa_final.json
         checker_report.json
+        checker_report_initial.json
+        checker_report_final.json
+        quality_gate.json
+        source_image_inventory.json
         inputs.json
         source_audit_request.txt
         generation_prompt.txt
