@@ -111,6 +111,55 @@ VIEWPORT_CHECKS_JS = r"""() => {
     return rect.top >= 0 && rect.bottom <= window.innerHeight && rect.left >= 0 && rect.right <= window.innerWidth;
   });
   const ctaRect = cta ? cta.getBoundingClientRect() : null;
+  const rgb = value => {
+    const parts = String(value || '').match(/[\d.]+/g);
+    if (!parts || parts.length < 3) return null;
+    return parts.slice(0, 3).map(Number);
+  };
+  const luminance = color => color ? color.map(channel => {
+    const value = channel / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  }).reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index], 0) : null;
+  const stableSelector = element => {
+    if (element.id && document.querySelectorAll(`#${CSS.escape(element.id)}`).length === 1) return `#${CSS.escape(element.id)}`;
+    const classes = Array.from(element.classList || []).filter(value => /^[a-zA-Z_-][\w-]*$/.test(value)).slice(0, 2);
+    return `${element.tagName.toLowerCase()}${classes.map(value => `.${CSS.escape(value)}`).join('')}`;
+  };
+  const effectiveBackground = element => {
+    let background = [255, 255, 255];
+    const ancestors = [];
+    for (let node = element; node && node !== document.documentElement; node = node.parentElement) ancestors.push(node);
+    let unknownImageLayer = false;
+    for (const node of ancestors.reverse()) {
+      const style = getComputedStyle(node);
+      if (style.backgroundImage && style.backgroundImage !== 'none') unknownImageLayer = true;
+      const match = style.backgroundColor.match(/[\d.]+/g);
+      if (!match || match.length < 3) continue;
+      const alpha = match.length > 3 ? Number(match[3]) : 1;
+      const color = match.slice(0, 3).map(Number);
+      if (alpha >= 0.98) {
+        background = color;
+        unknownImageLayer = style.backgroundImage !== 'none';
+      } else if (alpha > 0) {
+        background = color.map((channel, index) => channel * alpha + background[index] * (1 - alpha));
+      }
+    }
+    return unknownImageLayer ? null : background;
+  };
+  const ctaCandidates = actions.filter(element => {
+    const label = [element.innerText, element.getAttribute('aria-label'), element.getAttribute('value'), element.getAttribute('href')].filter(Boolean).join(' ');
+    return visible(element) && (ctaWords.test(label) || /(?:^|[\s_-])(?:button|btn|cta|primary|call[-_]?to[-_]?action)(?:$|[\s_-])/i.test(String(element.className || '')));
+  });
+  const contrastIssues = ctaCandidates.flatMap(element => {
+    const fg = luminance(rgb(getComputedStyle(element).color));
+    const background = effectiveBackground(element);
+    const bg = luminance(background);
+    const ratio = fg === null || bg === null ? null : (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05);
+    if (ratio !== null && ratio >= 4.5) return [];
+    return [{selector: stableSelector(element), text: (element.innerText || element.getAttribute('aria-label') || '').trim().slice(0, 80),
+      contrast_ratio: ratio === null ? null : Math.round(ratio * 100) / 100, threshold: 4.5,
+      reason: ratio === null ? 'contrast could not be measured' : 'contrast ratio below 4.5:1'}];
+  });
   const images = Array.from(document.images);
   images.forEach(image => { image.loading = 'eager'; });
   const imageResults = images.map(image => ({
@@ -124,11 +173,69 @@ VIEWPORT_CHECKS_JS = r"""() => {
   return {
     hero: heroData,
     cta: {visible_first_screen: Boolean(cta), text: cta ? (cta.innerText || cta.getAttribute('aria-label') || '') : '', bottom: ctaRect ? Math.round(ctaRect.bottom) : null},
+    primary_cta_contrast: {count: ctaCandidates.length, pass: ctaCandidates.length > 0 && contrastIssues.length === 0, issues: ctaCandidates.length ? contrastIssues : [{selector: '', reason: 'no visible primary CTA found', contrast_ratio: null, threshold: 4.5}]},
     horizontal_overflow: {scroll_width: documentWidth, viewport_width: root.clientWidth, overflow: documentWidth > root.clientWidth + 1},
     images: {count: images.length, loaded_count: imageResults.filter(item => item.loaded).length, failures: imageResults.filter(item => !item.loaded)},
     fonts: {status: document.fonts.status, loaded_face_count: Array.from(document.fonts).filter(face => face.status === 'loaded').length, failed_face_count: Array.from(document.fonts).filter(face => face.status === 'error').length}
   };
 }"""
+
+
+TEMPLATE_LAYOUT_JS = r"""profile => {
+  const main = document.querySelector('main');
+  const h1 = document.querySelector('h1');
+  const hero = h1 && (h1.closest('section') || h1.closest('[class*="hero" i]') || h1.closest('main'));
+  const below = main ? Array.from(main.querySelectorAll(':scope > section, :scope > div > section')).filter(section => section !== hero && !section.contains(hero)) : [];
+  const spots = below.filter(section => section.classList.contains('spotlight'));
+  const mediaSide = section => {
+    const node = section.querySelector('.image,picture,img,video,[style*="background-image"]');
+    if (!node) return null;
+    const a = section.getBoundingClientRect(), b = node.getBoundingClientRect();
+    if (!a.width || b.width < a.width * 0.18) return null;
+    return b.left + b.width / 2 < a.left + a.width / 2 ? 'left' : 'right';
+  };
+  const sides = spots.map(mediaSide);
+  const alternations = sides.slice(1).reduce((n, side, i) => n + (side && sides[i] && side !== sides[i] ? 1 : 0), 0);
+  const actual = {hero_banner: Boolean(hero && hero.classList.contains('banner')), below_hero_sections: below.length,
+    spotlight_count: spots.length, spotlight_media_sides: sides, spotlight_side_alternations: alternations,
+    tiles: Boolean(main && main.querySelector('.tiles')), gallery_or_items: Boolean(main && main.querySelector('.gallery,.items')),
+    oriented_left: Boolean(main && main.querySelector('.orient-left')), oriented_right: Boolean(main && main.querySelector('.orient-right'))};
+  let pass = true, expected = {};
+  if (profile === 'forty') {
+    const tiles = main && main.querySelector('.tiles');
+    const articles = tiles ? Array.from(tiles.querySelectorAll(':scope > article')) : [];
+    const positions = [...new Set(articles.map(article => Math.round(article.getBoundingClientRect().left / 16)))];
+    const layout = tiles ? getComputedStyle(tiles).display : 'missing';
+    const columns = layout === 'grid' ? getComputedStyle(tiles).gridTemplateColumns.split(/\s+/).filter(Boolean).length : positions.length;
+    actual.tile_count = articles.length; actual.tile_columns = columns;
+    expected = {hero_banner: true, tile_count_min: 3, tile_columns_min: 2};
+    pass = Boolean(hero && hero.id === 'banner' && hero.classList.contains('major') && articles.length >= 3 && columns >= 2);
+  } else if (profile === 'landed') {
+    const styles = ['style1','style2','style3'].every(name => spots.some(section => section.classList.contains(name)));
+    actual.three_source_styles = styles;
+    expected = {hero_id: 'banner', spotlight_count_min: 3, source_styles: ['style1','style2','style3'], media_side_alternations_min: 2};
+    pass = Boolean(hero && hero.id === 'banner' && spots.length >= 3 && styles && alternations >= 2);
+  } else if (profile === 'story') {
+    expected = {hero_banner_fullscreen: true, spotlight_count_min: 2, gallery_or_items: true, both_orientations: true, media_side_alternations_min: 1};
+    pass = Boolean(hero && hero.classList.contains('banner') && hero.classList.contains('fullscreen') && spots.length >= 2 && actual.gallery_or_items && actual.oriented_left && actual.oriented_right && alternations >= 1);
+  }
+  return {status: pass ? 'pass' : 'fail', pass, profile, expected, actual};
+}""";
+
+
+def _selected_template_profile(run_dir: Path) -> tuple[str | None, dict]:
+    try:
+        audit = json.loads((run_dir / "debug" / "source_assessment.json").read_text(encoding="utf-8"))
+        reference = audit.get("design_reference") if isinstance(audit, dict) else None
+    except (OSError, json.JSONDecodeError):
+        reference = None
+    if not isinstance(reference, dict):
+        return None, {"status": "not_required", "pass": True, "reason": "no selected template"}
+    name = str(reference.get("name", "")).casefold()
+    profile = next((slug for slug in ("forty", "landed", "story") if slug in name), None)
+    if not profile:
+        return None, {"status": "unverified", "pass": True, "reason": "selected template has no maintained layout signature", "template": reference.get("name")}
+    return profile, {"status": "pending", "pass": False, "profile": profile, "template": reference.get("name")}
 
 
 MENU_BUTTON_JS = r"""button => {
@@ -228,6 +335,7 @@ def main() -> int:
     debug_dir = run_dir / "debug"
     screenshots_dir = debug_dir / "screenshots"
     screenshots_dir.mkdir(parents=True, exist_ok=True)
+    template_profile, template_layout = _selected_template_profile(run_dir)
     requested_sections = _required_sections(args.request)
     section_aliases = {name: list(SECTION_ALIASES.get(name, (name,))) for name in requested_sections}
     viewports = {"desktop": (1440, 900), "mobile": (390, 844)}
@@ -237,6 +345,7 @@ def main() -> int:
         "required_sections": requested_sections,
         "viewports": {},
         "mobile_menu": {},
+        "template_layout": template_layout,
         "checks": {},
         "resource_errors": [],
     }
@@ -277,6 +386,8 @@ def main() -> int:
                         page.screenshot(path=str(screenshots_dir / f"{name}.png"), full_page=False)
                         sections = page.evaluate(SECTION_VISIBILITY_JS, section_aliases)
                         visual = page.evaluate(VIEWPORT_CHECKS_JS)
+                        if name == "desktop" and template_profile:
+                            report["template_layout"] = page.evaluate(TEMPLATE_LAYOUT_JS, template_profile)
                         font_errors = [item for item in page_errors if item["type"] == "font"]
                         image_errors = [item for item in page_errors if item["type"] == "image"]
                         required_present = all(sections.get(section, {}).get("visible", False) for section in requested_sections)
@@ -289,6 +400,8 @@ def main() -> int:
                             "hero_spans_viewport": bool(visual["hero"].get("spans_viewport")),
                             "cta": visual["cta"],
                             "cta_visible_first_screen": visual["cta"]["visible_first_screen"],
+                            "primary_cta_contrast": visual["primary_cta_contrast"],
+                            "primary_ctas_readable": bool(visual["primary_cta_contrast"]["pass"]),
                             "horizontal_overflow": visual["horizontal_overflow"],
                             "no_horizontal_overflow": not visual["horizontal_overflow"]["overflow"],
                             "images": resource_state,
@@ -317,6 +430,8 @@ def main() -> int:
                             "all_required_sections_visible": False,
                             "hero_spans_viewport": False,
                             "cta_visible_first_screen": False,
+                            "primary_ctas_readable": False,
+                            "primary_cta_contrast": {"pass": False, "issues": []},
                             "no_horizontal_overflow": False,
                             "images_loaded": False,
                             "fonts_loaded": False,
@@ -327,6 +442,12 @@ def main() -> int:
             finally:
                 browser.close()
 
+        if template_profile and report["template_layout"].get("status") == "pending":
+            report["template_layout"] = {
+                **report["template_layout"], "status": "fail", "pass": False,
+                "reason": "desktop template layout could not be measured",
+            }
+
         desktop = report["viewports"].get("desktop", {})
         mobile = report["viewports"].get("mobile", {})
         mobile_menu = report["mobile_menu"]
@@ -334,6 +455,8 @@ def main() -> int:
             "rendered_sections_visible_desktop_and_mobile": bool(desktop.get("all_required_sections_visible") and mobile.get("all_required_sections_visible")),
             "hero_spans_viewport_desktop_and_mobile": bool(desktop.get("hero_spans_viewport") and mobile.get("hero_spans_viewport")),
             "cta_visible_first_screen_desktop_and_mobile": bool(desktop.get("cta_visible_first_screen") and mobile.get("cta_visible_first_screen")),
+            "primary_ctas_readable_desktop_and_mobile": bool(desktop.get("primary_ctas_readable") and mobile.get("primary_ctas_readable")),
+            "template_layout_signature_matches": bool(report["template_layout"].get("pass")),
             "mobile_menu_clicks_work": bool(mobile_menu.get("click_opens") and mobile_menu.get("click_closes")),
             "mobile_menu_keyboard_works": bool(mobile_menu.get("tab_reachable") and mobile_menu.get("enter_opens") and mobile_menu.get("space_toggles")),
             "mobile_has_no_horizontal_overflow": bool(mobile.get("no_horizontal_overflow")),

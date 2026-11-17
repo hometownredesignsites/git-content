@@ -427,8 +427,8 @@ def _source_image_urls_from_prompt(prompt):
     return urls
 
 
-def _category_fallback_image_urls_from_prompt(prompt):
-    marker = re.search(r"CATEGORY_FALLBACK_IMAGE_URLS:\s*\n([\s\S]*?)(?:\n\s*\n|$)", prompt)
+def _urls_from_context_marker(prompt, marker_name):
+    marker = re.search(rf"{re.escape(marker_name)}:\s*\n([\s\S]*?)(?:\n\s*\n|$)", prompt)
     if not marker:
         return []
     urls = []
@@ -436,14 +436,15 @@ def _category_fallback_image_urls_from_prompt(prompt):
         match = re.match(r"\s*-\s*(https?://\S+)", line)
         if match:
             urls.append(html_module.unescape(match.group(1)))
-    return urls
+    return list(dict.fromkeys(urls))
 
 
-def _image_asset_approval(image_urls, hero_urls, approved_urls, base_url=None):
-    approved = {key for url in approved_urls if (key := _url_key(url, base_url))}
-    used = {key for url in image_urls if (key := _url_key(url, base_url))}
-    hero = {key for url in hero_urls if (key := _url_key(url, base_url))}
-    return bool(used) and used.issubset(approved), bool(hero) and bool(hero & approved)
+def _source_asset_urls_from_prompt(prompt):
+    return _urls_from_context_marker(prompt, "VERIFIED_SOURCE_ASSET_URLS")
+
+
+def _category_fallback_image_urls_from_prompt(prompt):
+    return _urls_from_context_marker(prompt, "VERIFIED_CATEGORY_FALLBACK_IMAGE_URLS")
 
 
 class _PageInventory(HTMLParser):
@@ -879,6 +880,8 @@ def assess_website(prompt, session_dir):
         "rendered_sections_visible_desktop_and_mobile",
         "hero_spans_viewport_desktop_and_mobile",
         "cta_visible_first_screen_desktop_and_mobile",
+        "primary_ctas_readable_desktop_and_mobile",
+        "template_layout_signature_matches",
         "mobile_menu_clicks_work",
         "mobile_menu_keyboard_works",
         "mobile_has_no_horizontal_overflow",
@@ -889,14 +892,8 @@ def assess_website(prompt, session_dir):
         checks[f"browser_{name}"] = browser_qa_status in {"pass", "fail"} and browser_qa_checks.get(name) is True
 
     source_image_urls = _source_image_urls_from_prompt(prompt)
+    source_asset_urls = _source_asset_urls_from_prompt(prompt)
     category_fallback_urls = _category_fallback_image_urls_from_prompt(prompt)
-    approved_image_urls = source_image_urls + category_fallback_urls
-    if approved_image_urls:
-        all_approved, hero_approved = _image_asset_approval(
-            image_urls, parser.hero_image_urls, approved_image_urls, base_url
-        )
-        checks["images_use_source_or_category_assets"] = all_approved
-        checks["hero_uses_source_or_category_asset"] = hero_approved
     if source_image_urls:
         source_keys = {key for url in source_image_urls if (key := _url_key(url, base_url))}
         used_keys = {key for url in parser.all_image_urls if (key := _url_key(url, base_url))}
@@ -910,6 +907,22 @@ def assess_website(prompt, session_dir):
             for url in parser.all_image_urls
             if (key := _url_key(url, base_url)) in source_keys
         )
+
+    approved_image_urls = list(dict.fromkeys(source_asset_urls + source_image_urls + category_fallback_urls))
+    if approved_image_urls:
+        approved_keys = {key for url in approved_image_urls if (key := _url_key(url, base_url))}
+        external_image_keys = {
+            key for url in parser.all_image_urls
+            if urllib.parse.urlsplit(html_module.unescape(url)).scheme.lower() != "data"
+            if (key := _url_key(url, base_url))
+        }
+        external_hero_keys = {
+            key for url in parser.hero_image_urls
+            if urllib.parse.urlsplit(html_module.unescape(url)).scheme.lower() != "data"
+            if (key := _url_key(url, base_url))
+        }
+        checks["images_use_source_or_category_assets"] = bool(external_image_keys) and external_image_keys.issubset(approved_keys)
+        checks["hero_uses_source_or_category_asset"] = bool(external_hero_keys) and external_hero_keys.issubset(approved_keys)
 
     explicit_form_request = re.sub(
         r"[^.!?\n]*\b(?:if|when)\b[^.!?\n]*[.!?]?",
@@ -960,6 +973,8 @@ def assess_website(prompt, session_dir):
             "rendered_sections_visible_desktop_and_mobile": "required sections visibly render on desktop and mobile",
             "hero_spans_viewport_desktop_and_mobile": "hero spans the desktop and mobile viewports",
             "cta_visible_first_screen_desktop_and_mobile": "CTA appears on the first screen at desktop and mobile sizes",
+            "primary_ctas_readable_desktop_and_mobile": "primary CTA text meets the 4.5:1 contrast threshold on desktop and mobile",
+            "template_layout_signature_matches": "selected template layout signature is preserved",
             "mobile_menu_clicks_work": "mobile menu opens and closes by click",
             "mobile_menu_keyboard_works": "mobile menu works with keyboard controls",
             "mobile_has_no_horizontal_overflow": "mobile page has no horizontal overflow",
@@ -983,6 +998,7 @@ def assess_website(prompt, session_dir):
         "checks_passed": passed,
         "checks_total": total,
         "checks": checks,
+        "blocking_failures": [name for name, value in checks.items() if value is False],
         "automated_success": automated_success,
         "required_sections": required,
         "missing_sections": missing_sections,
@@ -1002,7 +1018,8 @@ def assess_website(prompt, session_dir):
         "browser_qa_status": browser_qa_status,
         "browser_qa": browser_qa_report,
         "source_image_urls_available": source_image_urls,
-        "category_fallback_image_urls_available": category_fallback_urls,
+        "approved_source_asset_urls": source_asset_urls,
+        "approved_category_fallback_urls": category_fallback_urls,
         "source_image_urls_used": sorted(source_used) if source_image_urls else [],
         "parse_diagnostic": parse_error,
         "html_bytes": len(html.encode("utf-8")),

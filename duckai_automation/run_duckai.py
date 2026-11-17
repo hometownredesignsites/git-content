@@ -11,6 +11,7 @@ import sys
 import tempfile
 import time
 import traceback
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
@@ -19,9 +20,11 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
 try:
-    from .scripts.source_images import _allowed_image_host, collect_source_images
-except ImportError:  # direct runner execution
-    from scripts.source_images import _allowed_image_host, collect_source_images
+    from .scripts.source_brief import build_compact_source_brief, category_fallback_candidates, format_retry_guidance
+    from .scripts.site_quality import _image_loads_ok
+except ImportError:  # Direct execution from duckai_automation/run_duckai.py.
+    from scripts.source_brief import build_compact_source_brief, category_fallback_candidates, format_retry_guidance
+    from scripts.site_quality import _image_loads_ok
 
 
 ROOT = Path(__file__).resolve().parent
@@ -29,8 +32,8 @@ REPO = ROOT.parent
 RUN_ID = os.environ.get("GITHUB_RUN_ID", "local")
 RUN_ATTEMPT = os.environ.get("GITHUB_RUN_ATTEMPT", "1")
 CANDIDATE_INDEX = os.environ.get("CANDIDATE_INDEX", "1")
-if not CANDIDATE_INDEX.isdigit() or not 1 <= int(CANDIDATE_INDEX) <= 20:
-    raise RuntimeError("CANDIDATE_INDEX must be between 1 and 20.")
+if not CANDIDATE_INDEX.isdigit() or not 1 <= int(CANDIDATE_INDEX) <= 24:
+    raise RuntimeError("CANDIDATE_INDEX must be between 1 and 24.")
 SITE_INDEX = os.environ.get("SITE_INDEX", "1")
 if not SITE_INDEX.isdigit() or int(SITE_INDEX) < 1:
     raise RuntimeError("SITE_INDEX must be a positive integer.")
@@ -41,67 +44,40 @@ INLINE_SCRIPT = ROOT / "scripts" / "inline_css.py"
 BROWSER_QA_SCRIPT = ROOT / "scripts" / "browser_qa.py"
 CHECK_SCRIPT = ROOT / "scripts" / "check_website.py"
 
-BASE_CONTRACT = """Use a clear visual hierarchy, purposeful sections, and the source conversion path. Use the exact listed source-photo URLs when their observed evidence fits; use listed category fallbacks only to fill image gaps. Never guess URLs, force unrelated photos, use indoor photos for outdoor work, or count crop variants as distinct. Include at least three distinct relevant images with truthful alt text, and ensure every image loads. The hero image must cover the full viewport width and hero region; keep readable copy and the main CTA visible in the first viewport on desktop and mobile. Keep CTA labels/icons free of arrows. Avoid filler and repeated generic card grids.
+BASE_CONTRACT = """Create an original, polished, responsive redesign using only verified facts. Never invent contact details, hours, services, metrics, reviews, credentials, or claims. Preserve the source conversion path and exact contact-form fields/required states when provided; do not imply a static form submits. Reproduce every verified phone number in full in visible text and its matching tel: link; never mask, truncate, or omit digits.
 
-Use exactly six turns in this chat: CSS PARTS 1–3, then HTML PARTS 1–3. Each response has one code fence, its exact part label outside, and the required first nonblank marker inside: `/* CSS PART n OF 3 */` or `<!-- HTML PART n OF 3 -->`. CSS uses a css fence; HTML uses a text fence with raw markup. CSS chunks compose one stylesheet. HTML PART 1 starts the full HTML5 document and includes head, one styles.css link, header/navigation, and hero. PART 2 adds new body sections only. PART 3 adds remaining sections and a substantive semantic footer, any needed script, then closes `</body></html>`. Do not repeat content. Use semantic HTML, one main and h1, labeled controls, visible focus, reduced motion, and responsive layouts. The keyboard-operable mobile hamburger has an accessible name, matching `aria-controls`, working `aria-expanded`, and three bar spans. Keep verified template attribution in a non-rendering comment. Output only the requested part and short label; no explanation or extra fences."""
+Return exactly CSS PARTS 1-3, then HTML PARTS 1-3, one complete fenced block per response (`css` for CSS, `text` for raw HTML). State the exact part label outside the block. Its first nonblank line must be `/* CSS PART n OF 3 */` or `<!-- HTML PART n OF 3 -->`. Keep parts compatible; link styles.css once. HTML 1 starts the full document, header/nav, and complete hero. HTML 2 adds new sections. HTML 3 adds remaining sections and semantic footer, then closes `</body></html>`. Never repeat prior sections or the shell.
 
-CATEGORY_IMAGE_FALLBACKS = {
-    "fence": (
-        ("https://images.unsplash.com/photo-1769831190663-95fe8454d8c9?auto=format&fit=crop&w=1800&q=85", "wooden backyard fence with a gate"),
-        ("https://images.unsplash.com/photo-1792628953895-5d46f431b402?auto=format&fit=crop&w=1800&q=85", "backyard with wooden privacy fence and patio"),
-        ("https://images.unsplash.com/photo-1769690177043-c28ce822a4f7?auto=format&fit=crop&w=1800&q=85", "wooden gate and fence among garden plants"),
-    ),
-    "deck": (
-        ("https://images.unsplash.com/photo-1773979638724-c6ffed7fe0de?auto=format&fit=crop&w=1800&q=85", "wooden deck and steps leading to a grassy yard"),
-        ("https://images.unsplash.com/photo-1716904519810-349244919824?auto=format&fit=crop&w=1800&q=85", "wooden outdoor deck with table and chairs"),
-        ("https://images.unsplash.com/photo-1741277031817-146e7ed13f8d?auto=format&fit=crop&w=1800&q=85", "sunny backyard pool and wooden deck"),
-    ),
-    "landscap": (
-        ("https://images.unsplash.com/photo-1416879595882-3373a0480b5b?auto=format&fit=crop&w=1800&q=85", "garden planting and landscape work"),
-        ("https://images.unsplash.com/photo-1585320806297-9794b3e4eeae?auto=format&fit=crop&w=1800&q=85", "garden plants and outdoor design"),
-        ("https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=1800&q=85", "plants and garden detail"),
-    ),
-    "kitchen": (
-        ("https://images.unsplash.com/photo-1770063817031-f3b98dff347f?auto=format&fit=crop&w=1800&q=85", "modern kitchen with white cabinets and stainless appliances"),
-        ("https://images.unsplash.com/photo-1761656630581-69a58e4e1c09?auto=format&fit=crop&w=1800&q=85", "modern kitchen with wooden cabinets and stainless appliances"),
-        ("https://images.unsplash.com/photo-1764526624453-db32c24eca55?auto=format&fit=crop&w=1800&q=85", "modern kitchen with wooden cabinets and island"),
-    ),
-    "bathroom": (
-        ("https://images.unsplash.com/photo-1771239048293-72abf673adb2?auto=format&fit=crop&w=1800&q=85", "modern bathroom with glass shower and vanity"),
-        ("https://images.unsplash.com/photo-1758239873506-82d0e76244f6?auto=format&fit=crop&w=1800&q=85", "modern bathroom with a vanity and tiled floor"),
-        ("https://images.unsplash.com/photo-1690603935238-b60582bcb273?auto=format&fit=crop&w=1800&q=85", "bathroom with tiled walls and a shower"),
-    ),
-    "carpent": (
-        ("https://images.unsplash.com/photo-1769353086138-19ee65291a04?auto=format&fit=crop&w=1800&q=85", "carpenter working with wood in a workshop"),
-        ("https://images.unsplash.com/photo-1722411927625-0e478acf502b?auto=format&fit=crop&w=1800&q=85", "woodworker shaping a piece of wood in a workshop"),
-        ("https://images.unsplash.com/photo-1759756480941-7230dedf5fc9?auto=format&fit=crop&w=1800&q=85", "woodworking shop with tools and machinery"),
-    ),
-    "home": (
-        ("https://images.unsplash.com/photo-1600585154340-be6161a56c0?auto=format&fit=crop&w=1800&q=85", "residential exterior and home improvement"),
-        ("https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1800&q=85", "finished home interior and renovation"),
-        ("https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=1800&q=85", "residential construction work"),
-    ),
-}
+Use CSS tokens for colors/type/spacing/width. Build varied, business-specific sections and at least three distinct, relevant, directly loadable image assets with accurate alt text. Prefer listed source photos; otherwise use stable category-relevant image URLs. Use a full-width cover-cropped hero image with readable overlay and first-screen primary CTA on desktop/mobile. Keep CTA text free of arrows. Mobile nav must be an accessible three-bar button with a name, matching aria-controls, aria-expanded, and exactly three child spans; no visible Menu label. Preserve source form fields. Footer must be visibly styled, semantic, include brand, two useful links, supported contact/location details, and copyright. Avoid generic repeated card grids, filler, unsupported claims, and decorative effects without purpose. For a selected HTML5 UP reference, adapt its distinct structure and include template/source/CC BY 3.0 attribution only in an HTML comment; no visible credit. Return only the requested part."""
+MAX_INITIAL_PROMPT_CHARS = 11000
+MAX_DESIGN_BRIEF_CHARS = 1400
+CURRENT_STAGE = "initialization"
 
 
-def category_image_fallbacks(category: str) -> tuple[tuple[str, str], ...]:
-    """Return curated category fallbacks; unknown categories stay unforced."""
-    lowered = category.lower()
-    if re.search(r"fenc|gate", lowered):
-        return CATEGORY_IMAGE_FALLBACKS["fence"]
-    if re.search(r"deck|patio", lowered):
-        return CATEGORY_IMAGE_FALLBACKS["deck"]
-    if re.search(r"landscap|garden", lowered):
-        return CATEGORY_IMAGE_FALLBACKS["landscap"]
-    if "kitchen" in lowered:
-        return CATEGORY_IMAGE_FALLBACKS["kitchen"]
-    if "bath" in lowered:
-        return CATEGORY_IMAGE_FALLBACKS["bathroom"]
-    if re.search(r"carpent|woodwork", lowered):
-        return CATEGORY_IMAGE_FALLBACKS["carpent"]
-    if re.search(r"home|roof|siding|window|remodel|renovat|contractor|construction", lowered):
-        return CATEGORY_IMAGE_FALLBACKS["home"]
-    return ()
+def failure_category(error: BaseException) -> str:
+    message = str(error).casefold()
+    if "guest chat is gated" in message or "sign in to continue" in message or "human-verification" in message:
+        return "access_gate"
+    if "compact generation prompt" in message or "source-grounded brief is" in message or ("prompt" in message and "budget" in message):
+        return "prompt_budget"
+    if "source assessment" in message or "source-site assessment" in message:
+        return "source_assessment"
+    if "chunk" in message or "part label" in message or "code block" in message:
+        return "response_capture"
+    if "browser" in message or "playwright" in message:
+        return "browser_qa"
+    if "quality checks" in message or "automated" in message:
+        return "candidate_quality"
+    return "unknown"
+
+
+def _verified_category_fallbacks(category: str) -> list[dict]:
+    candidates = category_fallback_candidates(category)
+    if not candidates:
+        return []
+    with ThreadPoolExecutor(max_workers=min(3, len(candidates))) as pool:
+        loaded = list(pool.map(lambda item: _image_loads_ok(item["url"]), candidates))
+    return [item for item, valid in zip(candidates, loaded) if valid]
 
 
 def fail(message: str) -> None:
@@ -388,21 +364,19 @@ def send_source_assessment(
         if business_name or industry_category
         else ""
     )
-    prompt = f"""Inspect the public website at {source_url} using Web Search. This is a source assessment only; do not write redesign code yet.
+    prompt = (
+        f"Inspect {source_url} with Web Search. Audit only; do not write code. Review the homepage and relevant About, Services, Locations, FAQ, and Contact pages. Return one concise JSON block preceded by {label}.\n\n"
+        + target_metadata
+        + """Include: access_status; pages_reviewed:[{url,page_title,content}]; sources:[exact reviewed page URLs];
+organization_facts: up to 8 [{fact,source_urls}] for identity, services, locations;
+selling_points: up to 3 [{fact,source_urls}]; contact_details: verified phone/email/address/conversion path as [{fact,source_urls}];
+contact_form_fields: each field [{label,required:true|false|unknown,source_urls}]; faq_answers: up to 3 [{question,answer,source_urls}];
+audience_and_goals:{primary_conversion_path,source_urls,audience_inference}; brand_and_visual_observations:[{observation,source_urls}] (brief, separate observation from opinion);
+source_assets: up to 5 [{url,type,page_url,context}] for exact public logo/photo/image URLs actually seen;
+content_structure: up to 4 [{section,source_urls}]; unknown_or_verify: concise list; design_reference: verified fitting HTML5 UP {name,url,license_url,patterns_to_adapt}, or null.
 
-{target_metadata}Review the homepage and relevant pages linked from its navigation, such as about, services, products, solutions, portfolio/work, locations, support, and contact pages when present. Return one JSON object in exactly one `json` code block, preceded by the exact label `{label}`. Include:
-- `access_status`: `accessed` only if you actually retrieved and reviewed the requested website; otherwise `unavailable`.
-- `pages_reviewed`: an array of objects with `url`, `page_title`, and a short description of visible content.
-- `organization_facts`: concise, neutral facts visible on those pages; do not copy paragraphs verbatim.
-- `audience_and_goals`: likely audience and primary contact/conversion path, separating evidence from inference.
-- `brand_and_visual_observations`: visible brand colors, typography, layout, tone, and image subjects; distinguish observations from design opinions.
-- `source_assets`: an array of publicly displayed logo/photo/brand asset objects with `type`, exact `url`, `where_it_appears`, and, for photos, `visible_subject`. Look for image URLs in `<img src>`, `srcset` and `<picture><source>`, lazy-loading attributes such as `data-src`, `data-srcset`, `data-lazy-src`, Open Graph/Twitter image metadata, and inline background images when inspectable. Preserve the exact URL as observed; do not guess or reconstruct one. For each photo, describe its visible subject and list the section/service it appears to support only when observed evidence makes that fit clear. Use `unknown` when the image itself could not be inspected; do not infer the subject from a filename or alt text alone. Use an empty array if no assets can be identified.
-- `content_structure`: the important sections/pages a redesign should retain.
-- `unknown_or_verify`: details that are unclear, inconsistent, or should be confirmed with the organization.
-- `design_reference`: recommend one specific HTML5 UP template only if it genuinely fits and you can inspect its official demo; include `name`, `url`, `license_url`, and `patterns_to_adapt`. If none fits or you cannot verify its demo and license, use `null`.
-- `sources`: exact source URLs you actually reviewed, including the requested domain.
-
-Do not invent facts or claim a page was reviewed when it was not. Do not reproduce source copy or existing page layouts wholesale. Identify the organization's own publicly displayed assets for potential reuse; do not make claims about asset ownership or licensing that you cannot verify. Preserve observed facts separately from design opinions. Keep the audit concise enough to guide a one-page redesign."""
+Every fact and asset must cite an exact reviewed page URL. Do not invent facts, claim unreviewed pages, copy paragraphs, or claim asset rights. Keep it short and traceable."""
+    )
 
     composer = wait_for_guest_composer(page)
     before_text = main_text(page)
@@ -593,11 +567,12 @@ def build_initial_prompt(
     business_name: str = "",
     industry_category: str = "",
     location: str = "",
-    source_assessment: dict | None = None,
-    source_image_records: list[dict] | None = None,
+    source_brief: str = "",
+    retry_guidance: str = "",
 ) -> str:
     source_context = (
-        f"Source assessed in this chat: {source_url}. Use its verified facts, brand cues, and conversion path; do not copy its layout or wording.\n"
+        f"Use the compact, cited source brief below for verified facts from {source_url}. "
+        "Use only listed image URLs as source assets; do not copy source copy or layout.\n\n"
         if source_url
         else ""
     )
@@ -671,17 +646,39 @@ def build_initial_prompt(
         f"BUSINESS: {json.dumps(business_name, ensure_ascii=False)}; CATEGORY: {json.dumps(industry_category, ensure_ascii=False)}; "
         f"LOCATION HINT: {json.dumps(location, ensure_ascii=False)}\n"
     )
-    return (
-        identity
-        + f"WEBSITE REQUEST:\n{website_request.strip()}\n\n"
-        + f"DESIGN GUIDANCE:\n{design_brief.strip()}\n\n"
-        + source_context
-        + source_asset_context
-        + fallback_asset_context
-        + template_context
-        + BASE_CONTRACT
-        + "\n\nBegin with CSS PART 1 OF 3 only."
+    compact_design = " ".join(design_brief.split())[:MAX_DESIGN_BRIEF_CHARS]
+    retry_context = f"PREVIOUS CANDIDATE REPAIR GUIDANCE (follow these measured corrections):\n{retry_guidance}\n\n" if retry_guidance else ""
+    source_facts = f"VERIFIED SOURCE-GROUNDED BRIEF (each fact keeps its URL):\n{source_brief}\n\n" if source_brief else ""
+    prompt = (
+        f"Website request:\n{website_request.strip()}\n\n"
+        f"Design guidance:\n{compact_design}\n\n"
+        f"{retry_context}"
+        f"{source_facts}"
+        f"{target_metadata}"
+        f"{source_context}"
+        f"{template_context}"
+        f"{BASE_CONTRACT}\n\n"
+        "Begin with CSS PART 1 OF 3 only."
     )
+    if len(prompt) > MAX_INITIAL_PROMPT_CHARS:
+        raise ValueError(
+            f"Compact generation prompt is {len(prompt)} characters; limit is {MAX_INITIAL_PROMPT_CHARS}. "
+            "Reduce boilerplate while preserving verified facts and source URLs."
+        )
+    return prompt
+
+
+def _previous_retry_guidance(candidate_index: int) -> str:
+    for prior in range(candidate_index - 1, 0, -1):
+        prior_dir = REPO / "duckai-runs" / f"run-{RUN_ID}-{RUN_ATTEMPT}-site-{SITE_INDEX}-candidate-{prior}"
+        path = prior_dir / "debug" / "retry_guidance.txt"
+        try:
+            guidance = path.read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+        if guidance and not guidance.startswith("No targeted repair guidance"):
+            return guidance[:1800]
+    return ""
 
 
 def build_next_prompt(kind: str, part: int) -> str:
@@ -754,11 +751,77 @@ def run_checker(website_request: str, generation_prompt: str = "") -> dict:
     except json.JSONDecodeError:
         report = {"final_success": False, "checker_exit_code": result.returncode, "stdout": result.stdout, "stderr": result.stderr}
     report["checker_exit_code"] = result.returncode
+    report["blocking_failures"] = [name for name, value in report.get("checks", {}).items() if value is False]
     report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return report
 
 
+def run_quality_with_repair(website_request: str, source_brief: str) -> tuple[dict, dict]:
+    """Allow exactly one measured repair pass, then render and recheck once."""
+    run_browser_qa(website_request)
+    report = run_checker(website_request)
+    repair_path = ROOT / "scripts" / "repair_candidate_quality.py"
+    repair_result = {"status": "not_needed", "changed": False}
+    if not report.get("automated_success"):
+        repaired = subprocess.run(
+            [sys.executable, str(repair_path), str(RUN_DIR)],
+            cwd=REPO,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+        )
+        repair_record = RUN_DIR / "debug" / "quality_repair.json"
+        try:
+            repair_result = json.loads(repair_record.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            repair_result = {"status": "repair_error", "error": repaired.stderr[-1200:] or repaired.stdout[-1200:]}
+        if repaired.returncode and repair_result.get("status") != "no_safe_repair_available":
+            (RUN_DIR / "debug" / "repair_failure.txt").write_text(
+                repaired.stderr[-4000:] or repaired.stdout[-4000:], encoding="utf-8"
+            )
+        if repair_result.get("changed"):
+            run_browser_qa(website_request)
+            report = run_checker(website_request)
+            repair_result["rechecked"] = True
+        else:
+            repair_result["rechecked"] = False
+
+    browser_path = RUN_DIR / "debug" / "browser_qa.json"
+    try:
+        browser_report = json.loads(browser_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        browser_report = {}
+    approved_images = []
+    marker = source_brief.split("VERIFIED_SOURCE_IMAGE_URLS:\n", 1)
+    if len(marker) == 2:
+        approved_images = [
+            line[2:].strip() for line in marker[1].splitlines()
+            if line.startswith("- ") and line[2:].strip().startswith(("https://", "http://"))
+        ]
+    category_images = []
+    marker = source_brief.split("VERIFIED_CATEGORY_FALLBACK_IMAGE_URLS:\n", 1)
+    if len(marker) == 2:
+        category_images = [
+            line[2:].strip() for line in marker[1].splitlines()
+            if line.startswith("- ") and line[2:].strip().startswith(("https://", "http://"))
+        ]
+    guidance = format_retry_guidance(report, browser_report, approved_images, category_images)
+    if guidance:
+        (RUN_DIR / "debug" / "retry_guidance.txt").write_text(guidance + "\n", encoding="utf-8")
+    elif not report.get("automated_success"):
+        (RUN_DIR / "debug" / "retry_guidance.txt").write_text(
+            "No targeted repair guidance was produced; inspect debug/checker_report.json and debug/browser_qa.json.\n",
+            encoding="utf-8",
+        )
+    else:
+        (RUN_DIR / "debug" / "retry_guidance.txt").unlink(missing_ok=True)
+    return report, repair_result
+
+
 def run() -> None:
+    global CURRENT_STAGE
+    CURRENT_STAGE = "input_validation"
     website_request = os.environ.get("WEBSITE_REQUEST", "").strip()
     design_brief = os.environ.get("DESIGN_BRIEF", "").strip()
     source_url = os.environ.get("SOURCE_URL", "").strip()
@@ -829,7 +892,10 @@ def run() -> None:
             json.dumps(source_image_report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
         )
     turn_log = {"chat_url": "", "turns": []}
-    initial_generation_prompt = ""
+    source_assessment: dict = {}
+    source_brief = ""
+    retry_guidance = _previous_retry_guidance(int(CANDIDATE_INDEX))
+    CURRENT_STAGE = "browser_startup"
     with tempfile.TemporaryDirectory(prefix="duckai-website-profile-") as profile_dir:
         with sync_playwright() as playwright:
             context = playwright.chromium.launch_persistent_context(
@@ -845,6 +911,8 @@ def run() -> None:
                 page.goto("https://duck.ai/", wait_until="domcontentloaded", timeout=60000)
                 wait_for_guest_composer(page)
                 if source_url:
+                    CURRENT_STAGE = "source_assessment"
+                    print(f"Candidate {CANDIDATE_INDEX}: starting source assessment.")
                     enable_web_search(page)
                     response, current_url, assessment = send_source_assessment(
                         page, source_url, business_name, industry_category, location
@@ -861,8 +929,15 @@ def run() -> None:
                         {"type": "source_site_assessment", "source_url": source_url, "assistant_response_completed": True}
                     )
                     validate_source_assessment(assessment, source_url)
-                    print(f"Captured and validated Duck.ai's source assessment for {source_url}")
+                    source_assessment = assessment
+                    fallback_images = _verified_category_fallbacks(industry_category)
+                    source_brief = build_compact_source_brief(assessment, fallback_images)
+                    if not source_brief:
+                        fail("Source assessment returned no factual items with traceable page citations.")
+                    (RUN_DIR / "debug" / "website_context.md").write_text(source_brief + "\n", encoding="utf-8")
+                    print(f"Captured and validated source assessment; compact brief is {len(source_brief)} characters.")
                 for kind, part in [("css", 1), ("css", 2), ("css", 3), ("html", 1), ("html", 2), ("html", 3)]:
+                    CURRENT_STAGE = f"{kind}_part_{part}"
                     if kind == "html" and part == 1:
                         send_acknowledgment_and_wait(page, chat_url)
                         turn_log["turns"].append({"type": "user_acknowledgment", "text": "acknowledged", "assistant_response_completed": True})
@@ -877,18 +952,17 @@ def run() -> None:
                             business_name,
                             industry_category,
                             location,
-                            assessment if source_url else None,
-                            source_image_report.get("source_assets", []) if source_url else None,
+                            source_brief,
+                            retry_guidance,
                         )
                         if not turn_log["turns"] or turn_log["turns"][-1].get("type") == "source_site_assessment"
                         else build_next_prompt(kind, part)
                     )
-                    if kind == "css" and part == 1:
-                        initial_generation_prompt = prompt
-                        (RUN_DIR / "debug" / "initial_generation_prompt.txt").write_text(
-                            prompt, encoding="utf-8"
-                        )
-                        print(f"Initial generation prompt contains {len(prompt)} characters.")
+                    if not turn_log.get("generation_prompt_chars") and prompt.startswith("Website request:"):
+                        (RUN_DIR / "debug" / "generation_prompt.txt").write_text(prompt, encoding="utf-8")
+                        turn_log["generation_prompt_chars"] = len(prompt)
+                        turn_log["retry_guidance_included"] = bool(retry_guidance)
+                        print(f"Candidate {CANDIDATE_INDEX}: generation prompt is {len(prompt)} characters; retry guidance included={bool(retry_guidance)}.")
                     response, current_url = send_and_capture(page, prompt, kind, part)
                     if chat_url and current_url != chat_url:
                         fail("Duck.ai conversation URL changed during capture; refusing to mix chats.")
@@ -900,9 +974,13 @@ def run() -> None:
             finally:
                 context.close()
 
+    CURRENT_STAGE = "assemble"
     subprocess.run([sys.executable, str(ASSEMBLE_SCRIPT), str(RUN_DIR)], check=True, cwd=REPO)
-    run_browser_qa(website_request)
-    report = run_checker(website_request, initial_generation_prompt)
+    CURRENT_STAGE = "browser_qa_and_repair"
+    print(f"Candidate {CANDIDATE_INDEX}: running browser QA, checker, and at most one measured repair pass.")
+    report, repair_result = run_quality_with_repair(website_request, source_brief)
+    if report.get("blocking_failures"):
+        print("Candidate quality blockers: " + ", ".join(report["blocking_failures"][:8]))
     notes = {
         "candidate_index": int(CANDIDATE_INDEX),
         "site_index": int(SITE_INDEX),
@@ -910,6 +988,8 @@ def run() -> None:
         "industry_category": industry_category,
         "location": location,
         "automated_success": bool(report.get("automated_success")),
+        "quality_repair": repair_result,
+        "blocking_failures": report.get("blocking_failures", []),
         "status": (
             "automated_checks_passed_pending_human_review"
             if report.get("automated_success")
@@ -922,7 +1002,7 @@ def run() -> None:
         "source_photo_extraction_errors": len(source_image_report.get("errors", [])),
         "initial_generation_prompt_characters": len(initial_generation_prompt),
         "design_reference": (
-            json.loads((RUN_DIR / "debug" / "source_assessment.json").read_text(encoding="utf-8")).get("design_reference")
+            source_assessment.get("design_reference")
             if source_url
             else None
         ),
@@ -944,7 +1024,7 @@ def run() -> None:
                 handle.write(f"- Source assessment: completed in this chat for `{source_url}`; evidence saved in `debug/source_assessment.json`.\n")
                 handle.write("- Design reference: recorded in the source assessment, with its license.\n")
             handle.write("- Visual review: pending human screenshot and image relevance review.\n")
-            handle.write("- This candidate folder will be committed with the candidate batch.\n")
+            handle.write("- Candidate evidence is checkpointed to the private `duckai` branch as the run proceeds.\n")
     print(f"Run saved in {RUN_DIR}")
 
 
@@ -952,13 +1032,28 @@ if __name__ == "__main__":
     try:
         run()
     except Exception as error:
-        message = f"Duck.ai automation failed for site {SITE_INDEX}, candidate attempt {CANDIDATE_INDEX}: {error}"
+        category = failure_category(error)
+        message = f"Duck.ai automation failed for candidate {CANDIDATE_INDEX} during {CURRENT_STAGE} ({category})."
         print(message, file=sys.stderr)
         if RUN_DIR.exists():
             (RUN_DIR / "debug").mkdir(parents=True, exist_ok=True)
             (RUN_DIR / "debug" / "failure.txt").write_text(
                 traceback.format_exc(), encoding="utf-8"
             )
+            notes_path = RUN_DIR / "run_notes.json"
+            try:
+                notes = json.loads(notes_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                notes = {"candidate_index": int(CANDIDATE_INDEX), "site_index": int(SITE_INDEX)}
+            notes.update({
+                "automated_success": False,
+                "status": f"{CURRENT_STAGE}_failed",
+                "failed_stage": CURRENT_STAGE,
+                "failure_category": category,
+                "failure_reason": str(error)[:2000],
+            })
+            notes_path.write_text(json.dumps(notes, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+            (RUN_DIR / "debug" / "failure_summary.txt").write_text(message + "\n", encoding="utf-8")
         summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
         if summary_path:
             with Path(summary_path).open("a", encoding="utf-8") as handle:
