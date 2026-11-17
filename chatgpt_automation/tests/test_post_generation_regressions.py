@@ -26,6 +26,7 @@ from chatgpt_automation.html_assessment.html_assessment import (
     remove_contradicted_missing_attribute_claims,
     repository_qa_prompt,
     run_repository_qa,
+    validate_full_rebuild,
 )
 
 
@@ -33,6 +34,30 @@ CHROME_PATH = Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe")
 
 
 class PostGenerationRegressionTest(unittest.TestCase):
+    def test_full_rebuild_preserves_asset_links_and_form_contract(self):
+        source = '''<!doctype html><html><head><link rel="stylesheet" href="styles.css"></head><body>
+        <a href="/contact/">Contact</a><picture><source srcset="hero.webp 2x"><img src="hero.jpg" srcset="hero-2x.jpg 2x"></picture>
+        <form action="/send" method="post"><input type="email" name="email" required><select name="service"><option value="roof">Roof</option></select></form>
+        </body></html>'''
+        rebuilt = source.replace("<body>", '<body class="new-layout">')
+        self.assertEqual(validate_full_rebuild(source, rebuilt), [])
+
+    def test_full_rebuild_rejects_changed_image_urls_and_form_fields(self):
+        source = '''<!doctype html><html><head><link rel="stylesheet" href="styles.css"></head><body>
+        <a href="/contact/">Contact</a><img src="hero.jpg"><form action="/send" method="post"><input name="email"></form>
+        </body></html>'''
+        rebuilt = source.replace("hero.jpg", "other.jpg").replace('<input name="email">', "")
+        failures = validate_full_rebuild(source, rebuilt)
+        self.assertIn("image src/srcset values changed or image sources were added/removed", failures)
+        self.assertIn("existing form fields or select options changed", failures)
+
+    def test_full_rebuild_requires_stylesheet_link_and_preserves_anchor_destinations(self):
+        source = '''<!doctype html><html><head><link rel="stylesheet" href="styles.css"></head><body><a href="/one">One</a></body></html>'''
+        rebuilt = source.replace('href="styles.css"', 'href="theme.css"').replace('href="/one"', 'href="/two"')
+        failures = validate_full_rebuild(source, rebuilt)
+        self.assertIn("existing link destinations changed, or links were added/removed", failures)
+        self.assertIn("candidate does not link the extracted files/styles.css stylesheet", failures)
+
     def _candidate(self, root: Path, html: str) -> Path:
         candidate = root / "candidate"
         (candidate / "files").mkdir(parents=True)

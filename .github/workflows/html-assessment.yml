@@ -15,6 +15,14 @@ on:
         description: Numeric private results run ID containing that candidate
         required: true
         type: string
+      revision_mode:
+        description: Pass 1 strategy for this candidate
+        required: true
+        type: choice
+        options:
+          - repair
+          - full_rebuild
+        default: repair
 
 permissions:
   contents: read
@@ -125,6 +133,7 @@ jobs:
           set -euo pipefail
           python chatgpt_automation/html_assessment/html_assessment.py \
             --provider nvidia \
+            --revision-mode "${{ inputs.revision_mode }}" \
             --target-json-file "${RUNNER_TEMP}/html-assessment-target.json" \
             --source-html-file "$SOURCE_HTML_FILE" \
             --candidate-output-dir "$CANDIDATE_DIR" \

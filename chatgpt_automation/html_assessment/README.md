@@ -134,6 +134,8 @@ The public `chatgpt` branch now provides `.github/workflows/html-assessment.yml`
 
 Capture and inference occur in the Actions runner; screenshots are produced by headless Playwright and attached to the NVIDIA API request. Chromium does not inherit provider keys. The model's visual pass is advisory; only passing deterministic structural and rendered browser checks can approve a candidate. CTA contrast and broken image checks are blocking, and checks that cannot measure an issue reliably fail closed for review.
 
+The dispatch input `revision_mode` defaults to `repair`. Choose `full_rebuild` to have Nemotron generate the complete HTML/CSS page using the preserved original, code review, screenshots, and deterministic baseline QA as evidence. The full rebuild must retain exact image `src`/`srcset` values, existing link destinations, form actions and controls, and the `styles.css` link; otherwise it falls back safely and remains subject to the same pending gates.
+
 The original ChatGPT generation workflow does not post to Cloudflare before assessment. Once at least three candidates in the latest successful run pass deterministic repository QA, the assessment workflow refreshes `successful-passes/` and dispatches the unchanged `content-post` workflow. Configure `CONTENT_POST_DISPATCH_TOKEN` in the public Git Content repository; otherwise, start the existing publisher manually.
 
 ## API retries
