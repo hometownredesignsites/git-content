@@ -13,12 +13,25 @@ from run_duckai import (
     MAX_INITIAL_PROMPT_CHARS,
     _verified_source_assets,
     build_initial_prompt,
+    build_quality_prompt,
     validate_source_assessment,
 )
 from scripts.summarize_candidate_failure import summarize
 
 
 class PromptAndWorkflowTests(unittest.TestCase):
+    def test_quality_prompt_uses_the_same_verified_asset_allowlist_as_generation(self):
+        prompt = build_quality_prompt(
+            "Redesign the flooring company website.",
+            "VERIFIED_SOURCE_ASSET_URLS:\n- https://example.com/verified-photo.jpg\n\n"
+            "VERIFIED_SOURCE_IMAGE_URLS:\n- https://example.com/shortlisted-photo.jpg\n\n"
+            "VERIFIED_CATEGORY_FALLBACK_IMAGE_URLS:\n- https://images.example.com/floor.jpg",
+        )
+
+        self.assertIn("VERIFIED_SOURCE_ASSET_URLS:\n- https://example.com/verified-photo.jpg", prompt)
+        self.assertIn("VERIFIED_SOURCE_IMAGE_URLS:\n- https://example.com/shortlisted-photo.jpg", prompt)
+        self.assertIn("VERIFIED_CATEGORY_FALLBACK_IMAGE_URLS:\n- https://images.example.com/floor.jpg", prompt)
+
     def test_source_assessment_accepts_a_cited_natural_language_access_status(self):
         assessment = {
             "access_status": (

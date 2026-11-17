@@ -710,7 +710,14 @@ def run_browser_qa(website_request: str) -> None:
 def build_quality_prompt(website_request: str, generation_prompt: str = "") -> str:
     """Pass only the image-asset allowlists to QA alongside the actual request."""
     context_blocks = []
-    for marker in ("VERIFIED_SOURCE_IMAGE_URLS", "CATEGORY_FALLBACK_IMAGE_URLS"):
+    # Keep QA's allowlist aligned with every verified source asset the model
+    # was permitted to use.  The source brief also carries a narrower image
+    # shortlist, but generation may select other verified same-site assets.
+    for marker in (
+        "VERIFIED_SOURCE_ASSET_URLS",
+        "VERIFIED_SOURCE_IMAGE_URLS",
+        "VERIFIED_CATEGORY_FALLBACK_IMAGE_URLS",
+    ):
         match = re.search(
             rf"{marker}:\s*\n([\s\S]*?)(?:\n\s*\n|$)",
             generation_prompt,
