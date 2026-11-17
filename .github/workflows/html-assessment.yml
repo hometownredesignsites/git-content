@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       source_candidate_id:
-        description: Private candidate ID whose files/inlined/index.html is the source page
+        description: Private candidate ID; uses preserved files/inlined/index-old.html when present
         required: true
         type: string
       source_run_id:

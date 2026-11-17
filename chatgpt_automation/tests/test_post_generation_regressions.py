@@ -47,6 +47,21 @@ class PostGenerationRegressionTest(unittest.TestCase):
         }), encoding="utf-8")
         return candidate
 
+    def test_target_selection_prefers_preserved_original_and_falls_back_for_legacy_candidate(self):
+        target_script = Path(__file__).resolve().parents[1] / "scripts" / "prepare_html_assessment_target.py"
+        select_source = runpy.run_path(str(target_script))["select_source_html"]
+        with tempfile.TemporaryDirectory(prefix="assessment-target-source-") as temporary:
+            candidate = Path(temporary)
+            inline_dir = candidate / "files" / "inlined"
+            inline_dir.mkdir(parents=True)
+            current = inline_dir / "index.html"
+            original = inline_dir / "index-old.html"
+            current.write_text("<html>revised page</html>", encoding="utf-8")
+            self.assertEqual(select_source(candidate), current)
+
+            original.write_text("<html>preserved source</html>", encoding="utf-8")
+            self.assertEqual(select_source(candidate), original)
+
     def test_assessment_export_preserves_source_before_overwriting_inline_html(self):
         assessor_path = Path(__file__).resolve().parents[1] / "html_assessment" / "html_assessment.py"
         preserve_source = runpy.run_path(str(assessor_path))["preserve_original_inline_html"]

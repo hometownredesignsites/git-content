@@ -838,9 +838,11 @@ def run(args: argparse.Namespace) -> Path:
         if candidate_path == run_dir or run_dir in candidate_path.parents or candidate_path in run_dir.parents:
             raise RuntimeError("Candidate output directory must be separate from the assessment run directory.")
         if args.update_existing_candidate:
-            expected_source = (candidate_path / "files" / "inlined" / "index.html").resolve()
+            inline_dir = candidate_path / "files" / "inlined"
+            preserved_source = inline_dir / "index-old.html"
+            expected_source = (preserved_source if preserved_source.is_file() else inline_dir / "index.html").resolve()
             if not candidate_path.is_dir() or not args.source_html_file or Path(args.source_html_file).resolve() != expected_source:
-                raise RuntimeError("In-place updates require the source HTML to be this candidate's files/inlined/index.html.")
+                raise RuntimeError("In-place updates require the preserved files/inlined/index-old.html when present, otherwise files/inlined/index.html.")
         elif candidate_path.exists():
             raise RuntimeError("Candidate output directory already exists; refusing to overwrite an earlier candidate.")
     elif args.update_existing_candidate:

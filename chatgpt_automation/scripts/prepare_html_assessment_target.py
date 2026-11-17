@@ -10,6 +10,14 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 
+def select_source_html(source_candidate: Path) -> Path:
+    """Prefer the preserved original; use the current inline page for legacy candidates."""
+    inline_dir = source_candidate / "files" / "inlined"
+    original = inline_dir / "index-old.html"
+    current = inline_dir / "index.html"
+    return original if original.is_file() else current
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("job_file", type=Path)
@@ -56,6 +64,7 @@ def main() -> int:
     except ValueError as error:
         raise SystemExit("The selected source candidate must be inside the private results tree.") from error
     inline_html = source_candidate / "files" / "inlined" / "index.html"
+    source_html = select_source_html(source_candidate)
     notes_path = source_candidate / "run_notes.json"
     inputs_path = source_candidate / "debug" / "inputs.json"
     if not inline_html.is_file() or not notes_path.is_file() or not inputs_path.is_file():
@@ -74,8 +83,8 @@ def main() -> int:
     target_host = (parsed.hostname or "").lower().removeprefix("www.")
     if not source_host or source_host != target_host:
         raise SystemExit("The selected candidate source URL does not match the configured private target.")
-    if inline_html.stat().st_size < 100:
-        raise SystemExit("The selected candidate inline HTML is unexpectedly small.")
+    if source_html.stat().st_size < 100:
+        raise SystemExit("The selected candidate source HTML is unexpectedly small.")
 
     target = {
         "job_id": args.job_id,
@@ -94,7 +103,7 @@ def main() -> int:
     github_output = os.environ.get("GITHUB_OUTPUT")
     if github_output:
         with Path(github_output).open("a", encoding="utf-8") as handle:
-            source_path = str(inline_html)
+            source_path = str(source_html)
             handle.write(f"site_slug={site_slug}\n")
             handle.write(f"source_html_file={source_path}\n")
             handle.write(f"candidate_dir={source_candidate}\n")
