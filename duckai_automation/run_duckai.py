@@ -634,6 +634,18 @@ def build_initial_prompt(
             "--ink, --ink-soft, --paper, --surface, --accent, --accent-dark, "
             "--accent-soft, --accent-warm, and --line. Keep text contrast at least 4.5:1.\n\n"
         )
+    hard_requirements = (
+        "HARD OUTPUT CHECKLIST — satisfy every item before returning the final HTML: "
+        "(1) Keep the assigned template's required DOM structure and include its required <main> element. "
+        "(2) Render at least three distinct approved photos as actual <img src=...> elements with useful alt text; "
+        "CSS background images do not count as image coverage. Use only the verified source or fallback URLs below. "
+        "(3) If inquiry fields were captured, include a semantic <form> with each exact label and required state; "
+        "do not invent fields, a backend, or claim the form submits. "
+        "(4) Implement the mobile menu with a native button, matching aria-controls/aria-expanded, and a real panel; "
+        "pointer click, Enter, and Space must open and close it. Do not replace the button with a clickable span. "
+        "(5) Keep the primary CTA visible in the first screen at desktop and mobile widths. "
+        "Before returning, verify these five items against the actual markup and interactions.\n\n"
+    )
     identity = (
         f"BUSINESS: {json.dumps(business_name, ensure_ascii=False)}; "
         f"CATEGORY: {json.dumps(industry_category, ensure_ascii=False)}; "
@@ -655,6 +667,7 @@ def build_initial_prompt(
         f"{retry_context}"
         f"{source_facts}"
         f"{template_context}"
+        f"{hard_requirements}"
         f"{BASE_CONTRACT}\n\n"
         "Begin with CSS PART 1 OF 3 only."
     )
