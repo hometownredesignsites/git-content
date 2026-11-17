@@ -72,7 +72,7 @@ def _text(value: object, limit: int = 160) -> str:
 def _source_urls(item: object, valid_sources: set[str]) -> list[str]:
     values = []
     if isinstance(item, dict):
-        for key in ("source_urls", "sources", "source_url", "page_url", "found_on", "url"):
+        for key in ("source_urls", "sources", "source_url", "page_url", "found_on", "where_it_appears", "url"):
             value = item.get(key)
             if isinstance(value, str):
                 values.append(value)

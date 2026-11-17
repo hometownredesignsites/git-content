@@ -61,6 +61,17 @@ class SourceBriefTests(unittest.TestCase):
         self.assertIn("- https://cdn.example.com/flooring.jpg", allowlist)
         self.assertNotIn("logo.svg", allowlist)
 
+    def test_inventory_image_uses_where_it_appears_as_its_source_citation(self):
+        assessment = dict(self.assessment)
+        assessment["source_assets"] = [{
+            "url": "https://cdn.example.com/source-floor.jpg",
+            "type": "photo",
+            "where_it_appears": "https://example.com/services/",
+        }]
+        brief = build_compact_source_brief(assessment)
+        self.assertIn("https://cdn.example.com/source-floor.jpg", brief)
+        self.assertIn("VERIFIED_SOURCE_IMAGE_URLS:\n- https://cdn.example.com/source-floor.jpg", brief)
+
     def test_compact_brief_includes_byte_validated_category_fallbacks(self):
         fallbacks = category_fallback_candidates("flooring and tile")
         brief = build_compact_source_brief(self.assessment, fallbacks)
