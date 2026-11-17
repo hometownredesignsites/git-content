@@ -244,7 +244,7 @@ def compact_facts(facts: dict) -> tuple[dict, list[str]]:
         key = value.lower()
         if value and key not in seen_headings:
             seen_headings.add(key)
-            headings.append(value[:110])
+            headings.append(f"{value[:110]} [Source: {homepage.get('url', facts.get('requested_url', ''))}]")
         if len(headings) >= 5:
             break
 
@@ -262,7 +262,7 @@ def compact_facts(facts: dict) -> tuple[dict, list[str]]:
             if key in seen_headings:
                 continue
             seen_headings.add(key)
-            headings.append(value[:110])
+            headings.append(f"{value[:110]} [Source: {page.get('url', facts.get('requested_url', ''))}]")
             if len(headings) >= 8:
                 break
         if len(headings) >= 8:
@@ -274,7 +274,10 @@ def compact_facts(facts: dict) -> tuple[dict, list[str]]:
         per_page_limit = (220, 150, 180)[page_index] if page_index < 3 else 0
         for fact in _verified_facts(page, per_page_limit):
             title = " ".join(str(page.get("title", "")).split())
+            source_url = str(page.get("url", facts.get("requested_url", "")))
             value = fact if page_index == 0 or not title else f"{title}: {fact}"
+            if source_url:
+                value = f"{value} [Source: {source_url}]"
             key = re.sub(r"\W+", " ", value).strip().lower()
             if key in seen_facts:
                 continue
@@ -311,6 +314,7 @@ def compact_facts(facts: dict) -> tuple[dict, list[str]]:
             break
 
     candidate_by_key = {}
+    candidate_source_pages = {}
     discovery_priority = {
         "srcset": 0, "data-srcset": 0, "data-lazy-srcset": 0,
         "rendered_srcset": 0, "rendered_img": 1,
@@ -318,6 +322,14 @@ def compact_facts(facts: dict) -> tuple[dict, list[str]]:
         "og:image": 2, "og:image:url": 2, "twitter:image": 2,
         "inline_background": 3, "rendered_background": 3, "src": 4, "img_src": 4,
     }
+    logo_candidates = []
+    for image in facts.get("source_assets", []):
+        image_url = _canonical_source_image_url(str(image.get("url", "")).strip())
+        hint = " ".join((str(image.get("alt", "")), str(image.get("title", "")), urlsplit(image_url).path))
+        if image_url and _is_source_image_host_allowed(image_url, domain) and re.search(r"logo", hint, re.IGNORECASE):
+            logo_candidates.append({"url": image_url, "alt": " ".join(str(image.get("alt", "")).split())[:100], "source_page": image.get("source_page", "")})
+    logo_asset = next((item for item, valid in zip(logo_candidates[:3], [_image_loads_ok(item["url"]) for item in logo_candidates[:3]]) if valid), None)
+
     for image in facts.get("source_assets", []):
         image_url = _canonical_source_image_url(str(image.get("url", "")).strip())
         key = _url_key(image_url)
@@ -339,6 +351,7 @@ def compact_facts(facts: dict) -> tuple[dict, list[str]]:
                 item = (priority, key, image_url, description)
                 if key not in candidate_by_key or priority < candidate_by_key[key][0]:
                     candidate_by_key[key] = item
+                    candidate_source_pages[key] = str(image.get("source_page", ""))
 
     # Validate source assets before including them. This avoids asking the
     # generator to reproduce empty CMS paths or dead images from scraped markup.
@@ -355,6 +368,7 @@ def compact_facts(facts: dict) -> tuple[dict, list[str]]:
             "url": image_url,
             "alt": alt[:100] or "Source-site photo",
             "source": "verified_source",
+            "source_page": candidate_source_pages.get(key, facts.get("requested_url", "")),
         })
         source_image_urls.append(image_url)
         seen_images.add(key)
@@ -396,18 +410,21 @@ def compact_facts(facts: dict) -> tuple[dict, list[str]]:
         key = href.lower()
         if href and key not in seen_links:
             seen_links.add(key)
-            links.append({"label": label[:100], "url": href})
+            links.append({"label": label[:100], "url": href, "source_page": link.get("page", facts.get("requested_url", ""))})
         if len(links) >= MAX_NAVIGATION_LINKS:
             break
 
     compact = {
         "site": facts.get("requested_url"),
         "identity": str(homepage.get("title", ""))[:140],
+        "identity_source": homepage.get("url", facts.get("requested_url", "")),
         "visual_category_hint_unverified": str(facts.get("business_metadata_unverified", {}).get("category", ""))[:100],
         "verified_facts": verified_facts,
         "page_sections": headings,
         "contact_fields": form_fields,
+        "contact_form_source": selected_form.get("page_url", ""),
         "contact_actions": links,
+        "brand_logo": logo_asset,
         "project_images": images,
         "category_fallback_hero": fallback_images[0]["url"] if fallback_images else "",
     }

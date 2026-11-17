@@ -215,7 +215,7 @@ class SavedResponsePipelineTest(unittest.TestCase):
         with patch("chatgpt_automation.scripts.prepare_candidate_context._image_loads_ok", return_value=False):
             compact, _ = compact_facts(facts)
 
-        self.assertIn("Services: New fences", compact["page_sections"])
+        self.assertTrue(any(section.startswith("Services: New fences [Source: https://fixture.invalid/services]") for section in compact["page_sections"]))
         self.assertTrue(any("Services" in fact and "cedar fences" in fact for fact in compact["verified_facts"]))
 
     def test_css_three_is_not_a_supported_generation_stage(self):
