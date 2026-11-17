@@ -53,8 +53,8 @@ def run(candidate: Path) -> dict:
     report["browser_qa_status"] = browser_report.get("status", "missing")
     write_json(debug / "checker_report.json", report)
 
-    # Reuse Git Content's review schemas. They remain explicitly pending until a reviewer
-    # copies and completes them as debug/image_review.json and debug/visual_review.json.
+    # Keep Git Content's review templates as optional audit aids. Deterministic repository QA
+    # decides final_success; the model's visual pass is advisory and no human review is required.
     review_templates = debug / "review_templates"
     review_templates.mkdir(parents=True, exist_ok=True)
     image_review = {
@@ -87,14 +87,15 @@ def run(candidate: Path) -> dict:
     notes = json.loads(notes_path.read_text(encoding="utf-8")) if notes_path.is_file() else {}
     automated_success = report.get("automated_success") is True
     notes.update({
-        "status": "automated_success_review_pending" if automated_success else "automated_failed",
+        "status": "assessment_success" if automated_success else "automated_failed",
         "html_assessment_revision": True,
-        "html_assessment_status": "repo_qa_passed_review_pending" if automated_success else "repo_qa_failed",
+        "html_assessment_status": "repo_qa_passed" if automated_success else "repo_qa_failed",
         "html_assessment_repo_qa_passed": automated_success,
         "automated_success": automated_success,
-        "final_success": False,
-        "human_visual_review_status": "pending",
-        "image_relevance_review_status": "pending",
+        "final_success": automated_success,
+        "human_visual_review_status": "assessment_replaced_review" if automated_success else "pending",
+        "image_relevance_review_status": "assessment_replaced_review" if automated_success else "pending",
+        "html_assessment_model_visual_qa_advisory": notes.get("html_assessment_model_review_passed"),
         "browser_qa_status": browser_report.get("status", "missing"),
         "repository_qa_report": "debug/checker_report.json",
         "review_templates": [

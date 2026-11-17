@@ -15,13 +15,6 @@ on:
         description: Numeric private results run ID containing that candidate
         required: true
         type: string
-      provider:
-        description: Inference provider
-        required: true
-        type: choice
-        options:
-          - nvidia
-          - cloudflare
 
 permissions:
   contents: read
@@ -33,7 +26,8 @@ concurrency:
 jobs:
   assess:
     if: github.ref_name == 'chatgpt'
-    runs-on: ubuntu-latest
+    # Playwright 1.58 does not yet ship the Ubuntu 26 Chromium dependencies.
+    runs-on: ubuntu-24.04
     timeout-minutes: 180
     defaults:
       run:
@@ -122,38 +116,15 @@ jobs:
           python -m playwright install --with-deps chromium
 
       - name: Run HTML assessment with NVIDIA NIM
-        if: inputs.provider == 'nvidia'
         env:
           NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
           NVIDIA_MODEL: ${{ vars.NVIDIA_MODEL || 'nvidia/nemotron-3.5-super-vl-120b-a12b' }}
-          SITE_SLUG: ${{ steps.target.outputs.site_slug }}
           SOURCE_HTML_FILE: ${{ steps.target.outputs.source_html_file }}
           CANDIDATE_DIR: ${{ steps.target.outputs.candidate_dir }}
         run: |
           set -euo pipefail
           python chatgpt_automation/html_assessment/html_assessment.py \
             --provider nvidia \
-            --target-json-file "${RUNNER_TEMP}/html-assessment-target.json" \
-            --source-html-file "$SOURCE_HTML_FILE" \
-            --candidate-output-dir "$CANDIDATE_DIR" \
-            --update-existing-candidate \
-            --output-root "${RUNNER_TEMP}/html-assessment" \
-            --workflow-id "$GITHUB_RUN_ID" \
-            --workflow-attempt "$GITHUB_RUN_ATTEMPT"
-
-      - name: Run HTML assessment with Cloudflare Workers AI
-        if: inputs.provider == 'cloudflare'
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_MODEL: ${{ vars.CLOUDFLARE_MODEL || '@cf/google/gemma-4-26b-a4b-it' }}
-          SITE_SLUG: ${{ steps.target.outputs.site_slug }}
-          SOURCE_HTML_FILE: ${{ steps.target.outputs.source_html_file }}
-          CANDIDATE_DIR: ${{ steps.target.outputs.candidate_dir }}
-        run: |
-          set -euo pipefail
-          python chatgpt_automation/html_assessment/html_assessment.py \
-            --provider cloudflare \
             --target-json-file "${RUNNER_TEMP}/html-assessment-target.json" \
             --source-html-file "$SOURCE_HTML_FILE" \
             --candidate-output-dir "$CANDIDATE_DIR" \
@@ -169,7 +140,7 @@ jobs:
           set -euo pipefail
           python chatgpt_automation/scripts/run_html_assessment_qa.py "$CANDIDATE_DIR"
 
-      - name: Save the pending candidate to private results
+      - name: Save the assessed candidate to private results
         run: |
           set -euo pipefail
           python private-results/private_automation/scripts/build_results_index.py --provider chatgpt
@@ -185,7 +156,7 @@ jobs:
             git -C private-results fetch origin chatgpt
             git -C private-results rebase origin/chatgpt
             if git -C private-results push origin HEAD:refs/heads/chatgpt; then
-              echo "Candidate evidence saved to the private results branch; human and image review remain pending."
+              echo "Candidate evidence and deterministic QA results saved to the private results branch."
               exit 0
             fi
             if [[ "$retry" -lt 3 ]]; then
@@ -194,3 +165,14 @@ jobs:
           done
           echo "Could not save the private candidate after three bounded push attempts."
           exit 1
+
+      - name: Dispatch a successful assessed set to content-post
+        env:
+          CONTENT_POST_DISPATCH_TOKEN: ${{ secrets.CONTENT_POST_DISPATCH_TOKEN }}
+          JOB_ID: ${{ env.JOB_ID }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+        run: |
+          set -euo pipefail
+          python private-results/private_automation/scripts/dispatch_assessed_set.py \
+            --job-id "$JOB_ID" \
+            --source-run-id "$SOURCE_RUN_ID"

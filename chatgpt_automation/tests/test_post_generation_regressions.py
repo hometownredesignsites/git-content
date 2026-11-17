@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from playwright.sync_api import sync_playwright
 
@@ -14,6 +16,7 @@ from chatgpt_automation.scripts.browser_qa import HEADER_NAV_AUDIT_JS, VIEWPORT_
 from chatgpt_automation.scripts.repair_contact_form import repair
 from chatgpt_automation.scripts.repair_local_links import repair as repair_local_links
 from chatgpt_automation.scripts.repair_generated_visuals import repair as repair_visuals
+from chatgpt_automation.scripts.run_html_assessment_qa import run as run_html_assessment_qa
 from chatgpt_automation.scripts.site_quality import _PageInventory, _header_navigation_link_limit
 
 
@@ -35,6 +38,27 @@ class PostGenerationRegressionTest(unittest.TestCase):
             }],
         }), encoding="utf-8")
         return candidate
+
+    def test_repository_qa_approves_assessment_without_human_review(self):
+        with tempfile.TemporaryDirectory(prefix="assessment-qa-approval-") as temporary:
+            candidate = self._candidate(Path(temporary), "<main><h1>Example</h1></main>")
+            (candidate / "run_notes.json").write_text(json.dumps({
+                "html_assessment_model_review_passed": False,
+            }), encoding="utf-8")
+            (candidate / "debug" / "browser_qa.json").write_text(json.dumps({"status": "pass"}), encoding="utf-8")
+            browser_result = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+            structural_result = subprocess.CompletedProcess(
+                args=[], returncode=0, stdout=json.dumps({"automated_success": True}), stderr=""
+            )
+
+            with patch("chatgpt_automation.scripts.run_html_assessment_qa.subprocess.run", side_effect=[browser_result, structural_result]):
+                notes = run_html_assessment_qa(candidate)
+
+            self.assertTrue(notes["automated_success"])
+            self.assertTrue(notes["final_success"])
+            self.assertEqual(notes["human_visual_review_status"], "assessment_replaced_review")
+            self.assertEqual(notes["image_relevance_review_status"], "assessment_replaced_review")
+            self.assertFalse(notes["html_assessment_model_visual_qa_advisory"])
 
     def test_verified_email_is_inserted_into_contact_actions(self):
         with tempfile.TemporaryDirectory(prefix="contact-actions-") as temporary:
