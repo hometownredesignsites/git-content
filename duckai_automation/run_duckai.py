@@ -388,7 +388,8 @@ def send_source_assessment(
     prompt = (
         f"Inspect {source_url} with Web Search. Audit only; do not write code. Review the homepage and relevant About, Services, Locations, FAQ, and Contact pages. Return one concise JSON block preceded by {label}.\n\n"
         + target_metadata
-        + """Include: access_status; pages_reviewed:[{url,page_title,content}]; sources:[exact reviewed page URLs];
+        + """Include: access_status (exactly \"accessed\" if any requested-domain page loaded, otherwise \"not_accessible\");
+pages_reviewed:[{url,page_title,content}]; sources:[exact reviewed page URLs];
 organization_facts: up to 8 [{fact,source_urls}] for identity, services, locations;
 selling_points: up to 3 [{fact,source_urls}]; contact_details: verified phone/email/address/conversion path as [{fact,source_urls}];
 contact_form_fields: up to 16 [{name,type,label,required:true|false|unknown,placeholder,options,source_urls}] preserving exact observed field details;
@@ -466,7 +467,23 @@ Every fact and asset must cite an exact reviewed page URL. Do not invent facts, 
 
 
 def validate_source_assessment(assessment: dict, source_url: str) -> None:
-    if assessment.get("access_status") != "accessed":
+    access_status = assessment.get("access_status")
+    normalized_access_status = " ".join(access_status.casefold().split()) if isinstance(access_status, str) else ""
+    clearly_denied = any(
+        re.search(pattern, normalized_access_status)
+        for pattern in (
+            r"\b(?:could not|couldn't|cannot|can't|unable to|failed to)\s+(?:directly\s+)?access\b",
+            r"\bnot\s+(?:able to\s+)?access\b",
+            r"\binaccessible\b",
+            r"\baccess (?:was )?denied\b",
+            r"\bno access\b",
+            r"\b(?:homepage|website|site)\s+(?:is\s+)?not accessible\b",
+        )
+    )
+    confirms_access = normalized_access_status == "accessed" or bool(
+        re.search(r"\b(?:accessed|accessible)\b", normalized_access_status)
+    )
+    if clearly_denied or not confirms_access:
         fail("Duck.ai could not confirm it accessed the source site; stopping before code generation.")
     requested = urlparse(source_url)
     requested_host = (requested.hostname or "").lower().removeprefix("www.")

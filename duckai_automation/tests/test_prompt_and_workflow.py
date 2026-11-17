@@ -9,11 +9,45 @@ from unittest.mock import patch
 AUTOMATION = Path(__file__).resolve().parents[1]
 REPO = AUTOMATION.parent
 sys.path.insert(0, str(AUTOMATION))
-from run_duckai import MAX_INITIAL_PROMPT_CHARS, _verified_source_assets, build_initial_prompt
+from run_duckai import (
+    MAX_INITIAL_PROMPT_CHARS,
+    _verified_source_assets,
+    build_initial_prompt,
+    validate_source_assessment,
+)
 from scripts.summarize_candidate_failure import summarize
 
 
 class PromptAndWorkflowTests(unittest.TestCase):
+    def test_source_assessment_accepts_a_cited_natural_language_access_status(self):
+        assessment = {
+            "access_status": (
+                "Homepage accessible. Commercial Services page surfaced in search. "
+                "About and Contact pages were not verified."
+            ),
+            "pages_reviewed": [{"url": "https://codyflooring.wordpress.com/"}],
+            "sources": ["https://codyflooring.wordpress.com/"],
+        }
+        validate_source_assessment(assessment, "https://codyflooring.wordpress.com/")
+
+    def test_source_assessment_rejects_an_explicit_access_failure(self):
+        assessment = {
+            "access_status": "Could not access the homepage.",
+            "pages_reviewed": [{"url": "https://example.com/"}],
+            "sources": ["https://example.com/"],
+        }
+        with self.assertRaisesRegex(RuntimeError, "could not confirm it accessed"):
+            validate_source_assessment(assessment, "https://example.com/")
+
+    def test_source_assessment_still_requires_a_page_on_the_requested_domain(self):
+        assessment = {
+            "access_status": "Homepage accessible.",
+            "pages_reviewed": [{"url": "https://other.example/"}],
+            "sources": ["https://other.example/"],
+        }
+        with self.assertRaisesRegex(RuntimeError, "requested source domain"):
+            validate_source_assessment(assessment, "https://example.com/")
+
     def test_generation_prompt_keeps_verified_facts_but_stays_bounded(self):
         prompt = build_initial_prompt(
             "Redesign the flooring company website.",
