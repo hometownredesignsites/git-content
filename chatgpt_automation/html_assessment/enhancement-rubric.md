@@ -5,9 +5,11 @@ This concise, original rubric defines **Pass 2: design enhancement**. The select
 - **ENH-01 — Distinct design direction:** Propose a coherent direction for this page. Preserve its existing strengths and identity.
 - **ENH-02 — Design-system fit:** Consider page pattern, color roles, type pairing, spacing, imagery, and interaction as one system. Tie recommendations to the supplied customer category and the content actually present.
 - **ENH-03 — Clear hierarchy:** Make the primary message, supporting information, and next action easy to scan.
-- **ENH-04 — Intentional visual treatment:** Improve composition, whitespace, typography, color, and imagery only where screenshots or source evidence support a change.
+- **ENH-04 — Intentional visual treatment:** Improve composition, whitespace, typography, color, and imagery only where screenshots or source evidence support a change. A loaded image is not automatically relevant; do not stretch or crop logos/badges as photography. Never change, add, remove, or reorder image `src` or `srcset` values. Preserve a working, high-contrast primary CTA instead of recoloring it for variety.
 - **ENH-05 — Responsive behavior:** Keep the page readable and usable at the supplied desktop and mobile viewports.
 - **ENH-06 — Restraint and accessibility:** Preserve content, functioning links, and Pass 1 fixes. Do not add unsupported claims or functionality; maintain visible focus and respect reduced-motion preferences where motion exists.
+
+Pass 2 must retain all existing service, testimonial, contact, and other required sections, form controls and options, and contact channels. Do not invent testimonial attribution or business claims. If a visible defect cannot be corrected while preserving protected image URLs or verified content, leave it explicit for review; do not trade a known-good component for an unverified visual change.
 
 For every proposed enhancement, provide `criterion_id`, `priority`, `design_rationale`, `evidence`, `user_benefit`, `change`, and `confidence`. Keep the current direction if it works. Do not force Apple branding, Liquid Glass, a shared palette, or any ungrounded design pattern.
 

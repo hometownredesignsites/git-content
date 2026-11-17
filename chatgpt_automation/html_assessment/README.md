@@ -1,15 +1,15 @@
 # HTML Assessment Workflow
 
-A reusable Python workflow that downloads customer HTML pages, captures desktop and mobile screenshots with **headless Playwright Chromium**, reviews source and rendered appearance through Cloudflare Workers AI or NVIDIA NIM, then produces two sequenced revisions. It is designed to run locally or as a one-target-per-job step in GitHub Actions. It never publishes or deploys a page.
+A reusable Python workflow that downloads customer HTML pages, audits the original HTML/CSS first, then captures desktop and mobile screenshots with **headless Playwright Chromium** for a separate visual review through Cloudflare Workers AI or NVIDIA NIM. It then produces two sequenced revisions. It is designed to run locally or as a one-target-per-job step in GitHub Actions. It never publishes or deploys a page.
 
 ## Two-pass review
 
-1. **Pass 1 — Repair:** identify and correct evidence-backed HTML, accessibility, content/action, responsive, and visual defects. Keep changes minimal and preserve the existing page direction. Pass 1 has a QA and final gate; Pass 2 does not start until that gate passes.
+1. **Pass 1 — Repair:** inspect source code before screenshots, then combine that audit with screenshot evidence. Correct evidence-backed HTML, accessibility, content/action, responsive, and visual defects. Keep changes minimal and preserve the existing page direction. Pass 1 has a QA and final gate; Pass 2 does not start until that gate passes.
 2. **Pass 2 — Design enhancement:** start from the corrected Pass 1 output and apply restrained improvements informed by UI/UX Pro Max and web-applicable Apple Design principles. Capture fresh screenshots, review the draft, apply supported corrections, and run a final gate.
 
-The local edit applier blocks model edits that add, remove, or change an `<img>` `src` or `srcset`. Image URL changes need a separate asset-validation workflow; this prevents an unverified model suggestion from introducing a broken image.
+The local edit applier blocks model edits that add, remove, or change an `<img>` `src` or `srcset`. Image URL changes need a separate asset-validation workflow; this prevents an unverified model suggestion from introducing a broken image. Screenshot review also checks image relevance and alt-text accuracy: a loaded image can still be the wrong subject or be stretched into the wrong role. The assessor must preserve already readable CTAs, and any unresolved or unmeasured contrast issue remains pending deterministic QA or human review.
 
-The selected remote provider performs assessment, prioritization, design direction, and QA. Python downloads source HTML, captures local screenshots, sends requests, validates JSON and exact edit anchors, applies edits, and saves evidence. Source page text, code, and screenshots are treated as untrusted data.
+The selected remote provider performs assessment, prioritization, design direction, and QA. Python downloads source HTML, sends a code-only audit first, then captures local screenshots and requests a visual supplement before prioritization or edits. It validates JSON and exact edit anchors, applies edits, and saves evidence. Source page text, code, and screenshots are treated as untrusted data.
 
 ## Providers
 

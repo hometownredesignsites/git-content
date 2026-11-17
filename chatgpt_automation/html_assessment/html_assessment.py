@@ -700,64 +700,95 @@ def run(args: argparse.Namespace) -> Path:
                     source.write_bytes(response.read())
             if source.stat().st_size < 100:
                 raise RuntimeError(f"Downloaded source for {name} was unexpectedly small.")
-            if not args.code_only:
-                for key, width, height in (("hero", 1440, 1000), ("section", 1440, 1000), ("mobile", 390, 844)):
-                    path = shots_dir / f"{name}-source-{key}.png"
-                    save_screenshot(source, path, width, height, url, "section" if key == "section" else "top")
-                    page[f"source_{key}"] = path
         else:
             for key in ("hero", "section", "mobile"):
                 page[f"source_{key}"] = shots_dir / f"{name}-source-{key}.png"
         pages.append(page)
 
     assessments: dict[str, str] = {}
+    code_assessments: dict[str, str] = {}
     comparative_path = audit_dir / "comparative-recommendations.txt"
-    if args.resume_directory:
-        for page in pages:
-            assessment_path = audit_dir / f"assessment-{page['name']}.txt"
-            if assessment_path.exists():
-                assessments[page["name"]] = assessment_path.read_text(encoding="utf-8")
-                try:
-                    validate_assessment(assessments[page["name"]], page["name"])
-                except (RuntimeError, ValueError):
-                    cached_repair = audit_dir / f"assessment-format-repair-{page['name']}.txt"
-                    if cached_repair.exists():
-                        repaired_text = cached_repair.read_text(encoding="utf-8")
-                        try:
-                            validate_assessment(repaired_text, page["name"])
-                            assessments[page["name"]] = repaired_text
-                        except (RuntimeError, ValueError):
-                            assessments[page["name"]] = ensure_assessment_rubric(assessments[page["name"]], page["name"], repair_prompt, audit_dir, model, account_id, token)
-                    else:
-                        assessments[page["name"]] = ensure_assessment_rubric(assessments[page["name"]], page["name"], repair_prompt, audit_dir, model, account_id, token)
-            else:
-                visual = "Review the HTML source and attached headless Playwright screenshots: desktop hero, desktop content section, mobile hero." if not args.code_only else "Review HTML source only; there are no screenshots in this run."
-                user = f"STATE A — PASS 1 REPAIR AUDIT: ASSESS {page['name']}\nPage URL: {page['url']}\n{visual}\nFind defects and omissions that should be corrected before any design enhancement. Record the concept's current direction to preserve. Return only the requested JSON.\n<page_html>\n{read_html(page['source'])}\n</page_html>"
-                images = [] if args.code_only else screenshot_paths(page, "source")
-                assessments[page["name"]] = invoke_workers_ai(f"assessment-{page['name']}", repair_prompt, user, images, audit_dir, model, account_id, token, 4500)
-                assessments[page["name"]] = ensure_assessment_rubric(assessments[page["name"]], page["name"], repair_prompt, audit_dir, model, account_id, token)
-        if comparative_path.exists():
-            comparative = comparative_path.read_text(encoding="utf-8")
-        elif (audit_dir / "recommendations.json").exists():
-            comparative = (audit_dir / "recommendations.json").read_text(encoding="utf-8")
+
+    # Stage 1: complete source-code audits for every page before making screenshots.
+    for page in pages:
+        name = page["name"]
+        assessment_path = audit_dir / f"assessment-{name}.txt"
+        if args.resume_directory and assessment_path.exists():
+            cached = assessment_path.read_text(encoding="utf-8")
+            try:
+                validate_assessment(cached, name)
+                assessments[name] = cached
+                continue
+            except (RuntimeError, ValueError):
+                pass
+
+        code_path = audit_dir / f"assessment-code-{name}.txt"
+        code_report = None
+        if args.resume_directory and code_path.exists():
+            code_report = code_path.read_text(encoding="utf-8")
+            try:
+                validate_assessment(code_report, name)
+            except (RuntimeError, ValueError):
+                code_report = None
+        if code_report is None:
+            code_user = (
+                f"STATE A — PASS 1 SOURCE-CODE AUDIT: ASSESS {name}\n"
+                f"Page URL: {page['url']}\n"
+                "Inspect the original HTML and CSS only. No screenshots have been captured or supplied. "
+                "Report source-supported structure, content, semantics, links, forms, image-reference and CSS issues. "
+                "Do not make rendered or visual claims, propose edits, or recommend a redesign. Return the requested assessment JSON.\n"
+                f"<page_html>\n{read_html(page['source'])}\n</page_html>"
+            )
+            code_report = invoke_workers_ai(f"assessment-code-{name}", repair_prompt, code_user, [], audit_dir, model, account_id, token, 4500)
+            code_report = ensure_assessment_rubric(code_report, name, repair_prompt, audit_dir, model, account_id, token)
+            code_path.write_text(code_report, encoding="utf-8")
+
+        if args.code_only:
+            assessments[name] = code_report
+            assessment_path.write_text(code_report, encoding="utf-8")
         else:
-            all_assessments = "\n".join(f"--- {page['name']} ---\n{assessments[page['name']]}" for page in pages)
-            comparative = invoke_workers_ai("comparative-recommendations", repair_prompt,
-                "STATE B — PASS 1 REPAIR PRIORITIES\nCompare these assessments. Prioritize only repairs and corrections; do not propose a redesign. Return the requested comparative JSON.\n" + all_assessments,
-                [], audit_dir, model, account_id, token, 6000)
-            comparative_path.write_text(comparative, encoding="utf-8")
-            (audit_dir / "recommendations.json").write_text(comparative, encoding="utf-8")
-    else:
+            code_assessments[name] = code_report
+
+    # Stage 2: screenshots and visual review begin only after every code audit is saved.
+    if not args.code_only:
         for page in pages:
-            visual = "Review the HTML source and attached headless Playwright screenshots: desktop hero, desktop content section, mobile hero. The images are submitted to the selected provider for visual assessment." if not args.code_only else "Review HTML source only; there are no screenshots in this run."
-            user = f"STATE A — PASS 1 REPAIR AUDIT: ASSESS {page['name']}\nPage URL: {page['url']}\n{visual}\nFind defects and omissions that should be corrected before any design enhancement. Record the concept's current direction to preserve. Return only the requested JSON.\n<page_html>\n{read_html(page['source'])}\n</page_html>"
-            images = [] if args.code_only else screenshot_paths(page, "source")
-            assessments[page["name"]] = invoke_workers_ai(f"assessment-{page['name']}", repair_prompt, user, images, audit_dir, model, account_id, token, 4500)
-            assessments[page["name"]] = ensure_assessment_rubric(assessments[page["name"]], page["name"], repair_prompt, audit_dir, model, account_id, token)
+            name = page["name"]
+            if name not in code_assessments:
+                continue
+            for key, width, height in (("hero", 1440, 1000), ("section", 1440, 1000), ("mobile", 390, 844)):
+                path = shots_dir / f"{name}-source-{key}.png"
+                if not path.is_file():
+                    save_screenshot(page["source"], path, width, height, page["url"], "section" if key == "section" else "top")
+                page[f"source_{key}"] = path
+
+        for page in pages:
+            name = page["name"]
+            if name in assessments:
+                continue
+            visual_user = (
+                f"STATE A2 — PASS 1 SOURCE SCREENSHOT REVIEW: ASSESS {name}\n"
+                f"Page URL: {page['url']}\n"
+                "The original source-code audit below was completed before these screenshots were captured. "
+                "Review the rendered desktop hero, desktop content section, and mobile hero against the original HTML. "
+                "Return the complete assessment JSON, preserving all still-valid code findings and adding only screenshot-supported observations. "
+                "Focus on image relevance, alt-text mismatch, crop/scale, layout, primary CTA visibility/readability, and responsive issues. "
+                "Do not propose edits in this review. Do not claim measured contrast or pass status based on visual guess.\n"
+                f"<code_audit>\n{code_assessments[name]}\n</code_audit>\n"
+                f"<page_html>\n{read_html(page['source'])}\n</page_html>"
+            )
+            assessment = invoke_workers_ai(f"assessment-visual-{name}", repair_prompt, visual_user, screenshot_paths(page, "source"), audit_dir, model, account_id, token, 4500)
+            assessments[name] = ensure_assessment_rubric(assessment, name, repair_prompt, audit_dir, model, account_id, token)
+            (audit_dir / f"assessment-{name}.txt").write_text(assessments[name], encoding="utf-8")
+
+    if args.resume_directory and (comparative_path.exists() or (audit_dir / "recommendations.json").exists()):
+        comparative = comparative_path.read_text(encoding="utf-8") if comparative_path.exists() else (audit_dir / "recommendations.json").read_text(encoding="utf-8")
+    else:
         all_assessments = "\n".join(f"--- {page['name']} ---\n{assessments[page['name']]}" for page in pages)
-        comparative = invoke_workers_ai("comparative-recommendations", repair_prompt,
-            "STATE B — PASS 1 REPAIR PRIORITIES\nCompare these page assessments. Prioritize only repairs and corrections; do not propose a redesign. Return the requested comparative JSON.\n" + all_assessments,
-            [], audit_dir, model, account_id, token, 6000)
+        comparative = invoke_workers_ai(
+            "comparative-recommendations", repair_prompt,
+            "STATE B — PASS 1 REPAIR PRIORITIES\nCompare the completed code and screenshot assessments. Prioritize only evidence-backed repairs; do not propose a redesign. Return the requested comparative JSON.\n" + all_assessments,
+            [], audit_dir, model, account_id, token, 6000,
+        )
         comparative_path.write_text(comparative, encoding="utf-8")
         (audit_dir / "recommendations.json").write_text(comparative, encoding="utf-8")
 
@@ -1017,7 +1048,7 @@ def run(args: argparse.Namespace) -> Path:
         "beforeAfterDiffs": diff_paths,
         "finalQA": {name: {"status": report["status"], "remainingIssueCount": len(report.get("remaining_issues", [])) if report["status"] != "invalid" else None, "reportParsed": report["status"] != "invalid"} for name, report in final_qa_results.items()},
         "finalQAPassed": all(report["status"] == "pass" for report in final_qa_results.values()),
-        "pipeline": ["download", "source-screenshots", f"{provider}-pass1-repair-assessment", f"{provider}-repair-priorities", "pass1-minimal-repairs", "pass1-visual-code-qa", "pass1-final-repair", f"{provider}-pass2-design-direction", "pass2-design-enhancement", "pass2-visual-code-qa", "pass2-final-corrections", "pass2-final-visual-code-gate"] if not args.code_only else ["download", f"{provider}-pass1-code-assessment", "pass1-repairs", "pass1-code-qa", f"{provider}-pass2-design-direction", "pass2-enhancement", "pass2-code-qa", "final-corrections", "pass2-final-code-gate"],
+        "pipeline": ["download", f"{provider}-pass1-code-audit", "source-screenshots", f"{provider}-pass1-visual-review", f"{provider}-repair-priorities", "pass1-minimal-repairs", "pass1-visual-code-qa", "pass1-final-repair", f"{provider}-pass2-design-direction", "pass2-design-enhancement", "pass2-visual-code-qa", "pass2-final-corrections", "pass2-final-visual-code-gate"] if not args.code_only else ["download", f"{provider}-pass1-code-assessment", "pass1-repairs", "pass1-code-qa", f"{provider}-pass2-design-direction", "pass2-enhancement", "pass2-code-qa", "final-corrections", "pass2-final-code-gate"],
         "screenshotsSentToInferenceProvider": not args.code_only,
         "assessmentRubric": rubric_metadata,
         "enhancementRubric": {"file": "enhancement-rubric.md", "sources": ["UI/UX Pro Max", "Apple Design for the web"]},

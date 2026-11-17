@@ -4,14 +4,14 @@ This concise, original rubric defines **Pass 1: repair**. The selected inference
 
 ## Review criteria
 
-For each finding, name one criterion ID, provide observable evidence from the supplied HTML or screenshot, explain the user impact, and give a focused recommendation. Do not manufacture findings to fill categories. Say when evidence is insufficient.
+For each finding, name one criterion ID, provide observable evidence from the supplied HTML or screenshot, explain the user impact, and give a focused recommendation. Keep code observations separate from rendered observations: the source-code audit runs first without screenshots, followed by a screenshot review that supplements the saved code audit. Do not manufacture findings to fill categories. Say when evidence is insufficient.
 
 ### Baseline quality checks
 
 - **ART-01 — Existing page identity:** Record the visual direction to preserve. Do not propose new styling in Pass 1.
 - **ART-02 — Existing concept consistency:** Record concrete breaks in the page's own current visual system only when they look like defects, such as a visibly broken component or inconsistent state.
 - **VIS-01 — Hierarchy and legibility defects:** Flag content that is clipped, obscured, unreadable, or missing from the supplied viewports. Do not recommend decorative redesign.
-- **VIS-02 — Image correctness:** Flag broken or clearly mismatched images supported by source or screenshot evidence. State uncertainty where subject matter cannot be confirmed.
+- **VIS-02 — Image correctness:** A successfully loaded image can still be wrong for its section. Compare the rendered subject, nearby content, and `alt` text. Flag clear mismatches, misleading alternatives, and logos or badges stretched or cropped as photographs. State uncertainty where subject matter cannot be confirmed. Image `src` and `srcset` values are protected; when a mismatch cannot be corrected without changing them, leave it unresolved for review.
 - **VIS-03 — Existing component defects:** Flag broken or conflicting components only when they impair understanding or use.
 
 ### Usability, conversion, and responsive behavior
@@ -25,7 +25,7 @@ For each finding, name one criterion ID, provide observable evidence from the su
 
 - **A11Y-01 — Semantics and alternatives:** Inspect heading order, landmarks, image alternatives, link names, and control names where visible in source. Prefer native HTML semantics before ARIA.
 - **A11Y-02 — Keyboard and focus:** Inspect focus styling and keyboard-relevant code. Screenshots can confirm visible focus only when a focused state was captured; otherwise state that runtime behavior was not verified.
-- **A11Y-03 — Contrast:** Flag likely contrast problems supported by source colors or screenshots. Do not claim WCAG conformance without measured color values and an appropriate calculation.
+- **A11Y-03 — Contrast:** Check primary CTA visibility and text contrast at desktop and mobile. Preserve a CTA that is already prominent and readable. Flag likely contrast problems supported by source colors or screenshots. Do not claim WCAG conformance by visual guess; rely on deterministic contrast measurement or leave the concern pending for review.
 - **CODE-01 — Robust markup and links:** Look for malformed or redundant markup, empty containers, broken in-page fragment targets, missing image dimensions, and other concrete source issues. Distinguish a static source check from a tested browser result.
 - **CODE-02 — Maintainability and performance:** Recommend code or loading changes only when supported by this page's source and likely user impact. Avoid speculative optimization.
 
