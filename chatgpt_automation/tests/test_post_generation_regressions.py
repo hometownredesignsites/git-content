@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import runpy
 import subprocess
@@ -19,6 +20,12 @@ from chatgpt_automation.scripts.repair_local_links import repair as repair_local
 from chatgpt_automation.scripts.repair_generated_visuals import repair as repair_visuals
 from chatgpt_automation.scripts.run_html_assessment_qa import run as run_html_assessment_qa
 from chatgpt_automation.scripts.site_quality import _PageInventory, _header_navigation_link_limit
+from chatgpt_automation.html_assessment.html_assessment import (
+    apply_model_edits,
+    remove_contradicted_missing_attribute_claims,
+    repository_qa_prompt,
+    run_repository_qa,
+)
 
 
 CHROME_PATH = Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe")
@@ -80,6 +87,141 @@ class PostGenerationRegressionTest(unittest.TestCase):
             self.assertEqual(notes["human_visual_review_status"], "assessment_replaced_review")
             self.assertEqual(notes["image_relevance_review_status"], "assessment_replaced_review")
             self.assertFalse(notes["html_assessment_model_visual_qa_advisory"])
+
+    def test_repository_qa_keeps_candidate_pending_when_pass1_gate_was_not_cleared(self):
+        with tempfile.TemporaryDirectory(prefix="assessment-pass1-pending-") as temporary:
+            candidate = self._candidate(Path(temporary), "<main><h1>Example</h1></main>")
+            (candidate / "run_notes.json").write_text(json.dumps({
+                "html_assessment_pass1_gate_passed": False,
+            }), encoding="utf-8")
+            (candidate / "debug" / "browser_qa.json").write_text(json.dumps({"status": "pass"}), encoding="utf-8")
+            browser_result = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+            structural_result = subprocess.CompletedProcess(
+                args=[], returncode=0, stdout=json.dumps({"automated_success": True}), stderr=""
+            )
+
+            with patch("chatgpt_automation.scripts.run_html_assessment_qa.subprocess.run", side_effect=[browser_result, structural_result]):
+                notes = run_html_assessment_qa(candidate)
+
+            self.assertTrue(notes["html_assessment_repo_qa_passed"])
+            self.assertFalse(notes["automated_success"])
+            self.assertEqual(notes["status"], "pending_review")
+            self.assertEqual(notes["html_assessment_status"], "pass1_gate_pending")
+            self.assertEqual(notes["human_visual_review_status"], "pending")
+
+    def test_assessment_repository_qa_uses_isolated_candidate_and_strips_provider_secrets(self):
+        with tempfile.TemporaryDirectory(prefix="assessment-intermediate-qa-") as temporary:
+            root = Path(temporary)
+            html_path = root / "source.html"
+            html_path.write_text('<html><head><style>body{color:#111}</style></head><body><h1>Source</h1></body></html>', encoding="utf-8")
+            source_candidate = root / "private-candidate"
+            (source_candidate / "debug").mkdir(parents=True)
+            (source_candidate / "debug" / "source_facts.json").write_text('{"pages_reviewed":[]}', encoding="utf-8")
+            seen = {}
+
+            def fake_run(command, **kwargs):
+                seen["env"] = kwargs["env"]
+                candidate = Path(command[-1])
+                debug = candidate / "debug"
+                (debug / "checker_report.json").write_text(json.dumps({
+                    "automated_success": False,
+                    "blocking_failures": ["browser_primary_ctas_readable_desktop_and_mobile"],
+                    "checks": {},
+                    "missing_sections": [],
+                    "failed_image_urls": [],
+                }), encoding="utf-8")
+                (debug / "browser_qa.json").write_text(json.dumps({
+                    "status": "fail",
+                    "checks": {"primary_ctas_readable_desktop_and_mobile": False},
+                    "viewports": {"desktop": {"cta": {"visible_first_screen": True}}},
+                }), encoding="utf-8")
+                return subprocess.CompletedProcess(command, 0, "", "")
+
+            with patch.dict(os.environ, {"NVIDIA_API_KEY": "nvapi-private", "CLOUDFLARE_API_TOKEN": "cf-private"}):
+                with patch("chatgpt_automation.html_assessment.html_assessment.subprocess.run", side_effect=fake_run):
+                    report = run_repository_qa(html_path, "page-1-source", "https://example.test/", root / "run", source_candidate)
+
+            self.assertFalse(report["automated_success"])
+            self.assertNotIn("NVIDIA_API_KEY", seen["env"])
+            self.assertNotIn("CLOUDFLARE_API_TOKEN", seen["env"])
+            snapshot = root / "run" / "audit" / "repository-qa" / "page-1-source"
+            self.assertTrue((snapshot / "debug" / "source_facts.json").is_file())
+            self.assertEqual((snapshot / "files" / "styles.css").read_text(encoding="utf-8"), "body{color:#111}")
+            prompt = repository_qa_prompt(report)
+            self.assertIn("browser_primary_ctas_readable_desktop_and_mobile", prompt)
+
+    def test_repository_qa_prompt_includes_viewport_cta_measurements_and_image_failures(self):
+        prompt = repository_qa_prompt({
+            "available": True,
+            "automated_success": False,
+            "blocking_failures": ["browser_primary_ctas_readable_desktop_and_mobile"],
+            "missing_sections": [],
+            "browser_qa_status": "fail",
+            "browser_qa_checks": {"primary_ctas_readable_desktop_and_mobile": False},
+            "browser_qa": {"viewports": {"desktop": {
+                "hero_cta_contrast": {"issues": [{"text": "Request a quote", "contrast_ratio": 2.1}]},
+                "primary_cta_contrast": {"issues": [{"selector": "a.hero-cta", "text": "Request a quote", "contrast_ratio": 2.1}]},
+            }}},
+            "failed_image_urls": ["https://example.test/broken.jpg"],
+            "checks": {},
+        })
+        self.assertIn("contrast_ratio", prompt)
+        self.assertIn("a.hero-cta", prompt)
+        self.assertIn("broken.jpg", prompt)
+
+    def test_source_audit_drops_a_missing_attribute_claim_contradicted_by_its_exact_evidence(self):
+        report = {
+            "concept": "page-1", "summary": "Menu button exists.",
+            "strengths": [],
+            "code_findings": [{
+                "criterion_id": "A11Y-01", "priority": "low",
+                "finding": "The menu toggle lacks a type attribute.",
+                "evidence": 'The source contains <button class="menu-toggle" type="button">Menu</button>.',
+                "user_impact": "The control may submit a form.",
+                "recommendation": "Set type to button.", "confidence": "medium",
+            }],
+            "visual_findings": [], "content_and_conversion_findings": [],
+        }
+        result, rejected = remove_contradicted_missing_attribute_claims(
+            json.dumps(report), '<button class="menu-toggle" type="button">Menu</button>',
+        )
+        self.assertEqual(json.loads(result)["code_findings"], [])
+        self.assertEqual(rejected[0]["contradiction"]["attributes"], ["type"])
+
+    def test_assessment_can_repair_only_a_source_proven_broken_form_wrapper(self):
+        source = '<div action="/contact"><input name="name"><button type="submit">Send</button></div></form>'
+        edit = {"edits": [{
+            "id": "repair-form", "criterion_id": "CODE-01", "reason": "Restore the missing wrapper.",
+            "find": '<div action="/contact">',
+            "replace": '<form action="/contact"><div action="/contact">',
+        }]}
+        with tempfile.TemporaryDirectory(prefix="assessment-form-wrapper-") as temporary:
+            rejected_path = Path(temporary) / "rejected.json"
+            revised = apply_model_edits(source, json.dumps(edit), rejected_path)
+            self.assertIn('<form action="/contact">', revised)
+            self.assertEqual(json.loads(rejected_path.read_text(encoding="utf-8")), [])
+
+            invented = {"edits": [{
+                "id": "invent-field", "criterion_id": "CODE-01", "reason": "Add another field.",
+                "find": '<button type="submit">Send</button>',
+                "replace": '<input name="email"><button type="submit">Send</button>',
+            }]}
+            unchanged = apply_model_edits(source, json.dumps(invented), rejected_path)
+            self.assertEqual(unchanged, source)
+            self.assertIn("instead of repairing an existing", json.loads(rejected_path.read_text(encoding="utf-8"))[0]["reason"])
+
+    def test_assessment_edit_cannot_change_image_src_or_srcset(self):
+        source = '<img src="room.jpg" srcset="room-small.jpg 480w, room-large.jpg 1200w" alt="Room">'
+        edit = {"edits": [{
+            "id": "replace-image", "criterion_id": "VIS-01", "reason": "Use a more relevant image.",
+            "find": source,
+            "replace": source.replace("room.jpg", "different.jpg"),
+        }]}
+        with tempfile.TemporaryDirectory(prefix="assessment-image-guard-") as temporary:
+            rejected_path = Path(temporary) / "rejected.json"
+            revised = apply_model_edits(source, json.dumps(edit), rejected_path)
+            self.assertEqual(revised, source)
+            self.assertIn("changed an existing image src/srcset", json.loads(rejected_path.read_text(encoding="utf-8"))[0]["reason"])
 
     def test_verified_email_is_inserted_into_contact_actions(self):
         with tempfile.TemporaryDirectory(prefix="contact-actions-") as temporary:
@@ -321,6 +463,7 @@ class PostGenerationRegressionTest(unittest.TestCase):
                 self.assertFalse(result["critical_content_clipping"]["pass"])
                 self.assertFalse(result["hero_cta_contrast"]["pass"])
                 self.assertFalse(result["primary_cta_contrast"]["pass"])
+                self.assertEqual(result["hero_cta_contrast"]["issues"][0]["reason"], "rendered background could not be measured reliably")
                 self.assertEqual(result["contact_email_ctas"]["ungrouped_count"], 0)
                 self.assertEqual(result["contact_email_ctas"]["misplaced_count"], 1)
 

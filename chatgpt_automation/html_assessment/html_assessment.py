@@ -17,6 +17,7 @@ import shutil
 import socket
 import ssl
 import sys
+import subprocess
 import time
 import urllib.error
 import urllib.parse
@@ -400,6 +401,45 @@ def validate_assessment(text: str, concept: str, provider_name: str = "Model") -
                 raise RuntimeError(f"{provider_name} assessment for {concept} finding {group}[{index}] lacks user impact or confidence.")
 
 
+def remove_contradicted_missing_attribute_claims(text: str, source: str) -> tuple[str, list[dict]]:
+    """Drop only missing-attribute claims whose cited opening tag proves them false."""
+    report = model_json(text)
+    missing_patterns = (
+        re.compile(r"\b(?:missing|lacks?|without|does not have|doesn't have)\s+(?:(?:a|an|the)\s+)?([a-z][\w:-]*)\s+attribute\b", re.I),
+        re.compile(r"\b([a-z][\w:-]*)\s+attribute\s+(?:is|appears)\s+(?:missing|absent)\b", re.I),
+    )
+    rejected = []
+    for group in ("code_findings", "content_and_conversion_findings"):
+        kept = []
+        for finding in report.get(group, []):
+            description = " ".join(str(finding.get(key, "")) for key in ("finding", "recommendation", "evidence"))
+            missing_attributes = {match.group(1).lower() for pattern in missing_patterns for match in pattern.finditer(description)}
+            contradiction = None
+            if missing_attributes:
+                evidence = str(finding.get("evidence", ""))
+                for tag in re.findall(r"<([a-z][\w:-]*)\b[^>]*>", evidence, re.I):
+                    snippets = re.findall(rf"<{re.escape(tag)}\b[^>]*>", evidence, re.I)
+                    for snippet in snippets:
+                        if snippet not in source and not re.search(re.escape(snippet).replace(r"\ ", r"\s+"), source, re.I):
+                            continue
+                        attributes = {
+                            match.group(1).lower()
+                            for match in re.finditer(r"\s([a-z_:][\w:.-]*)(?:\s*=|\s|/?>)", snippet, re.I)
+                        }
+                        contradicted = sorted(missing_attributes & attributes)
+                        if contradicted:
+                            contradiction = {"attributes": contradicted, "evidence": snippet}
+                            break
+                    if contradiction:
+                        break
+            if contradiction:
+                rejected.append({"group": group, "finding": finding.get("finding", ""), "contradiction": contradiction})
+            else:
+                kept.append(finding)
+        report[group] = kept
+    return json.dumps(report, ensure_ascii=False), rejected
+
+
 def ensure_assessment_rubric(text: str, concept: str, system_text: str, audit_dir: Path,
                              model: str, account_id: str, token: str) -> str:
     try:
@@ -457,6 +497,48 @@ def image_sources(html: str) -> list[tuple[str, str, str]]:
     return parser.sources
 
 
+def supported_form_wrapper_repair(source: str, candidate: str) -> bool:
+    """Allow wrapping proven existing form controls without adding fields or behavior."""
+    source_form_values = {
+        (name.lower(), value)
+        for name, _quote, value in re.findall(r"\b(action|method)\s*=\s*(['\"])(.*?)\2", source, re.I)
+    }
+    for form_tag in re.findall(r"<form\b[^>]*>", candidate, re.I):
+        for name, _quote, value in re.findall(r"\b(action|method)\s*=\s*(['\"])(.*?)\2", form_tag, re.I):
+            if (name.lower(), value) not in source_form_values:
+                return False
+    source_open = len(re.findall(r"<form\b", source, re.I))
+    candidate_open = len(re.findall(r"<form\b", candidate, re.I))
+    source_closes = len(re.findall(r"</form\s*>", source, re.I))
+    candidate_closes = len(re.findall(r"</form\s*>", candidate, re.I))
+    if candidate_closes != source_closes or candidate_open < source_open:
+        return False
+    source_controls = {
+        tag: len(re.findall(rf"<{tag}\b", source, re.I))
+        for tag in ("input", "textarea", "select", "button")
+    }
+    candidate_controls = {
+        tag: len(re.findall(rf"<{tag}\b", candidate, re.I))
+        for tag in source_controls
+    }
+    if candidate_controls != source_controls:
+        return False
+    if candidate_open == source_open:
+        return True
+    if candidate_open != source_open + 1:
+        return False
+    if not any(source_controls[tag] for tag in ("input", "textarea", "select")):
+        return False
+    orphaned_action = bool(re.search(r"\baction\s*=\s*(['\"])[^'\"]+\1", source, re.I))
+    source_submit = bool(
+        re.search(r"<input\b[^>]*\btype\s*=\s*(['\"])submit\1", source, re.I)
+        or re.search(r"<button\b[^>]*\btype\s*=\s*(['\"])submit\1", source, re.I)
+    )
+    if (source_closes <= source_open and not orphaned_action) or (not source_submit and not orphaned_action):
+        return False
+    return True
+
+
 def apply_model_edits(html: str, edit_response: str, rejected_path: Path) -> str:
     parsed = model_json(edit_response)
     edits = parsed.get("edits")
@@ -471,9 +553,6 @@ def apply_model_edits(html: str, edit_response: str, rejected_path: Path) -> str
         if not isinstance(find, str) or not find or not isinstance(replace, str):
             rejected.append({"id": edit.get("id"), "reason": "Edit needs non-empty find and string replace fields."})
             continue
-        if not re.search(r"(?is)<form\b", html) and re.search(r"(?is)<\s*(form|input|textarea)\b", replace):
-            rejected.append({"id": edit.get("id"), "reason": "Edit attempted to add an unconfigured form control."})
-            continue
         count = html.count(find)
         matched_find = find
         if count != 1:
@@ -486,6 +565,9 @@ def apply_model_edits(html: str, edit_response: str, rejected_path: Path) -> str
                 rejected.append({"id": edit.get("id"), "reason": f"Exact source snippet matched {count} times and no unique quote/whitespace-equivalent span was found; skipped.", "find": find})
                 continue
         candidate = html.replace(matched_find, replace, 1)
+        if not supported_form_wrapper_repair(html, candidate):
+            rejected.append({"id": edit.get("id"), "reason": "Edit attempted to add form functionality, fields, or an unproven action instead of repairing an existing source-backed form wrapper."})
+            continue
         if image_sources(candidate) != image_sources(html):
             rejected.append({
                 "id": edit.get("id"),
@@ -599,6 +681,92 @@ def ensure_qa_report(text: str, concept: str, stage: str, system_text: str, audi
             # Keep the malformed provider output in the audit and continue with an
             # explicit non-passing status instead of losing all generated pages.
             return repaired, {"concept": concept, "status": "invalid", "remaining_issues": []}
+
+
+def run_repository_qa(html_path: Path, label: str, url: str, run_dir: Path, source_candidate: Path | None = None) -> dict:
+    """Run Git Content's existing deterministic QA against an isolated HTML snapshot."""
+    package = Path(__file__).resolve().parent
+    qa_script = package.parent / "scripts" / "run_html_assessment_qa.py"
+    if not qa_script.is_file():
+        return {"available": False, "automated_success": None, "blocking_failures": [], "note": "No Git Content repository QA is installed in this assessment project."}
+
+    candidate = run_dir / "audit" / "repository-qa" / label
+    files_dir = candidate / "files"
+    inline_dir = files_dir / "inlined"
+    debug_dir = candidate / "debug"
+    inline_dir.mkdir(parents=True, exist_ok=True)
+    debug_dir.mkdir(parents=True, exist_ok=True)
+    html = html_path.read_text(encoding="utf-8", errors="replace")
+    (files_dir / "index.html").write_text(html, encoding="utf-8")
+    (inline_dir / "index.html").write_text(html, encoding="utf-8")
+    styles = re.findall(r"<style\b[^>]*>([\s\S]*?)</style\s*>", html, flags=re.IGNORECASE)
+    (files_dir / "styles.css").write_text("\n\n".join(styles), encoding="utf-8")
+    (candidate / "run_notes.json").write_text(json.dumps({"source_url": url}), encoding="utf-8")
+
+    # Preserve only source facts and selected-template metadata used by the
+    # repository's deterministic validators. Never copy credentials or old QA.
+    if source_candidate:
+        source_debug = source_candidate / "debug"
+        for name in ("source_facts.json", "design_reference.json", "design_references.json"):
+            source_file = source_debug / name
+            if source_file.is_file():
+                shutil.copy2(source_file, debug_dir / name)
+
+    child_env = os.environ.copy()
+    for secret_name in ("NVIDIA_API_KEY", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"):
+        child_env.pop(secret_name, None)
+    result = subprocess.run(
+        [sys.executable, str(qa_script), str(candidate)],
+        capture_output=True, text=True, encoding="utf-8", env=child_env,
+    )
+    try:
+        report = json.loads((debug_dir / "checker_report.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        report = {"automated_success": False, "blocking_failures": ["repository QA did not produce a valid checker report"]}
+    try:
+        browser = json.loads((debug_dir / "browser_qa.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        browser = {"status": "missing", "checks": {}}
+    report["browser_qa_status"] = browser.get("status", "missing")
+    report["browser_qa_checks"] = browser.get("checks", {})
+    report["browser_qa"] = browser
+    report["process_exit_code"] = result.returncode
+    report["available"] = True
+    (debug_dir / "assessment_gate_summary.json").write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return report
+
+
+def repository_qa_prompt(report: dict) -> str:
+    """Keep QA prompts compact while retaining every deterministic blocker and CTA detail."""
+    checks = report.get("checks", {})
+    browser = report.get("browser_qa_checks", {})
+    viewport_reports = (report.get("browser_qa") or {}).get("viewports", {})
+    cta_measurements = {
+        viewport: {
+            key: details.get(key)
+            for key in ("cta", "hero_cta_contrast", "contact_cta_contrast", "primary_cta_contrast")
+            if key in details
+        }
+        for viewport, details in viewport_reports.items()
+    }
+    return json.dumps({
+        "automated_success": report.get("automated_success", False),
+        "available": report.get("available", False),
+        "blocking_failures": report.get("blocking_failures", []),
+        "missing_sections": report.get("missing_sections", []),
+        "browser_qa_status": report.get("browser_qa_status", "missing"),
+        "browser_checks_failed": {name: value for name, value in browser.items() if value is False},
+        "cta_contrast": {
+            name: value for name, value in browser.items()
+            if "cta" in name.lower() and (value is False or isinstance(value, dict))
+        },
+        "cta_measurements_by_viewport": cta_measurements,
+        "failed_image_urls": report.get("failed_image_urls", []),
+        "source_contact_form": {
+            name: value for name, value in checks.items()
+            if name.startswith("source_contact_form")
+        },
+    }, indent=2, ensure_ascii=False)
 
 
 def run(args: argparse.Namespace) -> Path:
@@ -717,7 +885,11 @@ def run(args: argparse.Namespace) -> Path:
             cached = assessment_path.read_text(encoding="utf-8")
             try:
                 validate_assessment(cached, name)
-                assessments[name] = cached
+                assessments[name], contradicted = remove_contradicted_missing_attribute_claims(cached, read_html(page["source"]))
+                (audit_dir / f"source-claim-validation-{name}.json").write_text(
+                    json.dumps({"rejected_contradictions": contradicted}, indent=2, ensure_ascii=False) + "\n", encoding="utf-8",
+                )
+                assessment_path.write_text(assessments[name], encoding="utf-8")
                 continue
             except (RuntimeError, ValueError):
                 pass
@@ -741,7 +913,12 @@ def run(args: argparse.Namespace) -> Path:
             )
             code_report = invoke_workers_ai(f"assessment-code-{name}", repair_prompt, code_user, [], audit_dir, model, account_id, token, 4500)
             code_report = ensure_assessment_rubric(code_report, name, repair_prompt, audit_dir, model, account_id, token)
-            code_path.write_text(code_report, encoding="utf-8")
+        code_report, contradicted = remove_contradicted_missing_attribute_claims(code_report, read_html(page["source"]))
+        (audit_dir / f"source-claim-validation-{name}.json").write_text(
+            json.dumps({"rejected_contradictions": contradicted}, indent=2, ensure_ascii=False) + "\n", encoding="utf-8",
+        )
+        validate_assessment(code_report, name)
+        code_path.write_text(code_report, encoding="utf-8")
 
         if args.code_only:
             assessments[name] = code_report
@@ -778,12 +955,31 @@ def run(args: argparse.Namespace) -> Path:
             )
             assessment = invoke_workers_ai(f"assessment-visual-{name}", repair_prompt, visual_user, screenshot_paths(page, "source"), audit_dir, model, account_id, token, 4500)
             assessments[name] = ensure_assessment_rubric(assessment, name, repair_prompt, audit_dir, model, account_id, token)
+            assessments[name], contradicted = remove_contradicted_missing_attribute_claims(assessments[name], read_html(page["source"]))
+            (audit_dir / f"source-claim-validation-{name}.json").write_text(
+                json.dumps({"rejected_contradictions": contradicted}, indent=2, ensure_ascii=False) + "\n", encoding="utf-8",
+            )
             (audit_dir / f"assessment-{name}.txt").write_text(assessments[name], encoding="utf-8")
+
+    baseline_qa_results: dict[str, dict] = {}
+    source_candidate_dir = Path(args.candidate_output_dir).resolve() if args.candidate_output_dir else None
+    for page in pages:
+        name = page["name"]
+        baseline_qa_results[name] = run_repository_qa(
+            page["source"], f"{name}-source", page["url"], run_dir, source_candidate_dir,
+        )
+        (audit_dir / f"repository-qa-{name}-source.json").write_text(
+            json.dumps(baseline_qa_results[name], indent=2, ensure_ascii=False) + "\n", encoding="utf-8",
+        )
 
     if args.resume_directory and (comparative_path.exists() or (audit_dir / "recommendations.json").exists()):
         comparative = comparative_path.read_text(encoding="utf-8") if comparative_path.exists() else (audit_dir / "recommendations.json").read_text(encoding="utf-8")
     else:
-        all_assessments = "\n".join(f"--- {page['name']} ---\n{assessments[page['name']]}" for page in pages)
+        all_assessments = "\n".join(
+            f"--- {page['name']} ---\n{assessments[page['name']]}\n"
+            f"Git Content deterministic baseline QA:\n{repository_qa_prompt(baseline_qa_results[page['name']])}"
+            for page in pages
+        )
         comparative = invoke_workers_ai(
             "comparative-recommendations", repair_prompt,
             "STATE B — PASS 1 REPAIR PRIORITIES\nCompare the completed code and screenshot assessments. Prioritize only evidence-backed repairs; do not propose a redesign. Return the requested comparative JSON.\n" + all_assessments,
@@ -795,6 +991,7 @@ def run(args: argparse.Namespace) -> Path:
     # A resumable run can continue at Pass 2 when every saved Pass 1 output passed
     # its final QA gate. This avoids repeating costly inference after a later failure.
     pass1_qa_reports: dict[str, str] = {}
+    pass1_repo_qa_results: dict[str, dict] = {}
     reuse_pass1 = bool(args.resume_directory)
     if reuse_pass1:
         for page in pages:
@@ -830,7 +1027,7 @@ def run(args: argparse.Namespace) -> Path:
         if args.resume_directory and patch_path.exists():
             draft_edits = patch_path.read_text(encoding="utf-8")
         else:
-            user = f"STATE C — PASS 1 REPAIR {name}\nAssessment:\n{assessments[name]}\nRepair priorities:\n{comparative}\nOriginal complete HTML:\n<page_html>\n{read_html(page['source'])}\n</page_html>\nMake minimal corrections to proven flaws only. Do not redesign, add new sections, or introduce visual flourishes. Return exact JSON edits with valid repair criterion IDs."
+            user = f"STATE C — PASS 1 REPAIR {name}\nAssessment:\n{assessments[name]}\nRepair priorities:\n{comparative}\nGit Content deterministic baseline QA (blocking failures must be repaired when supported by the source and existing page purpose):\n{repository_qa_prompt(baseline_qa_results[name])}\nOriginal complete HTML:\n<page_html>\n{read_html(page['source'])}\n</page_html>\nMake minimal corrections to proven flaws only. Do not redesign or invent content, sections, controls, or functionality. Repair an already-intended form only when the source proves its existing fields, submit control, or orphaned form attributes; do not invent fields, endpoints, or behavior. Return exact JSON edits with valid repair criterion IDs."
             draft_edits = invoke_workers_ai(f"pass1-repair-edits-{name}", repair_prompt, user, [], audit_dir, model, account_id, token, 5000)
         revised = apply_model_edits_with_anchor_repair(read_html(page["source"]), draft_edits, audit_dir / f"rejected-pass1-repair-edits-{name}.json", f"pass1-repair-{name}", repair_prompt, audit_dir, model, account_id, token)
         if not re.search(r"(?is)(<!doctype\s+html|<html\b)", revised) or not re.search(r"(?is)</html>\s*$", revised):
@@ -847,6 +1044,12 @@ def run(args: argparse.Namespace) -> Path:
     for page in pages:
         name = page["name"]
         if reuse_pass1:
+            pass1_repo_qa_results[name] = run_repository_qa(
+                page["pass1"], f"{name}-pass1-reused", page["url"], run_dir, source_candidate_dir,
+            )
+            (audit_dir / f"repository-qa-{name}-pass1-reused.json").write_text(
+                json.dumps(pass1_repo_qa_results[name], indent=2, ensure_ascii=False) + "\n", encoding="utf-8",
+            )
             continue
         instruction = "STATE D — PASS 1 CODE-ONLY REPAIR QA. Make no visual claims." if args.code_only else "STATE D — PASS 1 REPAIR QA. Review HTML and attached screenshots (desktop hero, desktop content section, mobile hero). Identify defects only; do not suggest design enhancements."
         user = f"{instruction}\nConcept: {name}\nAssessment:\n{assessments[name]}\nRepair priorities:\n{comparative}\nPass 1 repair draft:\n<page_html>\n{read_html(page['pass1_draft'])}\n</page_html>\nReturn the requested QA JSON."
@@ -867,7 +1070,7 @@ def run(args: argparse.Namespace) -> Path:
         page["pass1"] = run_dir / f"{name}-pass1.html"
         page["pass1"].write_text(pass1_html, encoding="utf-8")
 
-    # Gate Pass 2 on a selected-provider QA review of the final corrected Pass 1 files.
+    # Gate Pass 2 on both the selected-provider review and Git Content's deterministic QA.
     for page in pages:
         name = page["name"]
         if not args.code_only:
@@ -881,18 +1084,38 @@ def run(args: argparse.Namespace) -> Path:
             continue
         pass1_verification = None
         for attempt in range(3):
-            verify_instruction = "STATE E2 — PASS 1 FINAL CODE-ONLY GATE. No visual claims." if args.code_only else "STATE E2 — PASS 1 FINAL GATE. Verify the final repaired HTML and attached desktop hero, desktop section, and mobile hero screenshots. Pass only when the reported Pass 1 defects are resolved. Do not suggest design enhancements."
-            verify_user = f"{verify_instruction}\nConcept: {name}\nOriginal repair assessment:\n{assessments[name]}\nFirst Pass 1 QA:\n{pass1_qa_reports[name]}\nCurrent corrected Pass 1 HTML:\n<page_html>\n{read_html(page['pass1'])}\n</page_html>\nReturn the Pass 1 QA JSON."
+            verify_instruction = "STATE E2 — PASS 1 FINAL CODE-ONLY GATE. No visual claims." if args.code_only else "STATE E2 — PASS 1 FINAL GATE. Verify the final repaired HTML and attached desktop hero, desktop section, and mobile hero screenshots. Pass only when every previously supported issue is resolved. Do not suggest design enhancements."
+            current_repo_qa = run_repository_qa(
+                page["pass1"], f"{name}-pass1-attempt-{attempt + 1}", page["url"], run_dir, source_candidate_dir,
+            )
+            pass1_repo_qa_results[name] = current_repo_qa
+            (audit_dir / f"repository-qa-{name}-pass1-attempt-{attempt + 1}.json").write_text(
+                json.dumps(current_repo_qa, indent=2, ensure_ascii=False) + "\n", encoding="utf-8",
+            )
+            repo_qa_text = repository_qa_prompt(current_repo_qa)
+            verify_user = f"{verify_instruction}\nConcept: {name}\nOriginal repair assessment and issue ledger:\n{assessments[name]}\nFirst Pass 1 QA (historical findings remain open until exact current evidence shows resolution):\n{pass1_qa_reports[name]}\nGit Content deterministic QA (authoritative; do not omit or overrule a failed check):\n{repo_qa_text}\nCurrent corrected Pass 1 HTML:\n<page_html>\n{read_html(page['pass1'])}\n</page_html>\nVerify each earlier issue against the current HTML and screenshots. A finding may be marked resolved only with exact current evidence. Claims that an attribute or element is missing must be checked against the actual source. Return the Pass 1 QA JSON."
             verify_images = [] if args.code_only else screenshot_paths(page, "pass1")
             verify_name = "pass1-final-qa" if attempt == 0 else f"pass1-final-qa-recheck-{attempt}"
             verification_text = invoke_workers_ai(f"{verify_name}-{name}", repair_prompt, verify_user, verify_images, audit_dir, model, account_id, token, 5000)
             verification_text, pass1_verification = ensure_qa_report(verification_text, name, "Pass 1 final", repair_prompt, audit_dir, model, account_id, token)
-            if pass1_verification["status"] == "pass":
+            if pass1_verification["status"] == "pass" and current_repo_qa.get("automated_success") is not False:
                 pass1_qa_reports[name] = verification_text
                 break
             if attempt == 2:
-                raise RuntimeError(f"Pass 1 repair gate still reports unresolved issues for {name}; Pass 2 was not started.")
-            fix_user = f"STATE E3 — REPAIR PASS 1 GATE FINDINGS FOR {name}\nPass 1 final QA report:\n{verification_text}\nCurrent corrected HTML:\n<page_html>\n{read_html(page['pass1'])}\n</page_html>\nApply only the listed Pass 1 repairs. Return exact JSON edits using repair criterion IDs."
+                unresolved = list(pass1_verification.get("remaining_issues", []))
+                if current_repo_qa.get("automated_success") is False:
+                    unresolved.append({
+                        "criterion_id": "CODE-01", "priority": "high",
+                        "evidence": "Git Content deterministic blockers: " + ", ".join(current_repo_qa.get("blocking_failures", [])),
+                        "user_impact": "A required repository structural or browser check remains unresolved.",
+                        "correction": "Resolve the listed deterministic blockers or leave this candidate pending review.",
+                        "confidence": "high",
+                    })
+                pass1_verification = {"concept": name, "status": "revise", "remaining_issues": unresolved, "deterministic_repository_qa_passed": current_repo_qa.get("automated_success") is not False}
+                pass1_qa_reports[name] = json.dumps(pass1_verification, indent=2, ensure_ascii=False)
+                (audit_dir / f"pass1-final-qa-blocked-{name}.json").write_text(pass1_qa_reports[name] + "\n", encoding="utf-8")
+                break
+            fix_user = f"STATE E3 — REPAIR PASS 1 GATE FINDINGS FOR {name}\nPass 1 final QA report (retain unresolved findings until fixed):\n{verification_text}\nGit Content deterministic QA blockers (all are authoritative):\n{repo_qa_text}\nCurrent corrected HTML:\n<page_html>\n{read_html(page['pass1'])}\n</page_html>\nApply only evidence-supported Pass 1 repairs. Do not invent sections, form fields, endpoints, or behavior. Return exact JSON edits using repair criterion IDs."
             gate_edits = invoke_workers_ai(f"pass1-gate-repair-{name}-{attempt + 1}", repair_prompt, fix_user, [], audit_dir, model, account_id, token, 5000)
             gate_html = apply_model_edits_with_anchor_repair(read_html(page["pass1"]), gate_edits, audit_dir / f"rejected-pass1-gate-repair-{name}-{attempt + 1}.json", f"pass1-gate-repair-{name}-{attempt + 1}", repair_prompt, audit_dir, model, account_id, token)
             page["pass1"].write_text(gate_html, encoding="utf-8")
@@ -900,8 +1123,37 @@ def run(args: argparse.Namespace) -> Path:
                 for key, width, height in (("hero", 1440, 1000), ("section", 1440, 1000), ("mobile", 390, 844)):
                     save_screenshot(page["pass1"], page[f"pass1_{key}"], width, height, page["url"], "section" if key == "section" else "top")
 
-    # Pass 2 starts only from pages the selected provider cleared at the Pass 1 repair gate.
+    # Failed gates retain their Pass 1 HTML as a pending candidate and never enter Pass 2.
+    final_qa_results: dict[str, dict] = {}
+    pass2_pages = []
     for page in pages:
+        name = page["name"]
+        repo_passed = pass1_repo_qa_results.get(name, {}).get("automated_success") is not False
+        model_gate_passed = False
+        if name in pass1_qa_reports:
+            try:
+                model_gate_passed = validate_qa_report(pass1_qa_reports[name], name, "Pass 1 final")["status"] == "pass"
+            except (ValueError, RuntimeError):
+                model_gate_passed = False
+        if repo_passed and model_gate_passed:
+            pass2_pages.append(page)
+            continue
+        final_path = run_dir / f"{name}.html"
+        shutil.copy2(page["pass1"], final_path)
+        if not args.code_only:
+            for key, width, height in (("hero", 1440, 1000), ("section", 1440, 1000), ("mobile", 390, 844)):
+                save_screenshot(final_path, shots_dir / f"{name}-final-{key}.png", width, height, page["url"], "section" if key == "section" else "top")
+        gate_report = pass1_repo_qa_results.get(name, {})
+        final_qa_results[name] = {
+            "status": "revise",
+            "remaining_issues": [
+                {"criterion_id": "CODE-01", "priority": "high", "evidence": ", ".join(gate_report.get("blocking_failures", [])) or "Pass 1 model QA did not pass", "user_impact": "The candidate has not cleared every required review gate.", "correction": "Resolve the reported gate findings; retain as pending until then.", "confidence": "high"}
+            ],
+            "pass2_skipped": True,
+        }
+
+    # Pass 2 starts only from pages cleared by both gates.
+    for page in pass2_pages:
         name = page["name"]
         direction_user = f"STATE F — PASS 2 DESIGN DIRECTION FOR {name}\nAudience/context: use the business category and location context supplied with this target, if any; treat it as unverified unless confirmed by the page source.\nOriginal assessment, including strengths and page identity:\n{assessments[name]}\nPass 1 repair QA:\n{pass1_qa_reports[name]}\nCross-page repair context:\n{comparative}\nCorrected Pass 1 HTML:\n<page_html>\n{read_html(page['pass1'])}\n</page_html>\nUse the appended Pass 2 enhancement rubric to propose a restrained, page-specific design direction. This is a proposal for this page, not a rewrite. Return JSON with concept, identity_to_preserve, design_direction, design_system (pattern, palette_roles, typography, spacing, imagery, interactions), prioritized_enhancements (each with criterion_id, priority, design_rationale, evidence, user_benefit, change, confidence), and avoid. Do not add business claims or form behavior."
         direction_images = [] if args.code_only else screenshot_paths(page, "pass1")
@@ -935,7 +1187,7 @@ def run(args: argparse.Namespace) -> Path:
                     save_screenshot(design_draft, page[f"pass2_draft_{key}"], width, height, page["url"], "section" if key == "section" else "top")
 
     pass2_qa_reports: dict[str, str] = {}
-    for page in pages:
+    for page in pass2_pages:
         name = page["name"]
         cached_qa = audit_dir / f"pass2-qa-{name}.txt"
         if args.resume_directory and cached_qa.exists():
@@ -951,7 +1203,7 @@ def run(args: argparse.Namespace) -> Path:
         pass2_qa_reports[name] = invoke_workers_ai(f"pass2-qa-{name}", enhancement_prompt, user, images, audit_dir, model, account_id, token, 5000)
         pass2_qa_reports[name], _ = ensure_qa_report(pass2_qa_reports[name], name, "Pass 2", enhancement_prompt, audit_dir, model, account_id, token)
 
-    for page in pages:
+    for page in pass2_pages:
         name = page["name"]
         final_path = run_dir / f"{name}.html"
         if args.resume_directory and final_path.exists():
@@ -974,9 +1226,10 @@ def run(args: argparse.Namespace) -> Path:
         final_path.write_text(final_html, encoding="utf-8")
 
     # Review the actual final files after State I; preserve any unresolved items in the audit.
-    final_qa_results: dict[str, dict] = {}
     for page in pages:
         name = page["name"]
+        if name in final_qa_results:
+            continue
         final_path = run_dir / f"{name}.html"
         cached_reports = sorted(audit_dir.glob(f"pass2-final-qa*-{name}.txt"), key=lambda item: item.stat().st_mtime, reverse=True)
         if args.resume_directory and cached_reports and cached_reports[0].stat().st_mtime >= final_path.stat().st_mtime:
@@ -1046,9 +1299,19 @@ def run(args: argparse.Namespace) -> Path:
         "outputs": [f"{page['name']}.html" for page in pages],
         "pass1Outputs": [f"{page['name']}-pass1.html" for page in pages],
         "beforeAfterDiffs": diff_paths,
+        "pass1RepositoryQA": {
+            name: {
+                "available": report.get("available", False),
+                "automatedSuccess": report.get("automated_success"),
+                "blockingFailures": report.get("blocking_failures", []),
+            }
+            for name, report in pass1_repo_qa_results.items()
+        },
+        "pass2Skipped": [page["name"] for page in pages if page not in pass2_pages],
+        "pass1GatePassed": all(page in pass2_pages for page in pages),
         "finalQA": {name: {"status": report["status"], "remainingIssueCount": len(report.get("remaining_issues", [])) if report["status"] != "invalid" else None, "reportParsed": report["status"] != "invalid"} for name, report in final_qa_results.items()},
         "finalQAPassed": all(report["status"] == "pass" for report in final_qa_results.values()),
-        "pipeline": ["download", f"{provider}-pass1-code-audit", "source-screenshots", f"{provider}-pass1-visual-review", f"{provider}-repair-priorities", "pass1-minimal-repairs", "pass1-visual-code-qa", "pass1-final-repair", f"{provider}-pass2-design-direction", "pass2-design-enhancement", "pass2-visual-code-qa", "pass2-final-corrections", "pass2-final-visual-code-gate"] if not args.code_only else ["download", f"{provider}-pass1-code-assessment", "pass1-repairs", "pass1-code-qa", f"{provider}-pass2-design-direction", "pass2-enhancement", "pass2-code-qa", "final-corrections", "pass2-final-code-gate"],
+        "pipeline": ["download", f"{provider}-pass1-code-audit", "source-screenshots", f"{provider}-pass1-visual-review", "repository-qa-baseline", f"{provider}-repair-priorities", "pass1-minimal-repairs", "pass1-visual-code-qa", "pass1-final-repair", "repository-qa-pass1", f"{provider}-pass2-design-direction", "pass2-design-enhancement", "pass2-visual-code-qa", "pass2-final-corrections", "pass2-final-visual-code-gate"] if pass2_pages and not args.code_only else (["download", f"{provider}-pass1-code-audit", "source-screenshots", f"{provider}-pass1-visual-review", "repository-qa-baseline", f"{provider}-repair-priorities", "pass1-minimal-repairs", "pass1-visual-code-qa", "pass1-final-repair", "repository-qa-pass1", "pass2-skipped-pending-gates"] if not args.code_only else ["download", f"{provider}-pass1-code-assessment", "repository-qa-baseline", "pass1-repairs", "pass1-code-qa", "repository-qa-pass1", "pass2-skipped-or-not-configured"]),
         "screenshotsSentToInferenceProvider": not args.code_only,
         "assessmentRubric": rubric_metadata,
         "enhancementRubric": {"file": "enhancement-rubric.md", "sources": ["UI/UX Pro Max", "Apple Design for the web"]},
@@ -1130,6 +1393,7 @@ def run(args: argparse.Namespace) -> Path:
             "human_visual_review_status": "pending",
             "image_relevance_review_status": "pending",
             "html_assessment_model_review_passed": model_review_passed,
+            "html_assessment_pass1_gate_passed": manifest["pass1GatePassed"],
             "html_assessment_repo_qa_passed": False,
             "html_assessment_provider": provider,
             "html_assessment_model": model,

@@ -305,21 +305,21 @@ VIEWPORT_CHECKS_JS = r"""async () => {
     const buttonClass = /(?:^|[\s_-])(?:button|btn|cta|call[-_]?to[-_]?action)(?:$|[\s_-])/i.test(String(element.className || ''));
     return visible(element) && (ctaWords.test(label) || buttonClass);
   });
-  const contactCtaContrastIssues = contactCtas.filter(element => {
+  const contactCtaContrastIssues = contactCtas.flatMap(element => {
     const foreground = luminance(rgb(getComputedStyle(element).color));
     const backgroundColor = effectiveBackground(element);
-    if (foreground === null || backgroundColor === null) return false;
-    const background = luminance(rgb(`rgb(${backgroundColor.join(',')})`));
-    if (background === null) return false;
-    const ratio = (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
-    return ratio < 4.5;
-  }).map(element => {
-    const background = effectiveBackground(element);
-    return {
+    const background = backgroundColor === null ? null : luminance(rgb(`rgb(${backgroundColor.join(',')})`));
+    const ratio = foreground === null || background === null
+      ? null
+      : (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+    if (ratio !== null && ratio >= 4.5) return [];
+    return [{
       text: (element.innerText || element.getAttribute('aria-label') || '').trim().slice(0, 100),
       color: getComputedStyle(element).color,
-      background: background ? `rgb(${background.join(',')})` : 'unknown'
-    };
+      background: backgroundColor ? `rgb(${backgroundColor.join(',')})` : 'unknown',
+      contrast_ratio: ratio === null ? null : Math.round(ratio * 100) / 100,
+      reason: ratio === null ? 'rendered background could not be measured reliably' : 'contrast ratio is below 4.5:1'
+    }];
   });
   const imageCardLabels = Array.from(document.querySelectorAll('.tiles article .eyebrow')).filter(visible);
   const imageCardLabelIssues = imageCardLabels.filter(element => {
@@ -334,34 +334,29 @@ VIEWPORT_CHECKS_JS = r"""async () => {
   }));
   const h1Node = document.querySelector('h1');
   const heroNode = h1Node && (h1Node.closest('section') || h1Node.closest('[class*="hero" i]') || h1Node.closest('main'));
-  const heroHasImage = Boolean(heroNode && [heroNode, ...heroNode.querySelectorAll('*')].some(node => {
-    const styles = [getComputedStyle(node), getComputedStyle(node, '::before'), getComputedStyle(node, '::after')];
-    return styles.some(style => style.backgroundImage && style.backgroundImage !== 'none');
-  }));
   const heroCtas = heroNode ? Array.from(heroNode.querySelectorAll('a,button,[role="button"]')).filter(element => {
     const label = [element.innerText, element.getAttribute('aria-label'), element.getAttribute('href')].filter(Boolean).join(' ');
     const isAction = /quote|estimate|contact|call|book|schedule|inquir|email|start a project|let.s talk/i.test(label) ||
       /(?:^|\s)(?:button|btn|cta)(?:\s|$)/i.test(String(element.className || ''));
     return isAction && visible(element);
   }) : [];
-  const heroCtaContrastIssues = heroCtas.filter(element => {
+  const heroCtaContrastIssues = heroCtas.flatMap(element => {
     const style = getComputedStyle(element);
     const foreground = luminance(rgb(style.color));
-    const backgroundParts = String(style.backgroundColor || '').match(/[\d.]+/g);
-    const alpha = backgroundParts && backgroundParts.length > 3 ? Number(backgroundParts[3]) : 1;
-    const background = alpha >= 0.85 ? luminance(rgb(style.backgroundColor)) : null;
-    if (background !== null && foreground !== null) {
-      const ratio = (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
-      return ratio < 4.5;
-    }
-    // A dark label over a photographic hero with no opaque button surface is
-    // unreadable over common dark image areas. Require a solid contrast surface.
-    return heroHasImage && alpha < 0.85 && foreground !== null && foreground < 0.35;
-  }).map(element => ({
-    text: (element.innerText || element.getAttribute('aria-label') || '').trim().slice(0, 100),
-    color: getComputedStyle(element).color,
-    background: getComputedStyle(element).backgroundColor
-  }));
+    const measuredBackground = effectiveBackground(element);
+    const background = measuredBackground === null ? null : luminance(rgb(`rgb(${measuredBackground.join(',')})`));
+    const ratio = foreground === null || background === null
+      ? null
+      : (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+    if (ratio !== null && ratio >= 4.5) return [];
+    return [{
+      text: (element.innerText || element.getAttribute('aria-label') || '').trim().slice(0, 100),
+      color: style.color,
+      background: measuredBackground ? `rgb(${measuredBackground.join(',')})` : style.backgroundColor,
+      contrast_ratio: ratio === null ? null : Math.round(ratio * 100) / 100,
+      reason: ratio === null ? 'rendered background could not be measured reliably' : 'contrast ratio is below 4.5:1'
+    }];
+  });
   const primaryCtas = Array.from(document.querySelectorAll('a,button,[role="button"],input[type="submit"]')).filter(element => {
     if (!visible(element)) return false;
     const label = [element.innerText, element.getAttribute('aria-label'), element.getAttribute('value'), element.getAttribute('href')].filter(Boolean).join(' ');
@@ -896,6 +891,7 @@ def main() -> int:
                             "contact_channel_ctas_aligned": bool(visual["contact_channel_ctas"]["aligned"]),
                             "contact_cta_contrast": visual["contact_cta_contrast"],
                             "contact_ctas_readable": bool(visual["contact_cta_contrast"]["pass"]),
+                            "primary_cta_contrast": visual["primary_cta_contrast"],
                             "image_card_labels": visual["image_card_labels"],
                             "image_card_labels_readable": bool(visual["image_card_labels"]["pass"]),
                             "hero_cta_contrast": visual["hero_cta_contrast"],

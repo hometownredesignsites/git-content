@@ -4,10 +4,10 @@ A reusable Python workflow that downloads customer HTML pages, audits the origin
 
 ## Two-pass review
 
-1. **Pass 1 — Repair:** inspect source code before screenshots, then combine that audit with screenshot evidence. Correct evidence-backed HTML, accessibility, content/action, responsive, and visual defects. Keep changes minimal and preserve the existing page direction. Pass 1 has a QA and final gate; Pass 2 does not start until that gate passes.
+1. **Pass 1 — Repair:** inspect source code before screenshots, then combine that audit with screenshot evidence and Git Content's deterministic baseline QA. Correct evidence-backed HTML, accessibility, content/action, responsive, visual, and repository-gate defects. Keep changes minimal and preserve the existing page direction. Rerun deterministic QA after repairs. Pass 2 does not start until both the model review and required repository checks pass; otherwise the Pass 1 HTML is saved as a pending candidate.
 2. **Pass 2 — Design enhancement:** start from the corrected Pass 1 output and apply restrained improvements informed by UI/UX Pro Max and web-applicable Apple Design principles. Capture fresh screenshots, review the draft, apply supported corrections, and run a final gate.
 
-The local edit applier blocks model edits that add, remove, or change an `<img>` `src` or `srcset`. Image URL changes need a separate asset-validation workflow; this prevents an unverified model suggestion from introducing a broken image. Screenshot review also checks image relevance and alt-text accuracy: a loaded image can still be the wrong subject or be stretched into the wrong role. The assessor must preserve already readable CTAs, and any unresolved or unmeasured contrast issue remains pending deterministic QA or human review.
+The local edit applier blocks model edits that add, remove, or change an `<img>` `src` or `srcset`. Image URL changes need a separate asset-validation workflow; this prevents an unverified model suggestion from introducing a broken image. Screenshot review also checks image relevance and alt-text accuracy: a loaded image can still be the wrong subject or be stretched into the wrong role. Git Content's browser QA checks CTA visibility and contrast and reports broken images; unmeasured contrast fails closed. QA subprocesses run without provider credentials.
 
 The selected remote provider performs assessment, prioritization, design direction, and QA. Python downloads source HTML, sends a code-only audit first, then captures local screenshots and requests a visual supplement before prioritization or edits. It validates JSON and exact edit anchors, applies edits, and saves evidence. Source page text, code, and screenshots are treated as untrusted data.
 
@@ -99,7 +99,7 @@ python html_assessment.py \
   --site-slug "$SITE_SLUG"
 ```
 
-The candidate export follows Git Content's file layout. Its initial `run_notes.json` explicitly marks assessment complete but repo QA pending; it does not set `automated_success` until Git Content's existing checker passes. `files/inlined/index-old.html` preserves the exact source selected from the private repository, while the revised HTML is written to `files/inlined/index.html`. The local assessor's model gate is not a replacement for the repo's deterministic structural and browser QA.
+The candidate export follows Git Content's file layout. Its initial `run_notes.json` explicitly marks assessment complete but repo QA pending; it does not set `automated_success` until Git Content's existing checker passes. `files/inlined/index-old.html` preserves the exact source selected from the private repository, while the revised HTML is written to `files/inlined/index.html`. The assessor runs the same repository QA on isolated baseline and Pass 1 snapshots under `audit/repository-qa/`; those blockers are included in repair prompts, and model QA cannot override them.
 
 ```text
 candidate/
@@ -128,7 +128,7 @@ The public `chatgpt` branch now provides `.github/workflows/html-assessment.yml`
 - Runs the two-pass assessment with `NVIDIA_API_KEY` from Actions secrets.
 - Runs Git Content's existing `browser_qa.py` and `check_website.py`, recording reports and optional review templates.
 - Preserves the original as `files/inlined/index-old.html`, then updates that candidate's `files/inlined/index.html`; each workflow attempt keeps separate evidence under `debug/assessment-runs/`.
-- Sets `final_success` only when Git Content's deterministic structural and browser QA passes; no separate human review is required for publication.
+- Sets `final_success` only when the Pass 1 gate and Git Content's deterministic structural and browser QA pass; the final model visual review remains advisory and no separate human review is required for publication.
 
 Capture and inference occur in the Actions runner; screenshots are produced by headless Playwright and attached to the NVIDIA API request. Chromium does not inherit provider keys. The model's visual pass is advisory; only passing deterministic structural and rendered browser checks can approve a candidate. CTA contrast and broken image checks are blocking, and checks that cannot measure an issue reliably fail closed for review.
 

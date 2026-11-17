@@ -85,12 +85,15 @@ def run(candidate: Path) -> dict:
 
     notes_path = candidate / "run_notes.json"
     notes = json.loads(notes_path.read_text(encoding="utf-8")) if notes_path.is_file() else {}
-    automated_success = report.get("automated_success") is True
+    repository_qa_passed = report.get("automated_success") is True
+    pass1_gate_passed = notes.get("html_assessment_pass1_gate_passed") is not False
+    automated_success = repository_qa_passed and pass1_gate_passed
     notes.update({
-        "status": "assessment_success" if automated_success else "automated_failed",
+        "status": "assessment_success" if automated_success else ("pending_review" if repository_qa_passed else "automated_failed"),
         "html_assessment_revision": True,
-        "html_assessment_status": "repo_qa_passed" if automated_success else "repo_qa_failed",
-        "html_assessment_repo_qa_passed": automated_success,
+        "html_assessment_status": "repo_qa_passed" if automated_success else ("pass1_gate_pending" if repository_qa_passed else "repo_qa_failed"),
+        "html_assessment_repo_qa_passed": repository_qa_passed,
+        "html_assessment_pass1_gate_passed": pass1_gate_passed,
         "automated_success": automated_success,
         "final_success": automated_success,
         "human_visual_review_status": "assessment_replaced_review" if automated_success else "pending",
