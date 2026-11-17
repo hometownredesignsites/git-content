@@ -4,9 +4,12 @@
 from __future__ import annotations
 
 import argparse
+import html as html_module
 import json
+import re
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
@@ -359,6 +362,28 @@ VIEWPORT_CHECKS_JS = r"""async () => {
     color: getComputedStyle(element).color,
     background: getComputedStyle(element).backgroundColor
   }));
+  const primaryCtas = Array.from(document.querySelectorAll('a,button,[role="button"],input[type="submit"]')).filter(element => {
+    if (!visible(element)) return false;
+    const label = [element.innerText, element.getAttribute('aria-label'), element.getAttribute('value'), element.getAttribute('href')].filter(Boolean).join(' ');
+    const classes = String(element.className || '');
+    return ctaWords.test(label) || /(?:^|[\s_-])(?:button|btn|cta|primary|call[-_]?to[-_]?action)(?:$|[\s_-])/i.test(classes);
+  });
+  const primaryCtaContrastIssues = primaryCtas.flatMap(element => {
+    const foreground = luminance(rgb(getComputedStyle(element).color));
+    const backgroundColor = effectiveBackground(element);
+    const background = backgroundColor && luminance(rgb(`rgb(${backgroundColor.join(',')})`));
+    const ratio = foreground !== null && background !== null
+      ? (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05)
+      : null;
+    if (ratio !== null && ratio >= 4.5) return [];
+    return [{
+      text: (element.innerText || element.getAttribute('aria-label') || element.getAttribute('value') || '').trim().slice(0, 100),
+      color: getComputedStyle(element).color,
+      background: backgroundColor ? `rgb(${backgroundColor.join(',')})` : 'unknown',
+      contrast_ratio: ratio === null ? null : Math.round(ratio * 100) / 100,
+      reason: ratio === null ? 'rendered background could not be measured reliably' : 'contrast ratio is below 4.5:1'
+    }];
+  });
   const images = Array.from(document.images);
   images.forEach(image => { image.loading = 'eager'; });
   const imageResults = images.map(image => ({
@@ -390,6 +415,11 @@ VIEWPORT_CHECKS_JS = r"""async () => {
     contact_cta_contrast: {pass: contactCtaContrastIssues.length === 0, issues: contactCtaContrastIssues},
     image_card_labels: {count: imageCardLabels.length, pass: imageCardLabelIssues.length === 0, issues: imageCardLabelIssues},
     hero_cta_contrast: {pass: heroCtaContrastIssues.length === 0, issues: heroCtaContrastIssues},
+    primary_cta_contrast: {
+      count: primaryCtas.length,
+      pass: primaryCtas.length > 0 && primaryCtaContrastIssues.length === 0,
+      issues: primaryCtas.length ? primaryCtaContrastIssues : [{reason: 'no visible primary CTA could be identified'}]
+    },
     visible_content_images: {distinct_count: distinctVisibleAssets.size, loaded_count: loadedVisibleAssets.size, failures: visibleMediaResults.filter(item => !item.loaded)},
     horizontal_overflow: {scroll_width: documentWidth, viewport_width: root.clientWidth, overflow: documentWidth > root.clientWidth + 1},
     images: {count: images.length, loaded_count: imageResults.filter(item => item.loaded).length, failures: imageResults.filter(item => !item.loaded)},
@@ -769,7 +799,25 @@ def main() -> int:
                     page.on("requestfailed", lambda request, dest=page_errors: _resource_event(request, dest))
                     page.on("response", lambda response, dest=page_errors: _resource_event(response, dest))
                     try:
-                        page.goto(html_file.as_uri(), wait_until="domcontentloaded", timeout=45000)
+                        notes_path = run_dir / "run_notes.json"
+                        source_url = ""
+                        if notes_path.is_file():
+                            try:
+                                source_url = str(json.loads(notes_path.read_text(encoding="utf-8")).get("source_url", ""))
+                            except (OSError, json.JSONDecodeError):
+                                source_url = ""
+                        parsed_source_url = urlsplit(source_url)
+                        if parsed_source_url.scheme in {"http", "https"} and parsed_source_url.hostname:
+                            source_html = html_file.read_text(encoding="utf-8")
+                            if not re.search(r"<base\b", source_html, flags=re.IGNORECASE):
+                                base_tag = f'<base href="{html_module.escape(source_url, quote=True)}">'
+                                if re.search(r"<head\b[^>]*>", source_html, flags=re.IGNORECASE):
+                                    source_html = re.sub(r"(<head\b[^>]*>)", rf"\1{base_tag}", source_html, count=1, flags=re.IGNORECASE)
+                                else:
+                                    source_html = f"<head>{base_tag}</head>" + source_html
+                            page.set_content(source_html, wait_until="domcontentloaded", timeout=45000)
+                        else:
+                            page.goto(html_file.as_uri(), wait_until="domcontentloaded", timeout=45000)
                         page.wait_for_timeout(800)
                         resource_state = page.evaluate(r"""async () => {
                           const timeout = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -828,6 +876,7 @@ def main() -> int:
                             "image_card_labels_readable": bool(visual["image_card_labels"]["pass"]),
                             "hero_cta_contrast": visual["hero_cta_contrast"],
                             "hero_ctas_readable": bool(visual["hero_cta_contrast"]["pass"]),
+                            "primary_ctas_readable": bool(visual["primary_cta_contrast"]["pass"]),
                             "images": resource_state,
                             "visible_content_images": visual["visible_content_images"],
                             "cta_arrows_absent": not visual["cta"].get("arrow_issues"),
@@ -877,6 +926,7 @@ def main() -> int:
                             "image_card_labels_readable": False,
                             "hero_cta_contrast": {"pass": False, "issues": []},
                             "hero_ctas_readable": False,
+                            "primary_ctas_readable": False,
                             "images_loaded": False,
                             "visible_content_images": {"distinct_count": 0, "loaded_count": 0, "failures": []},
                             "cta_arrows_absent": False,
@@ -943,6 +993,9 @@ def main() -> int:
             ),
             "hero_ctas_readable_desktop_and_mobile": bool(
                 desktop.get("hero_ctas_readable") and mobile.get("hero_ctas_readable")
+            ),
+            "primary_ctas_readable_desktop_and_mobile": bool(
+                desktop.get("primary_ctas_readable") and mobile.get("primary_ctas_readable")
             ),
             "fonts_load_in_browser": bool(desktop.get("fonts_loaded") and mobile.get("fonts_loaded")),
             "images_load_in_browser": bool(desktop.get("images_loaded") and mobile.get("images_loaded")),

@@ -444,6 +444,7 @@ class SavedResponsePipelineTest(unittest.TestCase):
                 "contact_email_ctas_grouped": True,
                 "contact_channel_ctas_aligned": True,
                 "contact_ctas_readable_desktop_and_mobile": True,
+                "primary_ctas_readable_desktop_and_mobile": True,
                 "image_card_labels_readable_desktop_and_mobile": True,
                 "hero_ctas_readable_desktop_and_mobile": True,
                 "fonts_load_in_browser": True,

@@ -275,6 +275,7 @@ class PostGenerationRegressionTest(unittest.TestCase):
                 result = page.evaluate(VIEWPORT_CHECKS_JS)
                 self.assertFalse(result["critical_content_clipping"]["pass"])
                 self.assertFalse(result["hero_cta_contrast"]["pass"])
+                self.assertFalse(result["primary_cta_contrast"]["pass"])
                 self.assertEqual(result["contact_email_ctas"]["ungrouped_count"], 0)
                 self.assertEqual(result["contact_email_ctas"]["misplaced_count"], 1)
 

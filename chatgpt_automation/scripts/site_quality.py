@@ -467,6 +467,7 @@ def _browser_qa_result(session_dir):
         "contact_email_ctas_grouped",
         "contact_channel_ctas_aligned",
         "contact_ctas_readable_desktop_and_mobile",
+        "primary_ctas_readable_desktop_and_mobile",
         "image_card_labels_readable_desktop_and_mobile",
         "hero_ctas_readable_desktop_and_mobile",
         "fonts_load_in_browser",
@@ -1341,6 +1342,7 @@ def assess_website(prompt, session_dir):
         "contact_email_ctas_grouped",
         "contact_channel_ctas_aligned",
         "contact_ctas_readable_desktop_and_mobile",
+        "primary_ctas_readable_desktop_and_mobile",
         "image_card_labels_readable_desktop_and_mobile",
         "hero_ctas_readable_desktop_and_mobile",
         "fonts_load_in_browser",
@@ -1467,6 +1469,7 @@ def assess_website(prompt, session_dir):
         "browser_contact_email_ctas_grouped",
         "browser_contact_channel_ctas_aligned",
         "browser_contact_ctas_readable_desktop_and_mobile",
+        "browser_primary_ctas_readable_desktop_and_mobile",
         "browser_image_card_labels_readable_desktop_and_mobile",
         "browser_hero_ctas_readable_desktop_and_mobile",
         "browser_template_layout_signature_matches",
@@ -1520,6 +1523,8 @@ def assess_website(prompt, session_dir):
         missing_sections.append("image-card labels with readable foreground contrast on desktop and mobile")
     if not checks.get("browser_hero_ctas_readable_desktop_and_mobile"):
         missing_sections.append("hero CTAs with readable text contrast on desktop and mobile")
+    if not checks.get("browser_primary_ctas_readable_desktop_and_mobile"):
+        missing_sections.append("visible primary CTAs with measured text contrast of at least 4.5:1 on desktop and mobile")
     if not checks["footer_has_substance"]:
         missing_sections.append("a substantive footer with at least two useful links")
     if missing_form_fields:

@@ -1,0 +1,196 @@
+name: HTML Assessment Candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: Opaque job ID for a configured private Git Content target
+        required: true
+        type: string
+      source_candidate_id:
+        description: Private candidate ID whose files/inlined/index.html is the source page
+        required: true
+        type: string
+      source_run_id:
+        description: Numeric private results run ID containing that candidate
+        required: true
+        type: string
+      provider:
+        description: Inference provider
+        required: true
+        type: choice
+        options:
+          - nvidia
+          - cloudflare
+
+permissions:
+  contents: read
+
+concurrency:
+  group: html-assessment-${{ inputs.job_id }}
+  cancel-in-progress: false
+
+jobs:
+  assess:
+    if: github.ref_name == 'chatgpt'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ github.workspace }}
+    steps:
+      - name: Check out the public Git Content workflow
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Validate the selected private job ID
+        env:
+          INPUT_JOB_ID: ${{ inputs.job_id }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$INPUT_JOB_ID" =~ ^[0-9a-f-]{36}$ ]]; then
+            echo "The private job ID is invalid."
+            exit 1
+          fi
+          echo "::add-mask::$INPUT_JOB_ID"
+          echo "JOB_ID=$INPUT_JOB_ID" >> "$GITHUB_ENV"
+
+      - name: Check out private target records
+        uses: actions/checkout@v5
+        with:
+          repository: hometownredesignsites/git-content-private
+          ref: chatgpt
+          token: ${{ secrets.PRIVATE_RESULTS_TOKEN }}
+          path: private-source
+          fetch-depth: 1
+
+      - name: Check out legacy private target records
+        uses: actions/checkout@v5
+        with:
+          repository: hometownredesignsites/git-content-private
+          ref: main
+          token: ${{ secrets.PRIVATE_RESULTS_TOKEN }}
+          path: private-source-main
+          fetch-depth: 1
+
+      - name: Check out the private results branch
+        uses: actions/checkout@v5
+        with:
+          repository: hometownredesignsites/git-content-private
+          ref: chatgpt
+          token: ${{ secrets.PRIVATE_RESULTS_TOKEN }}
+          path: private-results
+          fetch-depth: 0
+
+      - name: Validate configured target and create runner-private input
+        id: target
+        env:
+          INPUT_SOURCE_CANDIDATE_ID: ${{ inputs.source_candidate_id }}
+          INPUT_SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+        run: |
+          set -euo pipefail
+          job_file="private-source/private_automation/queue/jobs/${JOB_ID}.json"
+          if [[ ! -f "$job_file" ]]; then
+            job_file="private-source-main/private_automation/queue/jobs/${JOB_ID}.json"
+          fi
+          if [[ ! -f "$job_file" ]]; then
+            echo "The selected job record was not found in the private target configuration."
+            exit 1
+          fi
+          python chatgpt_automation/scripts/prepare_html_assessment_target.py \
+            "$job_file" --job-id "$JOB_ID" \
+            --results-root private-results \
+            --source-run-id "$INPUT_SOURCE_RUN_ID" \
+            --source-candidate-id "$INPUT_SOURCE_CANDIDATE_ID" \
+            --output "${RUNNER_TEMP}/html-assessment-target.json"
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: chatgpt_automation/html_assessment/requirements-playwright.txt
+
+      - name: Install assessment and headless Chromium dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -r chatgpt_automation/html_assessment/requirements-playwright.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Run HTML assessment with NVIDIA NIM
+        if: inputs.provider == 'nvidia'
+        env:
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          NVIDIA_MODEL: ${{ vars.NVIDIA_MODEL || 'nvidia/nemotron-3.5-super-vl-120b-a12b' }}
+          SITE_SLUG: ${{ steps.target.outputs.site_slug }}
+          SOURCE_HTML_FILE: ${{ steps.target.outputs.source_html_file }}
+          CANDIDATE_DIR: ${{ steps.target.outputs.candidate_dir }}
+        run: |
+          set -euo pipefail
+          python chatgpt_automation/html_assessment/html_assessment.py \
+            --provider nvidia \
+            --target-json-file "${RUNNER_TEMP}/html-assessment-target.json" \
+            --source-html-file "$SOURCE_HTML_FILE" \
+            --candidate-output-dir "$CANDIDATE_DIR" \
+            --update-existing-candidate \
+            --output-root "${RUNNER_TEMP}/html-assessment" \
+            --workflow-id "$GITHUB_RUN_ID" \
+            --workflow-attempt "$GITHUB_RUN_ATTEMPT"
+
+      - name: Run HTML assessment with Cloudflare Workers AI
+        if: inputs.provider == 'cloudflare'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_MODEL: ${{ vars.CLOUDFLARE_MODEL || '@cf/google/gemma-4-26b-a4b-it' }}
+          SITE_SLUG: ${{ steps.target.outputs.site_slug }}
+          SOURCE_HTML_FILE: ${{ steps.target.outputs.source_html_file }}
+          CANDIDATE_DIR: ${{ steps.target.outputs.candidate_dir }}
+        run: |
+          set -euo pipefail
+          python chatgpt_automation/html_assessment/html_assessment.py \
+            --provider cloudflare \
+            --target-json-file "${RUNNER_TEMP}/html-assessment-target.json" \
+            --source-html-file "$SOURCE_HTML_FILE" \
+            --candidate-output-dir "$CANDIDATE_DIR" \
+            --update-existing-candidate \
+            --output-root "${RUNNER_TEMP}/html-assessment" \
+            --workflow-id "$GITHUB_RUN_ID" \
+            --workflow-attempt "$GITHUB_RUN_ATTEMPT"
+
+      - name: Run Git Content deterministic candidate QA
+        env:
+          CANDIDATE_DIR: ${{ steps.target.outputs.candidate_dir }}
+        run: |
+          set -euo pipefail
+          python chatgpt_automation/scripts/run_html_assessment_qa.py "$CANDIDATE_DIR"
+
+      - name: Save the pending candidate to private results
+        run: |
+          set -euo pipefail
+          python private-results/private_automation/scripts/build_results_index.py --provider chatgpt
+          git -C private-results config user.name "github-actions[bot]"
+          git -C private-results config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C private-results add --all results
+          if git -C private-results diff --cached --quiet; then
+            echo "No private candidate files were created."
+            exit 1
+          fi
+          git -C private-results commit -m "private: save HTML assessment candidate ${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT} [skip ci]"
+          for retry in 1 2 3; do
+            git -C private-results fetch origin chatgpt
+            git -C private-results rebase origin/chatgpt
+            if git -C private-results push origin HEAD:refs/heads/chatgpt; then
+              echo "Candidate evidence saved to the private results branch; human and image review remain pending."
+              exit 0
+            fi
+            if [[ "$retry" -lt 3 ]]; then
+              sleep "$((2 ** retry))"
+            fi
+          done
+          echo "Could not save the private candidate after three bounded push attempts."
+          exit 1

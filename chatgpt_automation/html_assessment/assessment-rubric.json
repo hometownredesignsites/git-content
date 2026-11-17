@@ -1,0 +1,44 @@
+{
+  "version": "2.0.0",
+  "passes": ["repair", "design-enhancement"],
+  "sources": [
+    {
+      "name": "Anthropic Claude Code frontend-design skill",
+      "repository": "anthropics/claude-code",
+      "path": "plugins/frontend-design/skills/frontend-design",
+      "commit": "10a5141d2d12b5a089a5fbb5f24af3fd345a34d2",
+      "url": "https://github.com/anthropics/claude-code/tree/10a5141d2d12b5a089a5fbb5f24af3fd345a34d2/plugins/frontend-design/skills/frontend-design"
+    },
+    {
+      "name": "Vercel Labs web-design-guidelines skill",
+      "repository": "vercel-labs/agent-skills",
+      "path": "skills/web-design-guidelines",
+      "commit": "ba46938889d4e58635362fb8f618e1178ac3ec46",
+      "url": "https://github.com/vercel-labs/agent-skills/tree/ba46938889d4e58635362fb8f618e1178ac3ec46/skills/web-design-guidelines"
+    },
+    {
+      "name": "Vercel Web Interface Guidelines",
+      "repository": "vercel-labs/web-interface-guidelines",
+      "path": "command.md",
+      "commit": "4ecfb9fb8d1d3b7009674869b3aaee2f904042e1",
+      "url": "https://github.com/vercel-labs/web-interface-guidelines/blob/4ecfb9fb8d1d3b7009674869b3aaee2f904042e1/command.md"
+    },
+    {
+      "name": "UI/UX Pro Max",
+      "repository": "nextlevelbuilder/ui-ux-pro-max-skill",
+      "path": "repository design-system guidance",
+      "commit": "0e8d408204fdc66b8189960dd28cc20d71db188e",
+      "url": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill/tree/0e8d408204fdc66b8189960dd28cc20d71db188e",
+      "pass": 2
+    },
+    {
+      "name": "Apple Design for the web",
+      "repository": "emilkowalski/skills",
+      "path": "skills/apple-design/SKILL.md",
+      "commit": "0f2e23b32bb1265e84cff8d3e75785fec953fb1b",
+      "url": "https://github.com/emilkowalski/skills/tree/0f2e23b32bb1265e84cff8d3e75785fec953fb1b/skills/apple-design",
+      "pass": 2,
+      "note": "Use only the web-applicable feedback, motion, type, and restraint principles."
+    }
+  ]
+}
