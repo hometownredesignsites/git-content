@@ -148,6 +148,16 @@ def source_contact_form(source_facts: dict) -> dict:
             ]
             if not form_fields:
                 continue
+            form_hint = " ".join(
+                str(form.get(key, "")) for key in ("id", "name", "action", "aria_label", "title")
+            ) + " " + " ".join(
+                str(field.get(key, ""))
+                for field in form_fields
+                for key in ("name", "label", "aria_label", "placeholder")
+            )
+            if re.search(r"newsletter|subscribe|subscription|sign(?:\s+me)?\s+up|mailing\s*list|want\s*updates", form_hint, re.I):
+                ignored_noncontact_forms += 1
+                continue
             categories = {normalize_form_field(field) for field in form_fields}
             contact_shape = (
                 ("email" in categories and bool(categories & {"name", "message", "phone"}))
