@@ -288,6 +288,7 @@ jobs:
                 "${retry_flags[@]}" > "${RUNNER_TEMP}/chatgpt-private/context-${candidate_index}.log" 2>&1; then
                 printf '{"status":"generation_failed","automated_success":false,"final_success":false,"human_visual_review_status":"pending"}\n' > "$run_dir/run_notes.json"
                 previous_candidate_dir="$run_dir"
+                echo "::notice title=Candidate failure::Batch attempt ${batch_attempt} failed before generation: source-context preparation failed; ${successful} of ${target} distinct-template passes so far."
                 continue
               fi
               if [[ "$candidate_index" -eq $((prior_attempts + 1)) ]]; then
@@ -340,9 +341,14 @@ jobs:
                 fi
                 previous_candidate_dir="$run_dir"
                 outcome="did not pass"
+                failure_summary="$(python chatgpt_automation/scripts/summarize_candidate_failure.py "$run_dir")"
               fi
               successful="$(python chatgpt_automation/scripts/continuation.py pass-count --candidates-dir chatgpt-runs)"
-              echo "::notice title=Candidate progress::Batch attempt ${batch_attempt} of ${batch_attempt_limit} ${outcome} (candidate ${attempt} overall); ${successful} of ${target} distinct-template passes so far."
+              if [[ "$outcome" == "passed" ]]; then
+                echo "::notice title=Candidate progress::Batch attempt ${batch_attempt} of ${batch_attempt_limit} passed (candidate ${attempt} overall); ${successful} of ${target} distinct-template passes so far."
+              else
+                echo "::notice title=Candidate failure::Batch attempt ${batch_attempt} of ${batch_attempt_limit} did not pass (candidate ${attempt} overall): ${failure_summary}; ${successful} of ${target} distinct-template passes so far."
+              fi
             done
             if [[ "$successful" -ge "$target" || "$attempt" -ge "$max_total_attempts" ]]; then break; fi
             if ! python - "$successful" "$attempt" <<'PY'
