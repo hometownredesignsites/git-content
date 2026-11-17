@@ -132,13 +132,13 @@ jobs:
           continuation = job.get("continuation", {})
           if not isinstance(continuation, dict):
               continuation = {}
-          candidate_attempt_limit = int(job.get("candidate_attempt_limit", 10) or 10)
-          if not 1 <= candidate_attempt_limit <= 10:
-              raise SystemExit("The private Duck.ai candidate attempt limit is outside the ten-attempt bounds.")
+          candidate_attempt_limit = int(job.get("candidate_attempt_limit", 12) or 12)
+          if not 1 <= candidate_attempt_limit <= 12:
+              raise SystemExit("The private Duck.ai candidate attempt limit must be from 1 to 12.")
           prior_passes = int(continuation.get("successful_candidates", 0) or 0)
           prior_attempts = int(continuation.get("attempts", 0) or 0)
-          if continuation.get("parent_job_id") and (prior_attempts != 10 or not 0 <= prior_passes < 3):
-              raise SystemExit("The Duck.ai continuation record is outside the ten-attempt bounds.")
+          if continuation.get("parent_job_id") and (prior_attempts != 12 or not 0 <= prior_passes < 3):
+              raise SystemExit("The Duck.ai continuation record is outside the 12/24-attempt bounds.")
           aliases.update({
               "PRIOR_JOB_ID": str(continuation.get("parent_job_id", "")),
               "PRIOR_RUN_ID": str(continuation.get("parent_run_id", "")),
@@ -171,7 +171,7 @@ jobs:
           repository: hometownredesignsites/git-content-private
           ref: main
           token: ${{ secrets.PRIVATE_RESULTS_TOKEN }}
-          path: private-source
+          path: private-source-live
           fetch-depth: 1
 
       - name: Check out private Duck.ai evidence branch before generation
@@ -190,7 +190,8 @@ jobs:
           set -euo pipefail
           result_slug="$(python - "$JOB_ID" <<'PY'
           import json, os, pathlib, re, sys
-          path = pathlib.Path("private-source/private_automation/queue/jobs") / f"{sys.argv[1]}.json"
+          source_root = pathlib.Path(os.environ.get("PRIVATE_SOURCE_ROOT", "private-source"))
+          path = source_root / "private_automation/queue/jobs" / f"{sys.argv[1]}.json"
           job = json.loads(path.read_text(encoding="utf-8"))
           if job.get("job_id") != sys.argv[1] or job.get("provider", "duckai") != "duckai":
               raise SystemExit("The private job record is invalid for Duck.ai.")
@@ -334,6 +335,21 @@ jobs:
           NEW_ATTEMPT_COUNT: ${{ steps.generate.outputs.new_attempt_count }}
         run: |
           set -euo pipefail
+          private_source_root="${PRIVATE_SOURCE_ROOT:-private-source}"
+          job_relative_path="private_automation/queue/jobs/${JOB_ID}.json"
+          if [[ ! -f "$private_source_root/$job_relative_path" ]]; then
+            for candidate_root in private-source private-source-main; do
+              if [[ -f "$candidate_root/$job_relative_path" ]]; then
+                private_source_root="$candidate_root"
+                break
+              fi
+            done
+          fi
+          if [[ ! -f "$private_source_root/$job_relative_path" ]]; then
+            echo "::warning::Private job record unavailable; no candidate evidence can be saved."
+            exit 0
+          fi
+          export PRIVATE_SOURCE_ROOT="$private_source_root"
           result_slug="$(python - "$JOB_ID" <<'PY'
           import json, os, pathlib, re, sys
           job_path = pathlib.Path(os.environ.get("PRIVATE_SOURCE_ROOT", "private-source")) / "private_automation/queue/jobs" / f"{sys.argv[1]}.json"

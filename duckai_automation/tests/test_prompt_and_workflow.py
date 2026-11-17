@@ -52,6 +52,11 @@ class PromptAndWorkflowTests(unittest.TestCase):
     def test_workflow_checkpoints_each_candidate_on_private_duckai_branch(self):
         workflow = (REPO / ".github" / "workflows" / "duckai-private-queue.yml").read_text(encoding="utf-8")
         self.assertIn('CANDIDATE_ATTEMPT_LIMIT:-12', workflow)
+        self.assertIn('candidate_attempt_limit <= 12', workflow)
+        self.assertIn('prior_attempts != 12', workflow)
+        self.assertIn('PRIVATE_SOURCE_ROOT:-private-source', workflow)
+        self.assertIn('path: private-source-live', workflow)
+        self.assertNotIn('ten-attempt bounds', workflow)
         self.assertIn("checkpoint_candidate \"$run_dir\"", workflow)
         self.assertIn('HEAD:refs/heads/duckai', workflow)
         self.assertIn("continuation.py inherit", workflow)
