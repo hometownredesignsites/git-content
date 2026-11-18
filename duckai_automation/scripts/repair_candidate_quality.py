@@ -200,14 +200,18 @@ def _repair_cta(candidate: Path, browser: dict) -> list[str]:
     for viewport in browser.get("viewports", {}).values():
         for issue in viewport.get("primary_cta_contrast", {}).get("issues", []):
             selector = str(issue.get("selector", "")).strip()
-            if selector and SAFE_SELECTOR.fullmatch(selector) and selector not in selectors:
+            specific_cta = bool(re.search(r"\.(?:button|btn|cta|primary|call[-_]?to[-_]?action)(?:$|[.#:\s>])", selector, re.IGNORECASE))
+            anchored_path = selector.startswith("#") and len(selector) > 1
+            generic_control = selector.lower() in {"a", "button", "input", "[role=button]", "*"}
+            if (selector and not generic_control and (specific_cta or anchored_path)
+                    and SAFE_SELECTOR.fullmatch(selector) and selector not in selectors):
                 selectors.append(selector)
     if not selectors:
         return []
     css = css_path.read_text(encoding="utf-8", errors="replace")
     if CTA_MARKER in css:
         css = css.split(CTA_MARKER, 1)[0].rstrip()
-    rules = [f"{selector} {{ color:#17251d !important; background-color:#fff !important; background-image:none !important; border:2px solid #17251d !important; text-shadow:none !important; }}" for selector in selectors]
+    rules = [f"{selector} {{ color:#17251d !important; background-color:#fff !important; border:2px solid #17251d !important; text-shadow:none !important; }}" for selector in selectors]
     css_path.write_text(css.rstrip() + "\n\n" + CTA_MARKER + "\n" + "\n".join(rules) + "\n", encoding="utf-8")
     return selectors
 

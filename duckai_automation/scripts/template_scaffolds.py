@@ -89,10 +89,7 @@ TEMPLATES: dict[str, dict[str, Any]] = {
         "css_selectors": (".banner.style1", ".spotlight.style1", ".gallery.style2", ".items.style1"),
         "signature_id": "story-divided-panels-gallery",
         "signature_note": (
-            "Keep the shared full-screen hero as .banner.fullscreen. Below it, preserve "
-            "the divided, editorial rhythm: at least two broad alternating image/text spotlight panels, then a "
-            "separate image gallery or compact items band and contact. Preserve .banner, .spotlight, "
-            ".orient-left/.orient-right, .gallery or .items, and .divided."
+            "Keep the shared full-screen hero as .banner.fullscreen, with headline and one CTA on a solid paper panel beside the photo; use dark ink over bright flooring. Below it, preserve the divided editorial rhythm: two broad alternating image/text panels, then a gallery or compact items band and contact. Preserve .banner, .spotlight, .orient-left/.orient-right, .gallery or .items, and .divided."
         ),
         "qa_profile": "story",
     },
@@ -211,7 +208,7 @@ def scaffold_context(reference: dict[str, Any] | None) -> str:
     compact_signature = {
         "forty": "After full-screen #banner.major, build .tiles with 3+ image-backed article tiles in 2+ columns; then text and contact bands.",
         "landed": "After #banner, build 3+ wide .spotlight bands using style1/2/3 and alternating media sides; then feature grid and contact.",
-        "story": "Use #wrapper.divided and .banner.fullscreen; add 2+ alternating .spotlight panels with orient-left/right, then .gallery or .items and contact.",
+        "story": "Use #wrapper.divided and .banner.fullscreen with paper-backed copy beside the photo; add 2+ alternating .spotlight panels with orient-left/right, then .gallery or .items and contact.",
     }[slug]
     return (
         f"HTML5 UP {config['name']} source ({config['template_url']}; CCA 3.0). Adapt layout; replace demo branding/assets. Pipeline adds attribution.\n"

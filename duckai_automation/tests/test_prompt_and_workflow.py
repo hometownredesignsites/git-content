@@ -19,6 +19,7 @@ from run_duckai import (
 )
 from scripts.summarize_candidate_failure import summarize
 from scripts.site_quality import assess_website
+from scripts.template_scaffolds import scaffold_context
 
 
 class PromptAndWorkflowTests(unittest.TestCase):
@@ -30,6 +31,12 @@ class PromptAndWorkflowTests(unittest.TestCase):
             self.assertIn(item["name"], prompt)
             self.assertIn(item["template_url"], prompt)
             self.assertIn("REQUIRED LAYOUT SIGNATURE", prompt)
+
+    def test_story_scaffold_uses_paper_backed_hero_direction(self):
+        context = scaffold_context(assigned_design_reference(3))
+        self.assertIn("paper-backed copy beside the photo", context)
+        self.assertIn("solid paper panel beside the photo", assigned_design_reference(3)["fit_summary"])
+        self.assertIn("dark ink over bright flooring", assigned_design_reference(3)["fit_summary"])
 
     def test_quality_prompt_uses_the_same_verified_asset_allowlist_as_generation(self):
         prompt = build_quality_prompt(

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -202,7 +203,18 @@ VIEWPORT_CHECKS_JS = r"""() => {
   const stableSelector = element => {
     if (element.id && document.querySelectorAll(`#${CSS.escape(element.id)}`).length === 1) return `#${CSS.escape(element.id)}`;
     const classes = Array.from(element.classList || []).filter(value => /^[a-zA-Z_-][\w-]*$/.test(value)).slice(0, 2);
-    return `${element.tagName.toLowerCase()}${classes.map(value => `.${CSS.escape(value)}`).join('')}`;
+    const direct = `${element.tagName.toLowerCase()}${classes.map(value => `.${CSS.escape(value)}`).join('')}`;
+    if (document.querySelectorAll(direct).length === 1) return direct;
+    const parts = [];
+    for (let node = element; node && node !== document.body; node = node.parentElement) {
+      if (node.id && document.querySelectorAll(`#${CSS.escape(node.id)}`).length === 1) {
+        return `#${CSS.escape(node.id)} > ${parts.reverse().join(' > ') || direct}`;
+      }
+      const tag = node.tagName.toLowerCase();
+      const siblings = node.parentElement ? Array.from(node.parentElement.children).filter(item => item.tagName === node.tagName) : [];
+      parts.push(`${tag}:nth-of-type(${siblings.indexOf(node) + 1})`);
+    }
+    return parts.reverse().join(' > ') || direct;
   };
   const effectiveBackground = element => {
     let background = [255, 255, 255];
@@ -227,7 +239,17 @@ VIEWPORT_CHECKS_JS = r"""() => {
   };
   const ctaCandidates = actions.filter(element => {
     const label = [element.innerText, element.getAttribute('aria-label'), element.getAttribute('value'), element.getAttribute('href')].filter(Boolean).join(' ');
-    return visible(element) && (ctaWords.test(label) || /(?:^|[\s_-])(?:button|btn|cta|primary|call[-_]?to[-_]?action)(?:$|[\s_-])/i.test(String(element.className || '')));
+    const className = String(element.className || '');
+    const ctaClass = /(?:^|[\s_-])(?:button|btn|cta|primary|call[-_]?to[-_]?action)(?:$|[\s_-])/i.test(className);
+    const submitControl = element.matches('input[type="submit"],input[type="button"]');
+    const labeledButton = (element.tagName.toLowerCase() === 'button' || element.getAttribute('role') === 'button')
+      && !element.hasAttribute('aria-controls')
+      && ctaWords.test(label);
+    const contentLink = element.tagName.toLowerCase() === 'a'
+      && !element.closest('nav,header,footer')
+      && Boolean(element.closest('main'))
+      && ctaWords.test(label);
+    return visible(element) && (ctaClass || submitControl || labeledButton || contentLink);
   });
   const contrastIssues = ctaCandidates.flatMap(element => {
     const fg = luminance(rgb(getComputedStyle(element).color));
@@ -432,7 +454,11 @@ def main() -> int:
         report["error"] = "inlined HTML file is missing"
     else:
         with sync_playwright() as playwright:
-            browser = playwright.chromium.launch(headless=True)
+            launch_options = {"headless": True}
+            executable_path = os.environ.get("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH", "").strip()
+            if executable_path:
+                launch_options["executable_path"] = executable_path
+            browser = playwright.chromium.launch(**launch_options)
             try:
                 for name, (width, height) in viewports.items():
                     page = browser.new_page(viewport={"width": width, "height": height})

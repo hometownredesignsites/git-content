@@ -60,6 +60,17 @@ class CandidateRepairTests(unittest.TestCase):
         css = (self.candidate / "files" / "styles.css").read_text(encoding="utf-8")
         self.assertEqual(result["cta_selectors"], [".hero a.cta"])
         self.assertIn("background-color:#fff", css)
+        self.assertNotRegex(css, r"(?m)^a\s*\{")
+
+    def test_refuses_generic_anchor_selector_from_legacy_qa_report(self):
+        browser = {"viewports": {"mobile": {"primary_cta_contrast": {"issues": [
+            {"selector": "a", "text": "Contact", "contrast_ratio": 1.09, "threshold": 4.5}
+        ]}}}}
+        self._write_report({"browser_primary_ctas_readable_desktop_and_mobile": False}, browser)
+        result = repair(self.candidate)
+        css = (self.candidate / "files" / "styles.css").read_text(encoding="utf-8")
+        self.assertEqual(result["cta_selectors"], [])
+        self.assertNotIn("QA repair pass: measured primary CTA contrast.", css)
 
     def test_uses_category_fallback_when_no_verified_source_photo_exists(self):
         fallback = "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1800&q=85"
