@@ -182,11 +182,15 @@ VIEWPORT_CHECKS_JS = r"""() => {
     };
   }
 
-  const ctaWords = /ask|contact|book|schedule|inquir|reserve|visit|get in touch/i;
+  const ctaWords = /ask|contact|book|schedule|inquir|reserve|visit|get in touch|explore|discover|learn|view|see|browse|compare/i;
   const actions = Array.from(document.querySelectorAll('a,button,[role="button"],input[type="submit"]'));
   const cta = actions.find(element => {
     const label = [element.innerText, element.getAttribute('aria-label'), element.getAttribute('value'), element.getAttribute('href')].filter(Boolean).join(' ');
-    if (!ctaWords.test(label) || !visible(element)) return false;
+    const className = String(element.className || '');
+    const ctaClass = /(?:^|[\s_-])(?:button|btn|cta|primary|call[-_]?to[-_]?action)(?:$|[\s_-])/i.test(className);
+    const menuControl = element.hasAttribute('aria-controls') || /menu[-_]?toggle|hamburger/i.test(className);
+    const contentAction = !element.closest('header,nav,footer') && Boolean(element.closest('main'));
+    if ((!ctaClass && !ctaWords.test(label)) || menuControl || !contentAction || !visible(element)) return false;
     const rect = element.getBoundingClientRect();
     return rect.top >= 0 && rect.bottom <= window.innerHeight && rect.left >= 0 && rect.right <= window.innerWidth;
   });
