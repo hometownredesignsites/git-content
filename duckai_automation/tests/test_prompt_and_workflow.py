@@ -18,6 +18,7 @@ from run_duckai import (
     validate_source_assessment,
 )
 from scripts.summarize_candidate_failure import summarize
+from scripts.site_quality import assess_website
 
 
 class PromptAndWorkflowTests(unittest.TestCase):
@@ -49,9 +50,22 @@ class PromptAndWorkflowTests(unittest.TestCase):
             "- Email (type=email; required=true) (source: https://example.com/contact/)\n\n"
             "VERIFIED_SOURCE_IMAGE_URLS:\n- https://example.com/photo.jpg",
         )
+        self.assertIn("A contact form is required", prompt)
         self.assertIn("VERIFIED INQUIRY FIELD DEFINITIONS:", prompt)
-        self.assertNotIn("CONTACT FORM", prompt)
         self.assertIn("Email (type=email; required=true)", prompt)
+
+        with tempfile.TemporaryDirectory() as temp:
+            candidate = Path(temp)
+            (candidate / "files").mkdir()
+            (candidate / "files" / "index.html").write_text(
+                "<!doctype html><html><head><link href=\"styles.css\"></head>"
+                "<body><main><h1>Flooring</h1><form><label>Email</label></form></main>"
+                "<footer>Contact us for flooring projects and details.</footer></body></html>",
+                encoding="utf-8",
+            )
+            (candidate / "files" / "styles.css").write_text("body{color:#111}", encoding="utf-8")
+            report = assess_website(prompt, candidate)
+            self.assertIs(report["checks"]["requested_form_present"], True)
 
     def test_quality_prompt_does_not_require_a_form_without_verified_fields(self):
         prompt = build_quality_prompt(
@@ -60,6 +74,17 @@ class PromptAndWorkflowTests(unittest.TestCase):
         )
         self.assertNotIn("CONTACT FORM", prompt)
         self.assertNotIn("contact form", prompt.lower())
+        with tempfile.TemporaryDirectory() as temp:
+            candidate = Path(temp)
+            (candidate / "files").mkdir()
+            (candidate / "files" / "index.html").write_text(
+                "<!doctype html><html><head><link href=\"styles.css\"></head>"
+                "<body><main><h1>Flooring</h1></main><footer>Contact us for flooring projects and details.</footer></body></html>",
+                encoding="utf-8",
+            )
+            (candidate / "files" / "styles.css").write_text("body{color:#111}", encoding="utf-8")
+            report = assess_website(prompt, candidate)
+            self.assertNotIn("requested_form_present", report["checks"])
 
     def test_source_assessment_accepts_a_cited_natural_language_access_status(self):
         assessment = {

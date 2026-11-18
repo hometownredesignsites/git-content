@@ -781,7 +781,15 @@ def build_quality_prompt(website_request: str, generation_prompt: str = "") -> s
             generation_prompt,
         )
         if match:
-            context_blocks.append(f"{output_label}:\n{match.group(1).strip()}")
+            field_definitions = match.group(1).strip()
+            if marker == "CONTACT FORM (preserve exact fields and supplied attributes)":
+                if not field_definitions:
+                    continue
+                context_blocks.append(
+                    "Verified inquiry field definitions follow. A contact form is required; "
+                    "include these exact fields and preserve their supplied attributes."
+                )
+            context_blocks.append(f"{output_label}:\n{field_definitions}")
     return "\n\n".join([website_request.strip(), *context_blocks]).strip()
 
 
