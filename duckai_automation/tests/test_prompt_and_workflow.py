@@ -211,6 +211,8 @@ class PromptAndWorkflowTests(unittest.TestCase):
         continuation = (AUTOMATION / "scripts" / "continuation.py").read_text(encoding="utf-8")
         self.assertIn("continuation_eligible", continuation)
         self.assertIn("MAX_TOTAL_ATTEMPTS = 36", continuation)
+        runner = (AUTOMATION / "run_duckai.py").read_text(encoding="utf-8")
+        self.assertIn("int(CANDIDATE_INDEX) <= 36", runner)
         self.assertNotIn("refs/heads/fallback", workflow)
         self.assertLess(workflow.index("Check out private Duck.ai evidence branch before generation"), workflow.index("Generate candidate sites"))
 
