@@ -87,9 +87,12 @@ TEMPLATES: dict[str, dict[str, Any]] = {
             '<div class="items style1 medium">…</div> → contact'
         ),
         "css_selectors": (".banner.style1", ".spotlight.style1", ".gallery.style2", ".items.style1"),
-        "signature_id": "story-divided-panels-gallery",
+        "signature_id": "story-fullbleed-divided-panels-gallery",
         "signature_note": (
-            "Keep the shared full-screen hero as .banner.fullscreen. Below it, preserve "
+            "Make the Story hero a full-bleed flooring photo in .banner.fullscreen: the image must cover the entire hero "
+            "edge-to-edge and top-to-bottom on desktop and mobile. Overlay the headline and one readable CTA on a restrained "
+            "opaque paper panel. Do not use a half-width side-by-side hero image or a narrow mobile image rail; keep the "
+            "mobile photo full-width and the CTA on the first screen. Below it, preserve "
             "the divided, editorial rhythm: at least two broad alternating image/text spotlight panels, then a "
             "separate image gallery or compact items band and contact. Preserve .banner, .spotlight, "
             ".orient-left/.orient-right, .gallery or .items, and .divided."

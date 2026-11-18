@@ -219,13 +219,13 @@ class PostGenerationRegressionTest(unittest.TestCase):
             "source_form_fields_missing": ["phone"],
             "source_form_required_fields_missing": ["phone"],
             "browser_qa": {"template_layout": {
-                "status": "fail", "signature_id": "story-divided-panels-gallery",
+                "status": "fail", "signature_id": "story-fullbleed-divided-panels-gallery",
                 "profile": "story", "spotlight_side_alternations": 0,
             }},
         })
         self.assertIn('"styles_css_linked"', prompt)
         self.assertIn('"phone"', prompt)
-        self.assertIn('"story-divided-panels-gallery"', prompt)
+        self.assertIn('"story-fullbleed-divided-panels-gallery"', prompt)
         self.assertIn('"spotlight_side_alternations": 0', prompt)
 
     def test_source_audit_drops_a_missing_attribute_claim_contradicted_by_its_exact_evidence(self):

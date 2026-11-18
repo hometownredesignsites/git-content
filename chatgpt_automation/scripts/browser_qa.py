@@ -661,6 +661,25 @@ def _selected_template_profile(run_dir: Path) -> tuple[dict | None, dict]:
     return profile, {"status": "pending", "pass": False}
 
 
+def _enforce_story_full_bleed_hero(profile: dict | None, report: dict) -> None:
+    """Require Story's hero image to cover its full rendered hero on both viewports."""
+    if not isinstance(profile, dict) or profile.get("profile") != "story":
+        return
+    coverage = {
+        name: bool(report.get("viewports", {}).get(name, {}).get("hero_media_covers_hero"))
+        for name in ("desktop", "mobile")
+    }
+    layout = report.setdefault("template_layout", {})
+    actual = layout.setdefault("actual", {})
+    expected = layout.setdefault("expected", {})
+    actual["hero_media_covers_hero_by_viewport"] = coverage
+    expected["hero_media_covers_hero_desktop_and_mobile"] = True
+    if not all(coverage.values()):
+        layout["status"] = "fail"
+        layout["pass"] = False
+        layout["reason"] = "The Story hero photo must cover the full hero on desktop and mobile."
+
+
 def _resource_event(event, collection: list[dict]) -> None:
     request = event.request if hasattr(event, "request") else event
     if request.resource_type not in {"image", "font"}:
@@ -961,6 +980,7 @@ def main() -> int:
         desktop = report["viewports"].get("desktop", {})
         mobile = report["viewports"].get("mobile", {})
         mobile_menu = report["mobile_menu"]
+        _enforce_story_full_bleed_hero(template_profile, report)
         report["checks"] = {
             "desktop_navigation_has_single_visible_menu": bool(
                 desktop.get("header_navigation", {}).get("visible_nav_count") == 1
