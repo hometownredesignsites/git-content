@@ -20,7 +20,7 @@ from run_duckai import (
 from scripts.summarize_candidate_failure import summarize
 from scripts.site_quality import assess_website
 from scripts.template_scaffolds import scaffold_context
-from scripts.browser_qa import _selected_template_profile
+from scripts.browser_qa import _enforce_story_full_bleed_hero, _selected_template_profile
 
 
 class PromptAndWorkflowTests(unittest.TestCase):
@@ -60,13 +60,36 @@ class PromptAndWorkflowTests(unittest.TestCase):
             self.assertIn(item["template_url"], prompt)
             self.assertIn("REQUIRED LAYOUT SIGNATURE", prompt)
 
-    def test_story_scaffold_uses_paper_backed_hero_direction(self):
+    def test_story_scaffold_requires_full_bleed_photo_hero(self):
         context = scaffold_context(assigned_design_reference(3))
-        self.assertIn("paper-backed copy beside the photo", context)
-        self.assertIn("on mobile stack a short photo above the text and CTA", context)
-        self.assertIn("solid paper panel beside the photo", assigned_design_reference(3)["fit_summary"])
-        self.assertIn("dark ink over bright flooring", assigned_design_reference(3)["fit_summary"])
-        self.assertIn("keep the CTA on the first screen", assigned_design_reference(3)["fit_summary"])
+        self.assertIn("full-bleed photo", context)
+        self.assertIn("covering the hero edge-to-edge on desktop and mobile", context)
+        self.assertIn("photo full-width on mobile and the CTA on the first screen", context)
+        self.assertNotIn("beside the photo", context)
+        self.assertIn("dark ink", assigned_design_reference(3)["fit_summary"])
+        self.assertIn("CTA on the first screen", assigned_design_reference(3)["fit_summary"])
+
+    def test_story_layout_requires_hero_media_to_cover_both_viewports(self):
+        report = {
+            "viewports": {
+                "desktop": {"hero": {"media_covers_hero": False}},
+                "mobile": {"hero": {"media_covers_hero": False}},
+            },
+            "template_layout": {"status": "pass", "pass": True, "actual": {}, "expected": {}},
+        }
+
+        _enforce_story_full_bleed_hero("story", report)
+
+        self.assertFalse(report["template_layout"]["pass"])
+        self.assertEqual(
+            report["template_layout"]["actual"]["hero_media_covers_hero_by_viewport"],
+            {"desktop": False, "mobile": False},
+        )
+
+    def test_full_bleed_hero_gate_applies_only_to_story(self):
+        report = {"viewports": {}, "template_layout": {"pass": True}}
+        _enforce_story_full_bleed_hero("landed", report)
+        self.assertTrue(report["template_layout"]["pass"])
 
     def test_quality_prompt_uses_the_same_verified_asset_allowlist_as_generation(self):
         prompt = build_quality_prompt(

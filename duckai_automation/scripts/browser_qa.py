@@ -8,6 +8,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
@@ -362,6 +363,26 @@ def _resource_event(event, collection: list[dict]) -> None:
         collection.append({"type": request.resource_type, "error": request.failure, "url": request.url})
 
 
+def _enforce_story_full_bleed_hero(profile: str | None, report: dict[str, Any]) -> None:
+    if profile != "story":
+        return
+    media_coverage = {
+        name: bool(report.get("viewports", {}).get(name, {}).get("hero", {}).get("media_covers_hero"))
+        for name in ("desktop", "mobile")
+    }
+    layout = report.setdefault("template_layout", {})
+    actual = layout.setdefault("actual", {})
+    expected = layout.setdefault("expected", {})
+    actual["hero_media_covers_hero_by_viewport"] = media_coverage
+    expected["hero_media_covers_hero_desktop_and_mobile"] = True
+    if not all(media_coverage.values()):
+        layout["status"] = "fail"
+        layout["pass"] = False
+        layout["reason"] = "The Story hero photo must cover the full hero on desktop and mobile."
+    elif layout.get("pass"):
+        layout["status"] = "pass"
+
+
 def _nav_visible(page, nav_id: str) -> bool:
     return bool(page.evaluate(
         """id => {
@@ -555,6 +576,8 @@ def main() -> int:
                 **report["template_layout"], "status": "fail", "pass": False,
                 "reason": "desktop template layout could not be measured",
             }
+
+        _enforce_story_full_bleed_hero(template_profile, report)
 
         desktop = report["viewports"].get("desktop", {})
         mobile = report["viewports"].get("mobile", {})

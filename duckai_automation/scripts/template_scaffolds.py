@@ -87,9 +87,9 @@ TEMPLATES: dict[str, dict[str, Any]] = {
             '<div class="items style1 medium">…</div> → contact'
         ),
         "css_selectors": (".banner.style1", ".spotlight.style1", ".gallery.style2", ".items.style1"),
-        "signature_id": "story-divided-panels-gallery",
+        "signature_id": "story-fullbleed-divided-panels-gallery",
         "signature_note": (
-            "Keep the shared full-screen hero as .banner.fullscreen, with headline and one CTA on a solid paper panel beside the photo; use dark ink over bright flooring. On mobile, stack a short full-width photo above compact copy and keep the CTA on the first screen. Below it, preserve the divided editorial rhythm: two broad alternating image/text panels, then a gallery or compact items band and contact. Preserve .banner, .spotlight, .orient-left/.orient-right, .gallery or .items, and .divided."
+            "Keep the shared hero as a full-bleed photo in .banner.fullscreen: the flooring image covers the entire hero from edge to edge and top to bottom on desktop and mobile. Place the headline and one CTA in a restrained, opaque paper panel over the image; use dark ink and preserve readable contrast. Do not use a half-width hero image, side-by-side hero columns, or a narrow mobile image rail. Keep the mobile hero photo full-width and the CTA on the first screen. Below it, preserve the divided editorial rhythm: two broad alternating image/text panels, then a gallery or compact items band and contact. Preserve .banner, .spotlight, .orient-left/.orient-right, .gallery or .items, and .divided."
         ),
         "qa_profile": "story",
     },
@@ -208,7 +208,7 @@ def scaffold_context(reference: dict[str, Any] | None) -> str:
     compact_signature = {
         "forty": "After full-screen #banner.major, build .tiles with 3+ image-backed article tiles in 2+ columns; then text and contact bands.",
         "landed": "After #banner, build 3+ wide .spotlight bands using style1/2/3 and alternating media sides; then feature grid and contact.",
-        "story": "Use #wrapper.divided and .banner.fullscreen with paper-backed copy beside the photo on desktop; on mobile stack a short photo above the text and CTA. Add 2+ alternating .spotlight panels, then .gallery or .items and contact.",
+        "story": "Use #wrapper.divided and .banner.fullscreen with a full-bleed photo covering the hero edge-to-edge on desktop and mobile; overlay a readable paper-backed text panel, dark ink, and one CTA. Keep the photo full-width on mobile and the CTA on the first screen. Add 2+ alternating .spotlight panels, then .gallery or .items and contact.",
     }[slug]
     return (
         f"HTML5 UP {config['name']} source ({config['template_url']}; CCA 3.0). Adapt layout; replace demo branding/assets. Pipeline adds attribution.\n"
