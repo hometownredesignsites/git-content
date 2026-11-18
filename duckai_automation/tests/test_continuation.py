@@ -40,11 +40,14 @@ class ContinuationTests(unittest.TestCase):
                 }), encoding="utf-8")
             self.assertEqual(next_template_slot(candidates), 2)
 
-    def test_candidate_indices_continue_at_13_and_stop_at_24(self):
+    def test_candidate_indices_continue_in_bounded_batches_through_36(self):
         self.assertEqual(candidate_indices(0, 12), list(range(1, 13)))
         self.assertEqual(candidate_indices(12, 12), list(range(13, 25)))
+        self.assertEqual(candidate_indices(24, 12), list(range(25, 37)))
         with self.assertRaises(ValueError):
             candidate_indices(12, 13)
+        with self.assertRaises(ValueError):
+            candidate_indices(24, 13)
 
     def test_only_full_gate_free_first_batch_is_eligible(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -61,6 +64,16 @@ class ContinuationTests(unittest.TestCase):
             self.assertFalse(status["continuation_eligible"])
             self.assertEqual(status["access_gate_evidence"], ["access_gate"])
 
+    def test_second_continuation_is_eligible_but_third_batch_is_terminal(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            candidates = root / "candidates"
+            candidates.mkdir()
+            status = write_batch_status(root / "status.json", "job", candidates, 24, 12, 456, "parent", "123")
+            self.assertTrue(status["continuation_eligible"])
+            status = write_batch_status(root / "status.json", "job", candidates, 36, 12, 789, "parent", "456")
+            self.assertFalse(status["continuation_eligible"])
+
     def test_inherit_requires_parent_authorization_and_copies_only_passes(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -74,7 +87,7 @@ class ContinuationTests(unittest.TestCase):
                 "continuation_eligible": True, "attempts": 12, "successful_candidates": 1,
             }
             (parent / "status.json").write_text(json.dumps(status), encoding="utf-8")
-            copied = inherit_passing_candidates(root / "results", root / "new-run", "parent", 123, 1, 456, 1)
+            copied = inherit_passing_candidates(root / "results", root / "new-run", "parent", 123, 1, 12, 456, 1)
             self.assertEqual(len(copied), 1)
             self.assertTrue((copied[0] / "run_notes.json").is_file())
 

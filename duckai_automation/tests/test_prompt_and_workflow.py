@@ -199,7 +199,8 @@ class PromptAndWorkflowTests(unittest.TestCase):
         workflow = (REPO / ".github" / "workflows" / "duckai-private-queue.yml").read_text(encoding="utf-8")
         self.assertIn('CANDIDATE_ATTEMPT_LIMIT:-12', workflow)
         self.assertIn('candidate_attempt_limit <= 12', workflow)
-        self.assertIn('prior_attempts != 12', workflow)
+        self.assertIn('prior_attempts not in (12, 24)', workflow)
+        self.assertIn('--expected-attempts "$PRIOR_ATTEMPTS"', workflow)
         self.assertIn('PRIVATE_SOURCE_ROOT:-private-source', workflow)
         self.assertIn('path: private-source-live', workflow)
         self.assertNotIn('ten-attempt bounds', workflow)
@@ -209,7 +210,7 @@ class PromptAndWorkflowTests(unittest.TestCase):
         self.assertIn("continuation.py status", workflow)
         continuation = (AUTOMATION / "scripts" / "continuation.py").read_text(encoding="utf-8")
         self.assertIn("continuation_eligible", continuation)
-        self.assertIn("MAX_TOTAL_ATTEMPTS = 24", continuation)
+        self.assertIn("MAX_TOTAL_ATTEMPTS = 36", continuation)
         self.assertNotIn("refs/heads/fallback", workflow)
         self.assertLess(workflow.index("Check out private Duck.ai evidence branch before generation"), workflow.index("Generate candidate sites"))
 

@@ -11,7 +11,8 @@ from typing import Any
 
 TARGET_PASSES = 3
 MAX_ATTEMPTS_PER_BATCH = 12
-MAX_TOTAL_ATTEMPTS = 24
+MAX_TOTAL_ATTEMPTS = 36
+VALID_PRIOR_ATTEMPTS = {0, MAX_ATTEMPTS_PER_BATCH, 2 * MAX_ATTEMPTS_PER_BATCH}
 
 
 def read_json(path: Path) -> dict[str, Any] | None:
@@ -23,12 +24,12 @@ def read_json(path: Path) -> dict[str, Any] | None:
 
 
 def candidate_indices(prior_attempts: int, batch_limit: int = MAX_ATTEMPTS_PER_BATCH) -> list[int]:
-    if not 0 <= prior_attempts <= MAX_ATTEMPTS_PER_BATCH:
-        raise ValueError("prior_attempts must be between zero and twelve")
+    if prior_attempts not in VALID_PRIOR_ATTEMPTS:
+        raise ValueError("prior_attempts must be zero, twelve, or twenty-four")
     if not 1 <= batch_limit <= MAX_ATTEMPTS_PER_BATCH:
         raise ValueError("batch_limit must be between one and twelve")
     if prior_attempts + batch_limit > MAX_TOTAL_ATTEMPTS:
-        raise ValueError("candidate indices cannot exceed the 24-attempt total cap")
+        raise ValueError("candidate indices cannot exceed the 36-attempt total cap")
     return list(range(prior_attempts + 1, prior_attempts + batch_limit + 1))
 
 
@@ -101,6 +102,7 @@ def inherit_passing_candidates(
     parent_job_id: str,
     parent_run_id: int,
     expected_passes: int,
+    expected_attempts: int,
     current_run_id: int,
     current_run_attempt: int,
 ) -> list[Path]:
@@ -121,7 +123,8 @@ def inherit_passing_candidates(
     if (
         status.get("continuation_eligible") is not True
         or status.get("status") != "failed"
-        or int(status.get("attempts", 0) or 0) != MAX_ATTEMPTS_PER_BATCH
+        or expected_attempts not in VALID_PRIOR_ATTEMPTS - {0}
+        or int(status.get("attempts", 0) or 0) != expected_attempts
         or int(status.get("successful_candidates", -1) or 0) != expected_passes
     ):
         raise ValueError("Parent run status does not authorize this continuation")
@@ -154,9 +157,9 @@ def write_batch_status(
     evidence = access_gate_evidence(candidates_dir)
     success_count = len(passed)
     eligible = (
-        not continued_from
-        and success_count < TARGET_PASSES
-        and attempts == MAX_ATTEMPTS_PER_BATCH
+        success_count < TARGET_PASSES
+        and attempts in VALID_PRIOR_ATTEMPTS - {0}
+        and attempts < MAX_TOTAL_ATTEMPTS
         and new_attempts == MAX_ATTEMPTS_PER_BATCH
         and not evidence
     )
@@ -197,6 +200,7 @@ def main() -> None:
     inherit.add_argument("--parent-job-id", required=True)
     inherit.add_argument("--parent-run-id", type=int, required=True)
     inherit.add_argument("--expected-passes", type=int, required=True)
+    inherit.add_argument("--expected-attempts", type=int, required=True)
     inherit.add_argument("--current-run-id", type=int, required=True)
     inherit.add_argument("--current-run-attempt", type=int, required=True)
     count = subparsers.add_parser("pass-count")
@@ -218,7 +222,7 @@ def main() -> None:
     elif args.command == "inherit":
         paths = inherit_passing_candidates(
             args.results_root, args.destination_root, args.parent_job_id,
-            args.parent_run_id, args.expected_passes, args.current_run_id,
+            args.parent_run_id, args.expected_passes, args.expected_attempts, args.current_run_id,
             args.current_run_attempt,
         )
         print(json.dumps([str(path) for path in paths]))

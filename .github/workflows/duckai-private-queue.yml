@@ -141,8 +141,8 @@ jobs:
               raise SystemExit("The private Duck.ai candidate attempt limit must be from 1 to 12.")
           prior_passes = int(continuation.get("successful_candidates", 0) or 0)
           prior_attempts = int(continuation.get("attempts", 0) or 0)
-          if continuation.get("parent_job_id") and (prior_attempts != 12 or not 0 <= prior_passes < 3):
-              raise SystemExit("The Duck.ai continuation record is outside the 12/24-attempt bounds.")
+          if continuation.get("parent_job_id") and (prior_attempts not in (12, 24) or not 0 <= prior_passes < 3):
+              raise SystemExit("The Duck.ai continuation record is outside the 12/24/36-attempt bounds.")
           aliases.update({
               "PRIOR_JOB_ID": str(continuation.get("parent_job_id", "")),
               "PRIOR_RUN_ID": str(continuation.get("parent_run_id", "")),
@@ -214,8 +214,8 @@ jobs:
           prior_attempts = int(continuation.get("attempts", 0) or 0)
           parent_id = str(continuation.get("parent_job_id", ""))
           parent_run = str(continuation.get("parent_run_id", ""))
-          if parent_id and (prior_attempts != 12 or not 0 <= prior_passes < 3 or batch_limit + prior_attempts > 24):
-              raise SystemExit("The Duck.ai continuation record is outside the 12/24-attempt bounds.")
+          if parent_id and (prior_attempts not in (12, 24) or not 0 <= prior_passes < 3 or batch_limit + prior_attempts > 36):
+              raise SystemExit("The Duck.ai continuation record is outside the 12/24/36-attempt bounds.")
           if not parent_id and (prior_attempts or prior_passes):
               raise SystemExit("Prior candidate counts require a valid continuation parent.")
           print(slug)
@@ -247,6 +247,7 @@ jobs:
               --destination-root duckai-runs \
               --parent-job-id "$PRIOR_JOB_ID" --parent-run-id "${PRIOR_RUN_ID:-0}" \
               --expected-passes "$successful" \
+              --expected-attempts "$PRIOR_ATTEMPTS" \
               --current-run-id "$GITHUB_RUN_ID" --current-run-attempt "$GITHUB_RUN_ATTEMPT"
             successful="$(python duckai_automation/scripts/continuation.py pass-count --candidates-dir duckai-runs)"
           fi
