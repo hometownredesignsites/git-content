@@ -396,9 +396,9 @@ def send_source_assessment(
         + target_metadata
         + """Include: access_status (exactly \"accessed\" if any requested-domain page loaded, otherwise \"not_accessible\");
 pages_reviewed:[{url,page_title,content}]; sources:[exact reviewed page URLs];
-organization_facts: up to 8 [{fact,source_urls}] for identity, services, locations;
+organization_facts: up to 8 [{fact,kind (identity|service|location),source_urls}] for identity, services, locations;
 selling_points: up to 3 [{fact,source_urls}]; contact_details: verified phone/email/address/conversion path as [{fact,source_urls}];
-contact_form_fields: up to 16 [{name,type,label,required:true|false|unknown,placeholder,options,source_urls}] preserving exact observed field details;
+contact_form_fields: up to 16 [{name,type,label,required:true|false|unknown,placeholder,options,source_urls}] from a verified inquiry/contact form only; return [] if none is present. Exclude newsletter/updates, login, and account fields;
 navigation_links: up to 3 [{label,url,source_urls}] for useful internal destinations only; faq_answers: up to 3 [{question,answer,source_urls}];
 audience_and_goals:{primary_conversion_path,source_urls,audience_inference}; brand_and_visual_observations:[{observation,source_urls}] (brief, separate observation from opinion);
 source_assets: up to 5 [{url,type,page_url,context}] for exact public logo/photo/image URLs actually seen;
@@ -757,22 +757,23 @@ def run_browser_qa(website_request: str) -> None:
 
 
 def build_quality_prompt(website_request: str, generation_prompt: str = "") -> str:
-    """Pass only the image-asset allowlists to QA alongside the actual request."""
+    """Pass verified image and inquiry-field evidence to QA alongside the request."""
     context_blocks = []
     # Keep QA's allowlist aligned with every verified source asset the model
     # was permitted to use.  The source brief also carries a narrower image
     # shortlist, but generation may select other verified same-site assets.
-    for marker in (
-        "VERIFIED_SOURCE_ASSET_URLS",
-        "VERIFIED_SOURCE_IMAGE_URLS",
-        "VERIFIED_CATEGORY_FALLBACK_IMAGE_URLS",
+    for marker, output_label in (
+        ("VERIFIED_SOURCE_ASSET_URLS", "VERIFIED_SOURCE_ASSET_URLS"),
+        ("VERIFIED_SOURCE_IMAGE_URLS", "VERIFIED_SOURCE_IMAGE_URLS"),
+        ("VERIFIED_CATEGORY_FALLBACK_IMAGE_URLS", "VERIFIED_CATEGORY_FALLBACK_IMAGE_URLS"),
+        ("CONTACT FORM (preserve exact fields and supplied attributes)", "VERIFIED INQUIRY FIELD DEFINITIONS"),
     ):
         match = re.search(
-            rf"{marker}:\s*\n([\s\S]*?)(?:\n\s*\n|$)",
+            rf"{re.escape(marker)}:\s*\n([\s\S]*?)(?:\n\s*\n|$)",
             generation_prompt,
         )
         if match:
-            context_blocks.append(f"{marker}:\n{match.group(1).strip()}")
+            context_blocks.append(f"{output_label}:\n{match.group(1).strip()}")
     return "\n\n".join([website_request.strip(), *context_blocks]).strip()
 
 

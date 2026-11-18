@@ -42,6 +42,25 @@ class PromptAndWorkflowTests(unittest.TestCase):
         self.assertIn("VERIFIED_SOURCE_IMAGE_URLS:\n- https://example.com/shortlisted-photo.jpg", prompt)
         self.assertIn("VERIFIED_CATEGORY_FALLBACK_IMAGE_URLS:\n- https://images.example.com/floor.jpg", prompt)
 
+    def test_quality_prompt_receives_verified_contact_fields(self):
+        prompt = build_quality_prompt(
+            "Redesign this site.",
+            "CONTACT FORM (preserve exact fields and supplied attributes):\n"
+            "- Email (type=email; required=true) (source: https://example.com/contact/)\n\n"
+            "VERIFIED_SOURCE_IMAGE_URLS:\n- https://example.com/photo.jpg",
+        )
+        self.assertIn("VERIFIED INQUIRY FIELD DEFINITIONS:", prompt)
+        self.assertNotIn("CONTACT FORM", prompt)
+        self.assertIn("Email (type=email; required=true)", prompt)
+
+    def test_quality_prompt_does_not_require_a_form_without_verified_fields(self):
+        prompt = build_quality_prompt(
+            "If verified inquiry fields exist, include them. Otherwise, omit the inquiry interface.",
+            "VERIFIED_SOURCE_IMAGE_URLS:\n- https://example.com/photo.jpg",
+        )
+        self.assertNotIn("CONTACT FORM", prompt)
+        self.assertNotIn("contact form", prompt.lower())
+
     def test_source_assessment_accepts_a_cited_natural_language_access_status(self):
         assessment = {
             "access_status": (

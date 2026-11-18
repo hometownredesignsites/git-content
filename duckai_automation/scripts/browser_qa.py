@@ -79,6 +79,12 @@ def _selected_template_profile(run_dir: Path):
 
 SECTION_VISIBILITY_JS = r"""(required) => {
   const normalize = value => (value || '').toString().toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const selectorHint = element => {
+    if (!element) return null;
+    if (element.id && document.querySelectorAll(`#${CSS.escape(element.id)}`).length === 1) return `#${CSS.escape(element.id)}`;
+    const classes = Array.from(element.classList || []).filter(value => /^[a-zA-Z_-][\w-]*$/.test(value)).slice(0, 2);
+    return `${element.tagName.toLowerCase()}${classes.map(value => `.${CSS.escape(value)}`).join('')}`;
+  };
   const visible = element => {
     if (!element) return false;
     const rect = element.getBoundingClientRect();
@@ -113,9 +119,22 @@ SECTION_VISIBILITY_JS = r"""(required) => {
     });
     const element = usable[0] || matches[0];
     const rect = element ? element.getBoundingClientRect() : null;
+    const hiddenAncestors = [];
+    let ariaHiddenAncestor = false;
+    for (let node = element; node && node !== document.documentElement; node = node.parentElement) {
+      const style = getComputedStyle(node);
+      if (node.getAttribute('aria-hidden') === 'true') ariaHiddenAncestor = true;
+      if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) <= 0.01) {
+        const selector = selectorHint(node);
+        if (selector) hiddenAncestors.push(selector);
+      }
+    }
     results[name] = {
       visible: usable.length > 0,
-      selector_hint: element ? `${element.tagName.toLowerCase()}${element.id ? '#' + element.id : ''}${element.className && typeof element.className === 'string' ? '.' + element.className.trim().split(/\s+/).slice(0, 2).join('.') : ''}` : null,
+      style_hidden: hiddenAncestors.length > 0,
+      aria_hidden_ancestor: ariaHiddenAncestor,
+      selector_hint: selectorHint(element),
+      hidden_ancestors: hiddenAncestors,
       width: rect ? Math.round(rect.width) : 0,
       height: rect ? Math.round(rect.height) : 0
     };

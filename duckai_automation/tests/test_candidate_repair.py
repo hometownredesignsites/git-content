@@ -84,6 +84,61 @@ class CandidateRepairTests(unittest.TestCase):
         self.assertIn('id="banner"', html)
         self.assertIn("style1", html)
 
+    def test_adds_only_verified_captured_form_fields_as_non_submitting_preview(self):
+        self._write_report({"requested_form_present": False}, {})
+        (self.candidate / "debug" / "source_assessment.json").write_text(json.dumps({
+            "pages_reviewed": [{"url": "https://example.com/contact/"}],
+            "contact_form_fields": [{
+                "name": "email", "type": "email", "label": "Email address",
+                "required": True, "source_urls": ["https://example.com/contact/"],
+            }],
+        }), encoding="utf-8")
+        result = repair(self.candidate)
+        html = (self.candidate / "files" / "index.html").read_text(encoding="utf-8")
+        self.assertTrue(result["changed"])
+        self.assertEqual(result["verified_form_repair"]["fields_added"], 1)
+        self.assertIn('<label for="verified-inquiry-1">Email address</label>', html)
+        self.assertIn('type="email" required', html)
+        self.assertIn("This form preview does not submit messages.", html)
+
+    def test_does_not_invent_form_when_source_has_no_captured_fields(self):
+        self._write_report({"requested_form_present": False}, {})
+        (self.candidate / "debug" / "source_assessment.json").write_text(
+            json.dumps({"pages_reviewed": [], "contact_form_fields": []}), encoding="utf-8"
+        )
+        result = repair(self.candidate)
+        self.assertFalse(result["changed"])
+        self.assertNotIn("<form", (self.candidate / "files" / "index.html").read_text(encoding="utf-8"))
+
+    def test_adds_services_section_only_from_explicitly_typed_verified_facts(self):
+        self._write_report({"section_services": False}, {})
+        html_path = self.candidate / "files" / "index.html"
+        html_path.write_text(html_path.read_text(encoding="utf-8").replace("Services", "Flooring"), encoding="utf-8")
+        (self.candidate / "debug" / "source_assessment.json").write_text(json.dumps({
+            "pages_reviewed": [{"url": "https://example.com/services/"}],
+            "organization_facts": [
+                {"kind": "service", "fact": "Hardwood floor installation", "source_urls": ["https://example.com/services/"]},
+                {"kind": "location", "fact": "Albany", "source_urls": ["https://example.com/services/"]},
+            ],
+        }), encoding="utf-8")
+        result = repair(self.candidate)
+        html = (self.candidate / "files" / "index.html").read_text(encoding="utf-8")
+        self.assertTrue(result["changed"])
+        self.assertIn('id="services"', html)
+        self.assertIn("Hardwood floor installation", html)
+        self.assertNotIn(">Albany<", html)
+
+    def test_repairs_visibility_only_for_browser_measured_hidden_section(self):
+        browser = {"viewports": {"mobile": {"sections": {
+            "services": {"visible": False, "style_hidden": True, "selector_hint": "section#services", "hidden_ancestors": ["main#content"]}
+        }}}}
+        self._write_report({"rendered_sections_visible_desktop_and_mobile": False}, browser)
+        result = repair(self.candidate)
+        css = (self.candidate / "files" / "styles.css").read_text(encoding="utf-8")
+        self.assertEqual(result["section_visibility_selectors"], ["section#services", "main#content"])
+        self.assertIn("section#services{display:revert!important", css)
+        self.assertIn("main#content{display:revert!important", css)
+
 
 if __name__ == "__main__":
     unittest.main()

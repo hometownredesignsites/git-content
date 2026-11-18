@@ -134,6 +134,17 @@ def apply_palette(css: str, slot: int) -> tuple[str, dict]:
     normalized_css = _normalize_token_names(css)
     normalized_css = _write_root_tokens(normalized_css, palette)
 
+    # A model may declare the required token values without using them. Add
+    # neutral defaults for the document and links so the assigned palette is
+    # present in the rendered design before browser QA.
+    usage_css = re.sub(r"/\*[\s\S]*?\*/", " ", normalized_css)
+    if not re.search(r"var\(\s*--ink\s*(?:,|\))", usage_css, re.IGNORECASE):
+        normalized_css += "\nbody{color:var(--ink)}\n"
+    if not re.search(r"var\(\s*--paper\s*(?:,|\))", usage_css, re.IGNORECASE):
+        normalized_css += "\nbody{background-color:var(--paper)}\n"
+    if not re.search(r"var\(\s*--accent\s*(?:,|\))", usage_css, re.IGNORECASE):
+        normalized_css += "\na{color:var(--accent)}\n"
+
     token_values = {
         name: bool(re.search(rf"--{re.escape(name)}\s*:\s*{re.escape(palette[name])}\s*;", normalized_css, re.IGNORECASE))
         for name in TOKEN_NAMES

@@ -199,6 +199,13 @@ def build_compact_source_brief(
     if not core_facts:
         return ""
     sections.extend(core_facts)
+    service_facts = assessment.get("organization_facts", [])
+    if isinstance(service_facts, list):
+        verified_services = [
+            item for item in service_facts
+            if isinstance(item, dict) and str(item.get("kind", "")).strip().casefold() == "service"
+        ]
+        sections.extend(_render_items("VERIFIED SERVICES (source-backed facts only)", verified_services, valid_sources, 8))
     for title, key, limit in (
         ("SELLING POINTS", "selling_points", 3),
         ("CONTACT DETAILS", "contact_details", 5),
@@ -327,6 +334,22 @@ def format_retry_guidance(checker: dict, browser: dict, approved_images: list[st
                 )
     if cta_issues:
         lines.append("Primary CTA contrast failed the measured threshold: " + "; ".join(cta_issues[:4]) + ". Set a solid foreground/background pair that reaches at least 4.5:1, then recheck desktop and mobile.")
+    browser_checks = browser.get("checks", {}) if isinstance(browser.get("checks"), dict) else {}
+    if browser_checks.get("rendered_sections_visible_desktop_and_mobile") is False:
+        hidden = []
+        for viewport, data in browser.get("viewports", {}).items():
+            sections = data.get("sections", {}) if isinstance(data, dict) else {}
+            for name, result in sections.items() if isinstance(sections, dict) else []:
+                if isinstance(result, dict) and result.get("visible") is False:
+                    hidden.append(f"{viewport} {name} ({result.get('selector_hint') or 'unmatched'})")
+        lines.append("Required section visibility failed" + (": " + "; ".join(hidden[:4]) if hidden else "") + ". Keep each required section in the page and make it visibly render at both tested viewport sizes; remove hiding styles only from the measured section or hidden ancestor.")
+    if browser_checks.get("cta_visible_first_screen_desktop_and_mobile") is False:
+        missed = [name for name, data in browser.get("viewports", {}).items()
+                  if isinstance(data, dict) and data.get("cta_visible_first_screen") is False]
+        lines.append("The primary contact/action CTA was not fully visible in the first screen at " + ", ".join(missed or ["one or more viewports"]) + ". Place the primary CTA inside the hero and shorten/reflow the hero content so the entire CTA fits within the initial viewport on desktop and mobile.")
+    failed_checks = checker.get("checks", {}) if isinstance(checker.get("checks"), dict) else {}
+    if failed_checks.get("section_services") is False:
+        lines.append("The required services section is missing. Add a visible Services section using only the verified service facts and their supplied source URLs; do not infer or invent offerings.")
     layout = browser.get("template_layout", {})
     if layout and layout.get("status") == "fail":
         expected = json.dumps(layout.get("expected", {}), ensure_ascii=False, separators=(",", ":"))[:550]

@@ -9,6 +9,7 @@ import json
 import re
 from html.parser import HTMLParser
 from pathlib import Path
+from urllib.parse import urlsplit
 
 try:
     from .site_quality import (_category_fallback_image_urls_from_prompt, _image_loads_ok,
@@ -29,6 +30,9 @@ SAFE_SELECTOR = re.compile(r"^[A-Za-z0-9_#.:,>+~*()\s-]+$")
 CTA_MARKER = "/* QA repair pass: measured primary CTA contrast. */"
 LAYOUT_MARKER = "/* QA repair pass: measured template layout. */"
 HERO_IMAGE_MARKER = "/* QA repair pass: verified hero fallback. */"
+FORM_CHECK = "requested_form_present"
+SECTION_VISIBILITY_CHECK = "rendered_sections_visible_desktop_and_mobile"
+SERVICES_CHECK = "section_services"
 
 
 class _Nodes(HTMLParser):
@@ -263,6 +267,154 @@ def _repair_layout(candidate: Path, layout: dict) -> list[str]:
     return repairs
 
 
+def _repair_verified_form(candidate: Path) -> dict | None:
+    """Add a clearly labeled, non-submitting preview from audited source fields."""
+    html_path = candidate / "files" / "index.html"
+    assessment = _read(candidate / "debug" / "source_assessment.json")
+    fields = assessment.get("contact_form_fields", [])
+    if not html_path.is_file() or not isinstance(fields, list) or not fields:
+        return None
+    source_url = str(_read(candidate / "run_notes.json").get("source_url", ""))
+    source_host = (urlsplit(source_url).hostname or "").casefold().removeprefix("www.")
+    reviewed = {
+        str(page.get("url", "")) for page in assessment.get("pages_reviewed", [])
+        if isinstance(page, dict)
+    }
+    verified = []
+    for field in fields[:16]:
+        if not isinstance(field, dict):
+            continue
+        citations = field.get("source_urls", [])
+        if not isinstance(citations, list) or not any(url in reviewed for url in citations):
+            continue
+        if not any((urlsplit(str(url)).hostname or "").casefold().removeprefix("www.") == source_host for url in citations):
+            continue
+        label = str(field.get("label", "")).strip()
+        if label:
+            verified.append(field)
+    if not verified:
+        return None
+
+    source = html_path.read_text(encoding="utf-8", errors="replace")
+    if re.search(r"<form\b", source, re.IGNORECASE):
+        return None
+    controls = []
+    allowed_types = {
+        "text", "email", "tel", "url", "number", "date", "datetime-local", "month", "time", "week",
+        "search", "password", "checkbox", "radio", "file", "color", "range",
+    }
+    for index, field in enumerate(verified, start=1):
+        label = html.escape(str(field["label"]).strip())
+        name = re.sub(r"[^A-Za-z0-9_-]+", "-", str(field.get("name") or f"inquiry-field-{index}")).strip("-")
+        control_id = f"verified-inquiry-{index}"
+        field_type = str(field.get("type", "text")).casefold()
+        required = " required" if field.get("required") is True else ""
+        placeholder = field.get("placeholder")
+        placeholder_attr = f' placeholder="{html.escape(str(placeholder), quote=True)}"' if isinstance(placeholder, str) and placeholder else ""
+        if field_type == "textarea":
+            control = f'<textarea id="{control_id}" name="{html.escape(name, quote=True)}"{required}{placeholder_attr}></textarea>'
+        elif field_type in {"select", "dropdown"}:
+            options = [str(value) for value in field.get("options", []) if isinstance(value, (str, int, float))]
+            if not options:
+                continue
+            option_html = "".join(f'<option value="{html.escape(value, quote=True)}">{html.escape(value)}</option>' for value in options)
+            control = f'<select id="{control_id}" name="{html.escape(name, quote=True)}"{required}>{option_html}</select>'
+        else:
+            normalized_type = field_type if field_type in allowed_types else "text"
+            control = f'<input id="{control_id}" name="{html.escape(name, quote=True)}" type="{normalized_type}"{required}{placeholder_attr}>'
+        controls.append(f'<div class="field"><label for="{control_id}">{label}</label>{control}</div>')
+    if not controls:
+        return None
+    section = (
+        '<section id="verified-inquiry"><h2>Project inquiry</h2>'
+        '<p>This form preview does not submit messages.</p><form aria-label="Project inquiry preview">'
+        + "".join(controls) + "</form></section>\n"
+    )
+    insertion = re.search(r"</main\s*>", source, re.IGNORECASE)
+    if insertion:
+        updated = source[:insertion.start()] + section + source[insertion.start():]
+    else:
+        footer = re.search(r"<footer\b", source, re.IGNORECASE)
+        if not footer:
+            return None
+        updated = source[:footer.start()] + section + source[footer.start():]
+    html_path.write_text(updated, encoding="utf-8")
+    return {"fields_added": len(controls), "reason": "verified source fields were present and the candidate omitted a form"}
+
+
+def _repair_verified_services(candidate: Path) -> dict | None:
+    """Insert a services section only when the source audit explicitly typed facts as services."""
+    html_path = candidate / "files" / "index.html"
+    assessment = _read(candidate / "debug" / "source_assessment.json")
+    reviewed = {
+        str(page.get("url", "")) for page in assessment.get("pages_reviewed", [])
+        if isinstance(page, dict)
+    }
+    source_url = str(_read(candidate / "run_notes.json").get("source_url", ""))
+    source_host = (urlsplit(source_url).hostname or "").casefold().removeprefix("www.")
+    facts = assessment.get("organization_facts", [])
+    verified = []
+    for item in facts if isinstance(facts, list) else []:
+        if not isinstance(item, dict) or str(item.get("kind", "")).casefold() != "service":
+            continue
+        fact = str(item.get("fact", "")).strip()
+        citations = item.get("source_urls", [])
+        if not fact or not isinstance(citations, list):
+            continue
+        if not any(str(url) in reviewed and (urlsplit(str(url)).hostname or "").casefold().removeprefix("www.") == source_host for url in citations):
+            continue
+        verified.append(fact)
+    if not verified or not html_path.is_file():
+        return None
+    source = html_path.read_text(encoding="utf-8", errors="replace")
+    parser = _Nodes(source)
+    try:
+        parser.feed(source)
+    except Exception:
+        return None
+    # A visible alias already exists, so don't add duplicate content when the
+    # static check failed for another structural reason.
+    if re.search(r"\b(?:services?|repairs?|offerings?)\b", source, re.IGNORECASE):
+        return None
+    items = "".join(f"<li>{html.escape(fact)}</li>" for fact in verified[:8])
+    section = f'<section id="services"><h2>Services</h2><ul>{items}</ul></section>\n'
+    insertion = re.search(r"</main\s*>", source, re.IGNORECASE)
+    if insertion:
+        updated = source[:insertion.start()] + section + source[insertion.start():]
+    else:
+        return None
+    html_path.write_text(updated, encoding="utf-8")
+    return {"facts_added": min(len(verified), 8), "reason": "only source-cited facts explicitly typed as services were available"}
+
+
+def _repair_section_visibility(candidate: Path, browser: dict) -> list[str]:
+    """Restore visibility only on sections/ancestors identified by browser QA."""
+    css_path = candidate / "files" / "styles.css"
+    if not css_path.is_file():
+        return []
+    selectors = []
+    for viewport in browser.get("viewports", {}).values():
+        sections = viewport.get("sections", {}) if isinstance(viewport, dict) else {}
+        for result in sections.values() if isinstance(sections, dict) else []:
+            if (not isinstance(result, dict) or result.get("visible") is not False
+                    or result.get("style_hidden") is not True or result.get("aria_hidden_ancestor") is True):
+                continue
+            candidates = [result.get("selector_hint"), *result.get("hidden_ancestors", [])]
+            for selector in candidates:
+                selector = str(selector or "").strip()
+                if selector and SAFE_SELECTOR.fullmatch(selector) and selector not in selectors:
+                    selectors.append(selector)
+    if not selectors:
+        return []
+    css = css_path.read_text(encoding="utf-8", errors="replace")
+    marker = "/* QA repair pass: restore measured section visibility. */"
+    if marker in css:
+        css = css.split(marker, 1)[0].rstrip()
+    rules = [f"{selector}{{display:revert!important;visibility:visible!important;opacity:1!important}}" for selector in selectors]
+    css_path.write_text(css.rstrip() + "\n\n" + marker + "\n" + "\n".join(rules) + "\n", encoding="utf-8")
+    return selectors
+
+
 def repair(candidate: Path) -> dict:
     candidate = candidate.resolve()
     debug = candidate / "debug"
@@ -272,12 +424,15 @@ def repair(candidate: Path) -> dict:
     failures = set(checker.get("repair_checks", checker.get("blocking_failures", [])))
     image_replacements = _repair_images(candidate, checker, context) if failures & IMAGE_CHECKS else []
     cta_selectors = _repair_cta(candidate, browser) if CTA_CHECK in failures else []
+    form_repair = _repair_verified_form(candidate) if FORM_CHECK in failures else None
+    services_repair = _repair_verified_services(candidate) if SERVICES_CHECK in failures else None
+    visibility_selectors = _repair_section_visibility(candidate, browser) if SECTION_VISIBILITY_CHECK in failures else []
     layout = browser.get("template_layout", {})
     layout_repairs = _repair_layout(candidate, layout) if LAYOUT_CHECK in failures and isinstance(layout, dict) else []
     result = {
-        "status": "repaired" if image_replacements or cta_selectors or layout_repairs else "no_safe_repair_available",
-        "changed": bool(image_replacements or cta_selectors or layout_repairs),
-        "triggered_failures": sorted(failures & (IMAGE_CHECKS | {CTA_CHECK, LAYOUT_CHECK})),
+        "status": "repaired" if image_replacements or cta_selectors or layout_repairs or form_repair or services_repair or visibility_selectors else "no_safe_repair_available",
+        "changed": bool(image_replacements or cta_selectors or layout_repairs or form_repair or services_repair or visibility_selectors),
+        "triggered_failures": sorted(failures & (IMAGE_CHECKS | {CTA_CHECK, LAYOUT_CHECK, FORM_CHECK, SERVICES_CHECK, SECTION_VISIBILITY_CHECK})),
         "image_replacements": image_replacements,
         "image_evidence": {
             "failed_urls": checker.get("failed_image_urls", []),
@@ -298,6 +453,9 @@ def repair(candidate: Path) -> dict:
         } if CTA_CHECK in failures else None,
         "cta_selectors": cta_selectors,
         "layout_repairs": layout_repairs,
+        "verified_form_repair": form_repair,
+        "verified_services_repair": services_repair,
+        "section_visibility_selectors": visibility_selectors,
         "template_layout": {
             "expected": layout.get("expected", {}),
             "actual": layout.get("actual", {}),

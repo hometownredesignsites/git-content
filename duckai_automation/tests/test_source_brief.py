@@ -55,6 +55,17 @@ class SourceBriefTests(unittest.TestCase):
         self.assertNotIn("other.invalid", brief)
         self.assertIn("Q: Do you install tile? A: Yes", brief)
 
+    def test_separates_explicitly_typed_verified_service_facts(self):
+        assessment = dict(self.assessment)
+        assessment["organization_facts"] = [
+            {"fact": "Hardwood floor installation", "kind": "service", "source_urls": ["https://example.com/services/"]},
+            {"fact": "Located in Albany", "kind": "location", "source_urls": [self.home]},
+        ]
+        brief = build_compact_source_brief(assessment)
+        service_block = brief.split("VERIFIED SERVICES", 1)[1]
+        self.assertIn("Hardwood floor installation", service_block)
+        self.assertNotIn("Located in Albany", service_block)
+
     def test_image_allowlist_excludes_logo_and_keeps_exact_url(self):
         brief = build_compact_source_brief(self.assessment)
         allowlist = brief.split("VERIFIED_SOURCE_IMAGE_URLS:\n", 1)[1]
@@ -126,6 +137,22 @@ class SourceBriefTests(unittest.TestCase):
         self.assertIn(".hero a.cta", guidance)
         self.assertIn('"spotlights":3', guidance)
         self.assertIn('"spotlights":2', guidance)
+
+    def test_retry_guidance_targets_missing_services_visibility_and_first_screen_cta(self):
+        guidance = format_retry_guidance(
+            {"checks": {"section_services": False}},
+            {"checks": {
+                "rendered_sections_visible_desktop_and_mobile": False,
+                "cta_visible_first_screen_desktop_and_mobile": False,
+            }, "viewports": {
+                "mobile": {"cta_visible_first_screen": False, "sections": {
+                    "services": {"visible": False, "selector_hint": "section#services"}
+                }}
+            }}, [],
+        )
+        self.assertIn("visible Services section", guidance)
+        self.assertIn("section#services", guidance)
+        self.assertIn("Place the primary CTA inside the hero", guidance)
 
 
 if __name__ == "__main__":
