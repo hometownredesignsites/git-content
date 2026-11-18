@@ -20,9 +20,37 @@ from run_duckai import (
 from scripts.summarize_candidate_failure import summarize
 from scripts.site_quality import assess_website
 from scripts.template_scaffolds import scaffold_context
+from scripts.browser_qa import _selected_template_profile
 
 
 class PromptAndWorkflowTests(unittest.TestCase):
+    def test_browser_qa_requires_selected_template_audit_and_uses_its_slot(self):
+        with tempfile.TemporaryDirectory() as folder:
+            run_dir = Path(folder)
+            debug = run_dir / "debug"
+            debug.mkdir()
+            (debug / "source_assessment.json").write_text(
+                '{"design_reference": null}', encoding="utf-8"
+            )
+            (debug / "design_reference.json").write_text(
+                '{"status":"selected","design_reference":{"slot":2,"name":"Landed","template_url":"https://html5up.net/landed"}}',
+                encoding="utf-8",
+            )
+
+            profile, evidence = _selected_template_profile(run_dir)
+
+            self.assertEqual(profile, "landed")
+            self.assertEqual(evidence["status"], "pending")
+            self.assertEqual(evidence["signature_id"], "landed-alternating-spotlights")
+
+    def test_browser_qa_fails_closed_when_selected_template_audit_is_missing(self):
+        with tempfile.TemporaryDirectory() as folder:
+            profile, evidence = _selected_template_profile(Path(folder))
+
+        self.assertIsNone(profile)
+        self.assertEqual(evidence["status"], "fail")
+        self.assertFalse(evidence["pass"])
+
     def test_candidate_indices_cycle_the_three_html5up_templates(self):
         references = [assigned_design_reference(index) for index in range(1, 4)]
         self.assertEqual([item["name"] for item in references], ["Forty", "Landed", "Story"])

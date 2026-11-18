@@ -189,7 +189,7 @@ VIEWPORT_CHECKS_JS = r"""() => {
     const className = String(element.className || '');
     const ctaClass = /(?:^|[\s_-])(?:button|btn|cta|primary|call[-_]?to[-_]?action)(?:$|[\s_-])/i.test(className);
     const menuControl = element.hasAttribute('aria-controls') || /menu[-_]?toggle|hamburger/i.test(className);
-    const contentAction = !element.closest('header,nav,footer') && Boolean(element.closest('main'));
+    const contentAction = !element.closest('header,nav,footer') && Boolean(element.closest('main,[role="main"],section,article'));
     if ((!ctaClass && !ctaWords.test(label)) || menuControl || !contentAction || !visible(element)) return false;
     const rect = element.getBoundingClientRect();
     return rect.top >= 0 && rect.bottom <= window.innerHeight && rect.left >= 0 && rect.right <= window.innerWidth;
@@ -330,17 +330,16 @@ TEMPLATE_LAYOUT_JS = r"""profile => {
 
 def _selected_template_profile(run_dir: Path) -> tuple[str | None, dict]:
     try:
-        audit = json.loads((run_dir / "debug" / "source_assessment.json").read_text(encoding="utf-8"))
-        reference = audit.get("design_reference") if isinstance(audit, dict) else None
+        audit = json.loads((run_dir / "debug" / "design_reference.json").read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        reference = None
-    if not isinstance(reference, dict):
-        return None, {"status": "not_required", "pass": True, "reason": "no selected template"}
-    name = str(reference.get("name", "")).casefold()
-    profile = next((slug for slug in ("forty", "landed", "story") if slug in name), None)
+        audit = None
+    if not isinstance(audit, dict) or audit.get("status") != "selected":
+        return None, {"status": "fail", "pass": False, "reason": "selected HTML5 UP template audit is missing"}
+    reference = audit.get("design_reference")
+    profile = qa_profile(reference)
     if not profile:
-        return None, {"status": "unverified", "pass": True, "reason": "selected template has no maintained layout signature", "template": reference.get("name")}
-    return profile, {"status": "pending", "pass": False, "profile": profile, "template": reference.get("name")}
+        return None, {"status": "fail", "pass": False, "reason": "selected HTML5 UP template is unsupported", "template": reference.get("name") if isinstance(reference, dict) else None}
+    return profile["slug"], {"status": "pending", "pass": False, "profile": profile["slug"], "template": reference.get("name"), "signature_id": profile["signature_id"]}
 
 
 MENU_BUTTON_JS = r"""button => {
