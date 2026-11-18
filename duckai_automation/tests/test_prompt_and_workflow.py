@@ -66,6 +66,14 @@ class PromptAndWorkflowTests(unittest.TestCase):
             (candidate / "files" / "styles.css").write_text("body{color:#111}", encoding="utf-8")
             report = assess_website(prompt, candidate)
             self.assertIs(report["checks"]["requested_form_present"], True)
+            (candidate / "files" / "index.html").write_text(
+                "<!doctype html><html><head><link href=\"styles.css\"></head>"
+                "<body><main><h1>Flooring</h1></main>"
+                "<footer>Contact us for flooring projects and details.</footer></body></html>",
+                encoding="utf-8",
+            )
+            report = assess_website(prompt, candidate)
+            self.assertIs(report["checks"]["requested_form_present"], False)
 
     def test_quality_prompt_does_not_require_a_form_without_verified_fields(self):
         prompt = build_quality_prompt(
