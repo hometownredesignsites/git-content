@@ -139,6 +139,28 @@ class CandidateRepairTests(unittest.TestCase):
         self.assertIn("section#services{display:revert!important", css)
         self.assertIn("main#content{display:revert!important", css)
 
+    def test_only_repairs_the_exact_check_requested(self):
+        self._write_report({"requested_form_present": False, "section_services": False}, {})
+        (self.candidate / "debug" / "source_assessment.json").write_text(json.dumps({
+            "pages_reviewed": [{"url": "https://example.com/contact/"}, {"url": "https://example.com/services/"}],
+            "contact_form_fields": [{"name": "email", "type": "email", "label": "Email", "required": True,
+                                     "source_urls": ["https://example.com/contact/"]}],
+            "organization_facts": [{"kind": "service", "fact": "Hardwood installation",
+                                    "source_urls": ["https://example.com/services/"]}],
+        }), encoding="utf-8")
+        result = repair(self.candidate, "requested_form_present")
+        html = (self.candidate / "files" / "index.html").read_text(encoding="utf-8")
+        self.assertEqual(result["triggered_failures"], ["requested_form_present"])
+        self.assertIn("<form", html)
+        self.assertNotIn('id="services"', html)
+
+    def test_first_screen_cta_is_reported_without_unsafe_layout_edit(self):
+        self._write_report({"cta_visible_first_screen_desktop_and_mobile": False}, {})
+        result = repair(self.candidate, "cta_visible_first_screen_desktop_and_mobile")
+        self.assertEqual(result["status"], "no_safe_repair_available")
+        self.assertEqual(result["triggered_failures"], ["cta_visible_first_screen_desktop_and_mobile"])
+        self.assertFalse(result["changed"])
+
 
 if __name__ == "__main__":
     unittest.main()

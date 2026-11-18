@@ -33,6 +33,7 @@ HERO_IMAGE_MARKER = "/* QA repair pass: verified hero fallback. */"
 FORM_CHECK = "requested_form_present"
 SECTION_VISIBILITY_CHECK = "rendered_sections_visible_desktop_and_mobile"
 SERVICES_CHECK = "section_services"
+FIRST_SCREEN_CTA_CHECK = "cta_visible_first_screen_desktop_and_mobile"
 
 
 class _Nodes(HTMLParser):
@@ -415,24 +416,25 @@ def _repair_section_visibility(candidate: Path, browser: dict) -> list[str]:
     return selectors
 
 
-def repair(candidate: Path) -> dict:
+def repair(candidate: Path, only_check: str | None = None) -> dict:
     candidate = candidate.resolve()
     debug = candidate / "debug"
     checker, browser = _read(debug / "checker_report.json"), _read(debug / "browser_qa.json")
     context_path = debug / "website_context.md"
     context = context_path.read_text(encoding="utf-8", errors="replace") if context_path.is_file() else ""
     failures = set(checker.get("repair_checks", checker.get("blocking_failures", [])))
-    image_replacements = _repair_images(candidate, checker, context) if failures & IMAGE_CHECKS else []
-    cta_selectors = _repair_cta(candidate, browser) if CTA_CHECK in failures else []
-    form_repair = _repair_verified_form(candidate) if FORM_CHECK in failures else None
-    services_repair = _repair_verified_services(candidate) if SERVICES_CHECK in failures else None
-    visibility_selectors = _repair_section_visibility(candidate, browser) if SECTION_VISIBILITY_CHECK in failures else []
+    targeted_failures = failures if only_check is None else ({only_check} & failures)
+    image_replacements = _repair_images(candidate, checker, context) if targeted_failures & IMAGE_CHECKS else []
+    cta_selectors = _repair_cta(candidate, browser) if CTA_CHECK in targeted_failures else []
+    form_repair = _repair_verified_form(candidate) if FORM_CHECK in targeted_failures else None
+    services_repair = _repair_verified_services(candidate) if SERVICES_CHECK in targeted_failures else None
+    visibility_selectors = _repair_section_visibility(candidate, browser) if SECTION_VISIBILITY_CHECK in targeted_failures else []
     layout = browser.get("template_layout", {})
-    layout_repairs = _repair_layout(candidate, layout) if LAYOUT_CHECK in failures and isinstance(layout, dict) else []
+    layout_repairs = _repair_layout(candidate, layout) if LAYOUT_CHECK in targeted_failures and isinstance(layout, dict) else []
     result = {
         "status": "repaired" if image_replacements or cta_selectors or layout_repairs or form_repair or services_repair or visibility_selectors else "no_safe_repair_available",
         "changed": bool(image_replacements or cta_selectors or layout_repairs or form_repair or services_repair or visibility_selectors),
-        "triggered_failures": sorted(failures & (IMAGE_CHECKS | {CTA_CHECK, LAYOUT_CHECK, FORM_CHECK, SERVICES_CHECK, SECTION_VISIBILITY_CHECK})),
+        "triggered_failures": sorted(targeted_failures & (IMAGE_CHECKS | {CTA_CHECK, LAYOUT_CHECK, FORM_CHECK, SERVICES_CHECK, SECTION_VISIBILITY_CHECK, FIRST_SCREEN_CTA_CHECK})),
         "image_replacements": image_replacements,
         "image_evidence": {
             "failed_urls": checker.get("failed_image_urls", []),
@@ -440,7 +442,7 @@ def repair(candidate: Path) -> dict:
             "observed_image_urls": checker.get("image_urls", []),
             "approved_source_urls": _source_image_urls_from_prompt(context),
             "approved_category_urls": _category_fallback_image_urls_from_prompt(context),
-        } if failures & IMAGE_CHECKS else None,
+        } if targeted_failures & IMAGE_CHECKS else None,
         "primary_cta_evidence": {
             "issues": [
                 issue
@@ -450,7 +452,7 @@ def repair(candidate: Path) -> dict:
                 if isinstance(issue, dict)
             ],
             "minimum_text_contrast_ratio": 4.5,
-        } if CTA_CHECK in failures else None,
+        } if CTA_CHECK in targeted_failures else None,
         "cta_selectors": cta_selectors,
         "layout_repairs": layout_repairs,
         "verified_form_repair": form_repair,
@@ -460,7 +462,7 @@ def repair(candidate: Path) -> dict:
             "expected": layout.get("expected", {}),
             "actual": layout.get("actual", {}),
             "targeted_correction": layout_repairs or "No safe correction was measured; retry guidance includes expected and actual signatures.",
-        } if LAYOUT_CHECK in failures and isinstance(layout, dict) else None,
+        } if LAYOUT_CHECK in targeted_failures and isinstance(layout, dict) else None,
     }
     debug.mkdir(parents=True, exist_ok=True)
     (debug / "quality_repair.json").write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -471,8 +473,9 @@ def repair(candidate: Path) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("candidate", type=Path)
+    parser.add_argument("--only-check", help="attempt a safe repair for only this current failed check")
     args = parser.parse_args()
-    repair(args.candidate)
+    repair(args.candidate, args.only_check)
     return 0
 
 

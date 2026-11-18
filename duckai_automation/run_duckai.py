@@ -57,6 +57,14 @@ Return CSS PARTS 1–3, then HTML PARTS 1–3. Each turn has one complete fenced
 Let cited brand colors, logo, photography, language, and motifs lead; category is secondary. Avoid assumed audiences or preset styles; build a coherent palette, type, spacing, and motif from source cues. Use CSS variables and at least three distinct, relevant photo URLs from the supplied source/fallback lists (logo only as branding), with accurate alt text. Keep the hero full-width, readable, and CTA-visible on desktop/mobile. The mobile menu is a named button with matching `aria-controls`/`aria-expanded` and exactly three child spans; no visible Menu label. The styled semantic footer includes brand, two useful links, verified contact/location, and copyright. Put selected template attribution in an HTML comment, never visible copy. Return only the requested part."""
 MAX_INITIAL_PROMPT_CHARS = 11000
 MAX_DESIGN_BRIEF_CHARS = 700
+REPAIRABLE_QUALITY_CHECKS = {
+    "hero_has_image", "hero_images_load_ok", "all_images_load_ok", "image_coverage",
+    "source_site_hero_photo_used", "source_site_photos_used", "source_site_photos_load_ok",
+    "images_use_source_or_category_assets", "hero_uses_source_or_category_asset",
+    "browser_primary_ctas_readable_desktop_and_mobile", "browser_template_layout_signature_matches",
+    "requested_form_present", "section_services", "rendered_sections_visible_desktop_and_mobile",
+    "cta_visible_first_screen_desktop_and_mobile",
+}
 CURRENT_STAGE = "initialization"
 
 
@@ -820,7 +828,7 @@ def _read_json(path: Path) -> dict:
 
 
 def run_quality_with_repair(website_request: str, source_brief: str) -> tuple[dict, dict, dict]:
-    """Independently assess, make at most one measured repair, and assess again."""
+    """Assess, repair one exact failed check at a time, and recheck every change."""
     run_browser_qa(website_request)
     browser_path = RUN_DIR / "debug" / "browser_qa.json"
     initial_browser = _read_json(browser_path)
@@ -832,31 +840,60 @@ def run_quality_with_repair(website_request: str, source_brief: str) -> tuple[di
         json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
     repair_path = ROOT / "scripts" / "repair_candidate_quality.py"
-    repair_result = {"status": "not_needed", "changed": False}
+    repair_result = {"status": "not_needed", "changed": False, "steps": [], "recheck_count": 0}
     if not report.get("automated_success"):
-        repaired = subprocess.run(
-            [sys.executable, str(repair_path), str(RUN_DIR)],
-            cwd=REPO,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            check=False,
-        )
-        repair_record = RUN_DIR / "debug" / "quality_repair.json"
-        try:
-            repair_result = json.loads(repair_record.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            repair_result = {"status": "repair_error", "error": repaired.stderr[-1200:] or repaired.stdout[-1200:]}
-        if repaired.returncode and repair_result.get("status") != "no_safe_repair_available":
-            (RUN_DIR / "debug" / "repair_failure.txt").write_text(
-                repaired.stderr[-4000:] or repaired.stdout[-4000:], encoding="utf-8"
+        attempted_checks = set()
+        repair_steps = []
+        changed_any = False
+        recheck_count = 0
+        for _ in range(24):
+            current_failures = report.get("repair_checks", report.get("blocking_failures", []))
+            target = next((name for name in current_failures
+                           if name in REPAIRABLE_QUALITY_CHECKS and name not in attempted_checks), None)
+            if target is None:
+                break
+            attempted_checks.add(target)
+            repaired = subprocess.run(
+                [sys.executable, str(repair_path), str(RUN_DIR), "--only-check", target],
+                cwd=REPO,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                check=False,
             )
-        if repair_result.get("changed"):
-            run_browser_qa(website_request)
-            report = run_checker(website_request, source_brief)
-            repair_result["rechecked"] = True
-        else:
-            repair_result["rechecked"] = False
+            repair_record = RUN_DIR / "debug" / "quality_repair.json"
+            try:
+                step = json.loads(repair_record.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                step = {"status": "repair_error", "error": repaired.stderr[-1200:] or repaired.stdout[-1200:]}
+            step["target_check"] = target
+            if repaired.returncode and step.get("status") != "no_safe_repair_available":
+                (RUN_DIR / "debug" / "repair_failure.txt").write_text(
+                    repaired.stderr[-4000:] or repaired.stdout[-4000:], encoding="utf-8"
+                )
+            if step.get("changed"):
+                changed_any = True
+                run_browser_qa(website_request)
+                report = run_checker(website_request, source_brief)
+                recheck_count += 1
+                step["rechecked"] = True
+                step["remaining_blocking_failures"] = report.get("blocking_failures", [])
+            else:
+                step["rechecked"] = False
+            repair_steps.append(step)
+            if report.get("automated_success"):
+                break
+        repair_result = {
+            "status": "repaired" if changed_any else "no_safe_repair_available",
+            "changed": changed_any,
+            "steps": repair_steps,
+            "rechecked": recheck_count > 0,
+            "recheck_count": recheck_count,
+            "unattempted_failures": [
+                name for name in report.get("blocking_failures", [])
+                if name not in attempted_checks
+            ],
+        }
 
     browser_report = _read_json(browser_path)
     (RUN_DIR / "debug" / "browser_qa_final.json").write_text(
