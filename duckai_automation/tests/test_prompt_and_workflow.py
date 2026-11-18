@@ -35,8 +35,10 @@ class PromptAndWorkflowTests(unittest.TestCase):
     def test_story_scaffold_uses_paper_backed_hero_direction(self):
         context = scaffold_context(assigned_design_reference(3))
         self.assertIn("paper-backed copy beside the photo", context)
+        self.assertIn("on mobile stack a short photo above the text and CTA", context)
         self.assertIn("solid paper panel beside the photo", assigned_design_reference(3)["fit_summary"])
         self.assertIn("dark ink over bright flooring", assigned_design_reference(3)["fit_summary"])
+        self.assertIn("keep the CTA on the first screen", assigned_design_reference(3)["fit_summary"])
 
     def test_quality_prompt_uses_the_same_verified_asset_allowlist_as_generation(self):
         prompt = build_quality_prompt(
