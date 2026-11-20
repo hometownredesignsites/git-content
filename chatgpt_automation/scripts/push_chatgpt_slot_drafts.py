@@ -111,8 +111,7 @@ def push_slot(repo: Path, slot: int, candidate: Path, *, company: str, website: 
     revised = site / "revised"
     if revised.exists():
         shutil.rmtree(revised)
-    relative = f"sites/{slug}/draft"
-    git(repo, "add", "-A", "--", relative, f"sites/{slug}/revised")
+    git(repo, "add", "-A", "--", f"sites/{slug}")
     if git(repo, "diff", "--cached", "--quiet", check=False).returncode == 0:
         print(f"{branch}: draft already matches {candidate.name}; no push needed")
         return
