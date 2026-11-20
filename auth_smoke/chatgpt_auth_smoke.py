@@ -182,14 +182,19 @@ async def authenticate(
     totp_secret: str,
     diagnostics: Diagnostics,
     *,
-    attempt_cloudflare_tab_enter: bool = False,
+    attempt_cloudflare_click: bool = False,
 ) -> None:
     response = await page.goto(CHATGPT_HOME, wait_until="domcontentloaded", timeout=60_000)
     await diagnostics.capture(page, "01-chatgpt-home")
     if response is not None and response.status == 403:
-        if attempt_cloudflare_tab_enter and await has_cloudflare_challenge(page):
+        if attempt_cloudflare_click:
+            challenge_markers_found = await has_cloudflare_challenge(page)
             await diagnostics.capture(page, "02-cloudflare-before-coordinate-click")
-            print("Cloudflare challenge detected; clicking viewport coordinate (345, 510), then Ctrl+R.", flush=True)
+            print(
+                "Homepage returned 403; Cloudflare markers found="
+                f"{challenge_markers_found}; clicking viewport coordinate (345, 510), then Ctrl+R.",
+                flush=True,
+            )
             await page.mouse.click(345, 510)
             await page.keyboard.press("Control+r")
             await page.wait_for_timeout(5_000)
@@ -205,8 +210,8 @@ async def authenticate(
                 )
         else:
             raise RuntimeError(
-                "ChatGPT denied the home-page request; no recognizable Cloudflare challenge "
-                "was available for the requested coordinate click, stopping before credential entry."
+                "ChatGPT denied the home-page request; coordinate clicking is disabled for this "
+                "browser path, stopping before credential entry."
             )
     await asyncio.sleep(2)
     if await is_logged_in(page):
@@ -380,7 +385,7 @@ async def run(result_path: Path) -> int:
                         password,
                         totp_secret,
                         diagnostics,
-                        attempt_cloudflare_tab_enter=True,
+                        attempt_cloudflare_click=True,
                     )
                     write_result(result_path, "authenticated", "profile_control_visible", diagnostics=diagnostics)
                     print("ChatGPT authentication succeeded; signed-in profile control is visible.")
