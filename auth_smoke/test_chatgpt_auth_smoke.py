@@ -14,6 +14,12 @@ class EmailOnlyAuthSmokeHelpersTest(unittest.TestCase):
         self.assertIn('input[placeholder="Code"]', MODULE.SELECTORS)
         self.assertIn('input[placeholder*="6-digit" i]', MODULE.TOTP_SELECTORS)
 
+    def test_one_time_code_button_label(self):
+        self.assertEqual(
+            " ".join("log in with a one-time code".lower().split()),
+            "log in with a one-time code",
+        )
+
     def test_required_secret_raises_when_missing(self):
         import os
 

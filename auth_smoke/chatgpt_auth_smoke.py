@@ -282,6 +282,13 @@ async def authenticate_email(
     await asyncio.sleep(4)
     await diagnostics.capture(page, "03-email-submitted")
 
+    # After entering the email, ChatGPT may show a password screen with an
+    # alternate "Log in with a one-time code" button. Click it to reach the
+    # code field so we can wait for the emailed code.
+    await click_visible_button(page, ("log in with a one-time code",))
+    await asyncio.sleep(2)
+    await diagnostics.capture(page, "03b-one-time-code-link-clicked")
+
     # ChatGPT may present a one-time-code screen (emailed to the account) or a
     # TOTP/authenticator screen depending on the account's setup. Handle both.
     code_field = await find_visible_field(page, SELECTORS)
