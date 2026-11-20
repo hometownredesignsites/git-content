@@ -253,12 +253,26 @@ async def authenticate(
         raise RuntimeError("TOTP verification field did not appear; stopping without fallback entry.")
 
     await diagnostics.capture(page, "06-totp-prompt")
-    await code_field.fill(current_totp(totp_secret), timeout=10_000)
-    await asyncio.sleep(2)
+    seconds_remaining = 30 - (time.time() % 30)
+    if seconds_remaining < 8:
+        delay = seconds_remaining + 0.2
+        print(
+            f"TOTP window has {seconds_remaining:.1f}s remaining; waiting for the next window.",
+            flush=True,
+        )
+        await asyncio.sleep(delay)
+    totp_code = current_totp(totp_secret)
+    seconds_remaining = 30 - (time.time() % 30)
+    print(
+        f"Generated a fresh TOTP with {seconds_remaining:.1f}s remaining; submitting immediately.",
+        flush=True,
+    )
+    await code_field.fill(totp_code, timeout=10_000)
     if not await click_visible_button(page, ("continue", "verify", "submit")):
         raise RuntimeError("Could not submit the TOTP verification form.")
+    print("Playwright clicked the TOTP Continue/Verify button.", flush=True)
     await asyncio.sleep(2)
-    await diagnostics.capture(page, "07-totp-submitted")
+    await diagnostics.capture(page, "07-totp-after-continue")
 
     deadline = time.monotonic() + 120
     while time.monotonic() < deadline:
