@@ -1,3 +1,0 @@
-GitHub connection test
-
-Created by ChatGPT to verify write access to the main branch.
