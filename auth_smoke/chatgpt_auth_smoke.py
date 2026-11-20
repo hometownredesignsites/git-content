@@ -156,11 +156,58 @@ async def click_visible_button(page, labels: tuple[str, ...]) -> bool:
     return False
 
 
-async def authenticate(page, email: str, password: str, totp_secret: str, diagnostics: Diagnostics) -> None:
+async def has_cloudflare_challenge(page) -> bool:
+    """Return whether the visible page looks like a Cloudflare challenge."""
+    markers = (
+        "cloudflare",
+        "cf-chl-",
+        "challenges.cloudflare.com",
+        "verify you are human",
+        "checking your browser",
+    )
+    try:
+        title = (await page.title()).lower()
+        body = (await page.locator("body").inner_text(timeout=3_000)).lower()
+        markup = (await page.content()).lower()
+        visible_text = f"{title}\n{body}"
+        return any(marker in visible_text or marker in markup for marker in markers)
+    except Exception:
+        return False
+
+
+async def authenticate(
+    page,
+    email: str,
+    password: str,
+    totp_secret: str,
+    diagnostics: Diagnostics,
+    *,
+    attempt_cloudflare_tab_enter: bool = False,
+) -> None:
     response = await page.goto(CHATGPT_HOME, wait_until="domcontentloaded", timeout=60_000)
     await diagnostics.capture(page, "01-chatgpt-home")
     if response is not None and response.status == 403:
-        raise RuntimeError("ChatGPT denied the home-page request; stopping before credential entry.")
+        if attempt_cloudflare_tab_enter and await has_cloudflare_challenge(page):
+            await diagnostics.capture(page, "02-cloudflare-before-tab-enter")
+            print("Cloudflare challenge detected; sending one Tab then Enter key sequence.", flush=True)
+            await page.keyboard.press("Tab")
+            await page.keyboard.press("Enter")
+            await page.wait_for_timeout(5_000)
+            await diagnostics.capture(page, "03-cloudflare-after-tab-enter")
+            retry_response = await page.goto(
+                CHATGPT_HOME, wait_until="domcontentloaded", timeout=60_000
+            )
+            await diagnostics.capture(page, "04-chatgpt-home-after-tab-enter")
+            if retry_response is not None and retry_response.status == 403:
+                raise RuntimeError(
+                    "Cloudflare still denied the home-page request after one Tab/Enter attempt; "
+                    "stopping before credential entry."
+                )
+        else:
+            raise RuntimeError(
+                "ChatGPT denied the home-page request; no recognizable Cloudflare challenge "
+                "was available for the requested keypress attempt, stopping before credential entry."
+            )
     await asyncio.sleep(2)
     if await is_logged_in(page):
         await diagnostics.capture(page, "07-profile-visible")
@@ -313,7 +360,14 @@ async def run(result_path: Path) -> int:
                     page.set_default_timeout(20_000)
                     page.set_default_navigation_timeout(60_000)
                     stage = "chatgpt_login"
-                    await authenticate(page, email, password, totp_secret, diagnostics)
+                    await authenticate(
+                        page,
+                        email,
+                        password,
+                        totp_secret,
+                        diagnostics,
+                        attempt_cloudflare_tab_enter=True,
+                    )
                     write_result(result_path, "authenticated", "profile_control_visible", diagnostics=diagnostics)
                     print("ChatGPT authentication succeeded; signed-in profile control is visible.")
                     return 0
