@@ -91,6 +91,13 @@ def fetch_verification_code_from_remote() -> str:
     on that branch (e.g. before you push it).
     """
     try:
+        # Ensure the auth-chatgpt remote-tracking ref is available locally.
+        subprocess.run(
+            ["git", "fetch", "origin", "auth-chatgpt"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
         result = subprocess.run(
             [
                 "git",
