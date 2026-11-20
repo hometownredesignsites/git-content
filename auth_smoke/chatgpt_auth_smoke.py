@@ -188,26 +188,25 @@ async def authenticate(
     await diagnostics.capture(page, "01-chatgpt-home")
     if response is not None and response.status == 403:
         if attempt_cloudflare_tab_enter and await has_cloudflare_challenge(page):
-            await diagnostics.capture(page, "02-cloudflare-before-tab-enter")
-            print("Cloudflare challenge detected; sending Tab, Enter, then Ctrl+R.", flush=True)
-            await page.keyboard.press("Tab")
-            await page.keyboard.press("Enter")
+            await diagnostics.capture(page, "02-cloudflare-before-coordinate-click")
+            print("Cloudflare challenge detected; clicking viewport coordinate (345, 510), then Ctrl+R.", flush=True)
+            await page.mouse.click(345, 510)
             await page.keyboard.press("Control+r")
             await page.wait_for_timeout(5_000)
-            await diagnostics.capture(page, "03-cloudflare-after-tab-enter-refresh")
+            await diagnostics.capture(page, "03-cloudflare-after-coordinate-click-refresh")
             retry_response = await page.goto(
                 CHATGPT_HOME, wait_until="domcontentloaded", timeout=60_000
             )
             await diagnostics.capture(page, "04-chatgpt-home-after-refresh")
             if retry_response is not None and retry_response.status == 403:
                 raise RuntimeError(
-                    "Cloudflare still denied the home-page request after Tab/Enter/Ctrl+R; "
+                    "Cloudflare still denied the home-page request after coordinate click/Ctrl+R; "
                     "stopping before credential entry."
                 )
         else:
             raise RuntimeError(
                 "ChatGPT denied the home-page request; no recognizable Cloudflare challenge "
-                "was available for the requested keypress attempt, stopping before credential entry."
+                "was available for the requested coordinate click, stopping before credential entry."
             )
     await asyncio.sleep(2)
     if await is_logged_in(page):
