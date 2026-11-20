@@ -58,7 +58,7 @@ TOTP_SELECTORS = (
 
 VERIFICATION_CODE_FILE = "verification_code.txt"
 CODE_POLL_INTERVAL_SECONDS = 10
-CODE_POLL_DEADLINE_SECONDS = 100
+CODE_POLL_DEADLINE_SECONDS = 600
 
 
 def current_totp(secret: str, timestamp: float | None = None) -> str:
