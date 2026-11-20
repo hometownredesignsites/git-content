@@ -11,6 +11,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import time
 from urllib.parse import urlsplit
 
 
@@ -81,24 +82,24 @@ def site_slug(website: str) -> str:
     return slug
 
 
-def push_slot(repo: Path, slot: int, candidate: Path, *, company: str, website: str,
-              batch_id: str, source_run: str, source_commit: str) -> None:
-    branch = SLOT_BRANCHES[slot]
-    git(repo, "fetch", "origin", "main", check=True)
+def checkout_remote_branch(repo: Path, branch: str) -> None:
     remote_ref = git(repo, "ls-remote", "--heads", "origin", f"refs/heads/{branch}", check=False)
     if remote_ref.returncode != 0:
         raise RuntimeError(f"Could not inspect remote branch {branch}")
     if remote_ref.stdout.strip():
-        git(repo, "fetch", "origin", f"{branch}:refs/remotes/origin/{branch}", check=True)
+        git(repo, "fetch", "origin", f"+refs/heads/{branch}:refs/remotes/origin/{branch}")
         git(repo, "switch", "--force-create", branch, f"origin/{branch}")
     else:
+        git(repo, "fetch", "origin", "+refs/heads/main:refs/remotes/origin/main")
         git(repo, "switch", "--force-create", branch, "origin/main")
 
+
+def push_slot(repo: Path, slot: int, candidate: Path, *, company: str, website: str,
+              batch_id: str, source_run: str, source_commit: str) -> None:
+    branch = SLOT_BRANCHES[slot]
     slug = site_slug(website)
     site = repo / "sites" / slug
-    draft = site / "draft"
-    draft.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(candidate / "files" / "inlined" / "index.html", draft / "index.html")
+    html_source = candidate / "files" / "inlined" / "index.html"
     metadata = {
         "schema_version": 1,
         "company": company,
@@ -112,19 +113,33 @@ def push_slot(repo: Path, slot: int, candidate: Path, *, company: str, website: 
         "source_candidate": candidate.name,
         "queued_at_utc": datetime.now(timezone.utc).isoformat(),
     }
-    (draft / "metadata.json").write_text(json.dumps(metadata, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    queue = site / "queue" / batch_id
-    queue.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(candidate / "files" / "inlined" / "index.html", queue / "index.html")
-    (queue / "metadata.json").write_text(json.dumps(metadata, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    git(repo, "add", "-A", "--", f"sites/{slug}")
-    if git(repo, "diff", "--cached", "--quiet", check=False).returncode == 0:
-        print(f"{branch}: slot candidate is already staged")
-        return
-    git(repo, "-c", "user.name=github-actions[bot]", "-c", "user.email=41898282+github-actions[bot]@users.noreply.github.com",
-        "commit", "-m", f"content-post: stage {slug} candidate {slot} ({batch_id})")
-    git(repo, "push", "origin", f"HEAD:refs/heads/{branch}")
-    print(f"{branch}: staged draft and queue snapshot for slot {slot}")
+    metadata_text = json.dumps(metadata, indent=2, ensure_ascii=False) + "\n"
+
+    # A stale push is rejected by Git. Re-fetch and reapply only this batch's
+    # paths so a concurrent orchestrator or worker commit is preserved.
+    for attempt in range(5):
+        checkout_remote_branch(repo, branch)
+        draft = site / "draft"
+        draft.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(html_source, draft / "index.html")
+        (draft / "metadata.json").write_text(metadata_text, encoding="utf-8")
+        queue = site / "queue" / batch_id
+        queue.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(html_source, queue / "index.html")
+        (queue / "metadata.json").write_text(metadata_text, encoding="utf-8")
+        git(repo, "add", "-A", "--", f"sites/{slug}")
+        if git(repo, "diff", "--cached", "--quiet", check=False).returncode == 0:
+            print(f"{branch}: slot candidate is already staged")
+            return
+        git(repo, "-c", "user.name=github-actions[bot]", "-c", "user.email=41898282+github-actions[bot]@users.noreply.github.com",
+            "commit", "-m", f"content-post: stage {slug} candidate {slot} ({batch_id})")
+        result = git(repo, "push", "origin", f"HEAD:refs/heads/{branch}", check=False)
+        if result.returncode == 0:
+            print(f"{branch}: staged draft and queue snapshot for slot {slot}")
+            return
+        if attempt == 4:
+            raise RuntimeError(f"Could not stage slot {slot} after repeated concurrent branch updates")
+        time.sleep(1)
 
 
 def main() -> None:
