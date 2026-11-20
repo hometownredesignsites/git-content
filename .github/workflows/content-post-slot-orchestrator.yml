@@ -1,0 +1,63 @@
+name: Assign and reconcile content-post slots
+
+on:
+  schedule:
+    # Reconcile hourly and assign at most one customer batch per Eastern calendar day.
+    - cron: "17 * * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Reconcile returns, or reconcile and assign once today
+        type: choice
+        options:
+          - auto
+          - reconcile
+        default: auto
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: content-post-slot-orchestrator
+  cancel-in-progress: false
+
+jobs:
+  orchestrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out public git-content
+        uses: actions/checkout@v4
+
+      - name: Check out private content-post
+        uses: actions/checkout@v4
+        with:
+          repository: hometownredesignsites/content-post
+          ref: main
+          token: ${{ secrets.CONTENT_POST_DISPATCH_TOKEN }}
+          path: content-post
+          fetch-depth: 0
+
+      - name: Select orchestration mode
+        id: mode
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_MODE: ${{ inputs.mode }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            mode="$DISPATCH_MODE"
+          else
+            mode="auto"
+          fi
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+
+      - name: Reconcile returns and assign the next slot batch
+        env:
+          SLOT_MODE: ${{ steps.mode.outputs.mode }}
+          ASSIGNMENT_TIMEZONE: America/New_York
+        run: >-
+          python chatgpt_automation/scripts/content_post_slot_orchestrator.py
+          --content-post-dir content-post
+          --mode "$SLOT_MODE"
+          --timezone "$ASSIGNMENT_TIMEZONE"

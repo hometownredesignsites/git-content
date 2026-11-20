@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
@@ -25,8 +26,11 @@ def read_json(path: Path) -> dict:
 
 
 def git(directory: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(["git", *args], cwd=directory, check=check, text=True,
-                          stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    result = subprocess.run(["git", *args], cwd=directory, check=False, text=True,
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if check and result.returncode:
+        raise RuntimeError("A content-post Git operation failed; details are withheld from public logs.")
+    return result
 
 
 def slot_number(candidate: Path) -> int | None:
@@ -106,19 +110,21 @@ def push_slot(repo: Path, slot: int, candidate: Path, *, company: str, website: 
         "source_run": source_run,
         "source_commit": source_commit,
         "source_candidate": candidate.name,
+        "queued_at_utc": datetime.now(timezone.utc).isoformat(),
     }
     (draft / "metadata.json").write_text(json.dumps(metadata, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    revised = site / "revised"
-    if revised.exists():
-        shutil.rmtree(revised)
+    queue = site / "queue" / batch_id
+    queue.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(candidate / "files" / "inlined" / "index.html", queue / "index.html")
+    (queue / "metadata.json").write_text(json.dumps(metadata, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     git(repo, "add", "-A", "--", f"sites/{slug}")
     if git(repo, "diff", "--cached", "--quiet", check=False).returncode == 0:
-        print(f"{branch}: draft already matches {candidate.name}; no push needed")
+        print(f"{branch}: slot candidate is already staged")
         return
     git(repo, "-c", "user.name=github-actions[bot]", "-c", "user.email=41898282+github-actions[bot]@users.noreply.github.com",
         "commit", "-m", f"content-post: stage {slug} candidate {slot} ({batch_id})")
     git(repo, "push", "origin", f"HEAD:refs/heads/{branch}")
-    print(f"{branch}: staged {slug}/draft/index.html from {candidate.name}")
+    print(f"{branch}: staged draft and queue snapshot for slot {slot}")
 
 
 def main() -> None:
@@ -147,7 +153,7 @@ def main() -> None:
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
         with open(summary, "a", encoding="utf-8") as stream:
-            stream.write(f"## Content-post draft slots staged\n\n- Company: **{company}**\n- Batch: `{batch_id}`\n- Branches: `chatgpt-slot1`, `chatgpt-slot2`, `chatgpt-slot3`\n- Revisions are pending; Cloudflare deployment waits until all three are promoted to main.\n")
+            stream.write("## Content-post draft slots staged\n\n- Three slot drafts and immutable queue snapshots were staged.\n- Revisions are pending; Cloudflare deployment waits until all three are promoted to main.\n")
 
 
 if __name__ == "__main__":
