@@ -9,7 +9,7 @@ The GitHub Actions job launches normal headed Chromium under Xvfb, attaches Play
 3. If no code is supplied, the run stops cleanly with status `waiting_for_code` so a follow-up `workflow_dispatch` run can complete sign-in with the code.
 4. If ChatGPT presents a TOTP/authenticator screen instead, `CHATGPT_TOTP_SECRET` generates the six-digit code.
 
-The `auth-chatgpt` environment must provide `CHATGPT_LOGIN_EMAIL` and `CHATGPT_TOTP_SECRET`. Restrict the environment to trusted maintainers and the `auth-chatgpt` branch.
+The `auth-chatgpt` environment can provide `CHATGPT_LOGIN_EMAIL`. If it is not set, the smoke test falls back to `hometownredesign1@yahoo.com`. `CHATGPT_TOTP_SECRET` is used when ChatGPT presents a TOTP/authenticator screen instead of a code screen.
 
 The workflow runs on pushes that change files under this directory or its workflow file. `workflow_dispatch` is also defined, but GitHub requires the workflow file to exist on the default branch before its manual Run workflow button is available.
 

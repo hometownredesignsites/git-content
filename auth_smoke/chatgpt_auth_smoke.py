@@ -35,6 +35,10 @@ from pathlib import Path
 CHATGPT_HOME = "https://chatgpt.com/"
 CHATGPT_LOGIN = "https://chatgpt.com/auth/login"
 
+# Fallback account email used when CHATGPT_LOGIN_EMAIL is not configured as an
+# Actions secret. Set the secret to override this default.
+CHATGPT_LOGIN_EMAIL_FALLBACK = "hometownredesign1@yahoo.com"
+
 SELECTORS = (
     'input[placeholder="Code"]',
     'input[placeholder*="code" i]',
@@ -369,7 +373,7 @@ def write_result(path: Path, status: str, stage: str, reason: str = "", diagnost
 async def run(result_path: Path, verification_code: str, totp_secret: str) -> int:
     stage = "preflight"
     try:
-        email = required_secret("CHATGPT_LOGIN_EMAIL")
+        email = os.environ.get("CHATGPT_LOGIN_EMAIL", "").strip() or CHATGPT_LOGIN_EMAIL_FALLBACK
         diagnostics = Diagnostics(result_path, email)
         if not os.environ.get("DISPLAY"):
             raise RuntimeError("DISPLAY is unset; run this check under xvfb-run.")
