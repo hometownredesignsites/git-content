@@ -1,7 +1,15 @@
 #!/usr/bin/env python3
 """Verify ChatGPT login in a normal headed Chromium process under Xvfb.
 
-This smoke test stops after the signed-in profile control appears. It does not
+Email-only flow:
+1. Enter the account email; ChatGPT emails a one-time verification code.
+2. If a verification code is supplied (CLI ``--verification-code`` or env
+   ``CHATGPT_VERIFICATION_CODE``), enter it to complete sign-in.
+3. If no code is supplied, the run stops cleanly at the code screen with
+   status ``waiting_for_code`` so a follow-up ``workflow_dispatch`` run can
+   complete authentication with the code.
+
+The smoke test stops after the signed-in profile control appears. It does not
 send a prompt, upload a file, or save browser cookies beyond the temporary run.
 """
 
@@ -22,16 +30,27 @@ import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import urlsplit
 
 
 CHATGPT_HOME = "https://chatgpt.com/"
 CHATGPT_LOGIN = "https://chatgpt.com/auth/login"
-PASSWORD_ACTIONS = {
-    "use password",
-    "continue with password",
-    "sign in with password",
-}
+
+SELECTORS = (
+    'input[placeholder="Code"]',
+    'input[placeholder*="code" i]',
+    'input[aria-label*="code" i]',
+    'input[name="code"]',
+    'input[id*="code" i]',
+)
+
+TOTP_SELECTORS = (
+    'input[placeholder*="6-digit" i]',
+    'input[placeholder*="authenticator" i]',
+    'input[aria-label*="authenticator" i]',
+    'input[aria-label*="6-digit" i]',
+    'input[name="totp"]',
+    'input[id*="totp" i]',
+)
 
 
 def current_totp(secret: str, timestamp: float | None = None) -> str:
@@ -46,15 +65,15 @@ def current_totp(secret: str, timestamp: float | None = None) -> str:
     return str(binary % 1_000_000).zfill(6)
 
 
-def is_password_action_text(text: str) -> bool:
-    return " ".join(text.lower().split()) in PASSWORD_ACTIONS
-
-
 def required_secret(name: str) -> str:
     value = os.environ.get(name, "").strip()
     if not value:
         raise RuntimeError(f"Required Actions secret is missing: {name}")
     return value
+
+
+def optional_env(name: str) -> str:
+    return os.environ.get(name, "").strip()
 
 
 async def is_logged_in(page) -> bool:
@@ -106,32 +125,6 @@ class Diagnostics:
             print(f"Captured masked diagnostic screenshot: {relative_path}", flush=True)
         except Exception as error:
             self.screenshot_errors.append(f"{stage}: {type(error).__name__}")
-
-
-async def choose_password_sign_in(page) -> None:
-    controls = page.locator("button, a")
-    for index in range(await controls.count()):
-        control = controls.nth(index)
-        try:
-            text = (await control.inner_text(timeout=1500)).strip()
-            if is_password_action_text(text) and await control.is_visible():
-                await control.click(timeout=10_000)
-                return
-        except Exception:
-            continue
-
-
-async def visible_password_field(page, timeout_seconds: int = 30):
-    field = page.locator('input[type="password"]').last
-    deadline = time.monotonic() + timeout_seconds
-    while time.monotonic() < deadline:
-        try:
-            if await field.count() and await field.is_visible():
-                return field
-        except Exception:
-            pass
-        await asyncio.sleep(0.5)
-    raise RuntimeError("Password field did not appear; login may be gated or the page changed.")
 
 
 async def click_visible_button(page, labels: tuple[str, ...]) -> bool:
@@ -196,15 +189,52 @@ async def has_human_verification_challenge(page) -> bool:
         return False
 
 
-async def authenticate(
+async def find_code_field(page, timeout_seconds: int = 30):
+    """Locate the visible one-time-code input, waiting for it to appear."""
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        for selector in SELECTORS:
+            candidate = page.locator(selector).last
+            try:
+                if await candidate.count() and await candidate.is_visible():
+                    return candidate
+            except Exception:
+                continue
+        await asyncio.sleep(0.5)
+    return None
+
+
+async def find_visible_field(page, selectors: tuple[str, ...], timeout_seconds: int = 30):
+    """Locate the first visible field matching any of the selectors."""
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        for selector in selectors:
+            candidate = page.locator(selector).last
+            try:
+                if await candidate.count() and await candidate.is_visible():
+                    return candidate
+            except Exception:
+                continue
+        await asyncio.sleep(0.5)
+    return None
+
+
+async def authenticate_email(
     page,
     email: str,
-    password: str,
+    verification_code: str,
     totp_secret: str,
     diagnostics: Diagnostics,
     *,
     attempt_cloudflare_click: bool = False,
-) -> None:
+) -> str:
+    """Run email-first authentication.
+
+    Returns one of:
+      * ``authenticated`` — signed-in profile control visible
+      * ``waiting_for_code`` — email submitted, ChatGPT sent a code, no code
+        supplied to complete sign-in
+    """
     response = await page.goto(CHATGPT_HOME, wait_until="domcontentloaded", timeout=60_000)
     await diagnostics.capture(page, "01-chatgpt-home")
     if response is not None and response.status == 403:
@@ -237,7 +267,7 @@ async def authenticate(
     await asyncio.sleep(2)
     if await is_logged_in(page):
         await diagnostics.capture(page, "07-profile-visible")
-        return
+        return "authenticated"
 
     await page.goto(CHATGPT_LOGIN, wait_until="domcontentloaded", timeout=60_000)
     email_field = page.locator('input[type="email"]').last
@@ -248,63 +278,56 @@ async def authenticate(
     await asyncio.sleep(4)
     await diagnostics.capture(page, "03-email-submitted")
 
-    # Only click exact password sign-in options; this avoids the unrelated
-    # "Forgot password?" link that appeared in the previous skill version.
-    await choose_password_sign_in(page)
-    password_field = await visible_password_field(page)
-    await diagnostics.capture(page, "04-password-prompt")
-    await password_field.fill(password, timeout=10_000)
-    if not await click_visible_button(page, ("sign in", "continue")):
-        raise RuntimeError("Could not submit the password form.")
-    await asyncio.sleep(3)
-    await diagnostics.capture(page, "05-password-submitted")
+    # ChatGPT may present a one-time-code screen (emailed to the account) or a
+    # TOTP/authenticator screen depending on the account's setup. Handle both.
+    code_field = await find_visible_field(page, SELECTORS)
+    totp_field = await find_visible_field(page, TOTP_SELECTORS)
 
-    code_field = None
-    for selector in (
-        'input[placeholder="Code"]',
-        'input[placeholder*="code" i]',
-        'input[aria-label*="code" i]',
-        'input[name="code"]',
-        'input[id*="code" i]',
-    ):
-        candidate = page.locator(selector).last
-        try:
-            if await candidate.count() and await candidate.is_visible():
-                code_field = candidate
-                break
-        except Exception:
-            continue
-    if code_field is None:
-        raise RuntimeError("TOTP verification field did not appear; stopping without fallback entry.")
-
-    await diagnostics.capture(page, "06-totp-prompt")
-    seconds_remaining = 30 - (time.time() % 30)
-    if seconds_remaining < 8:
-        delay = seconds_remaining + 0.2
-        print(
-            f"TOTP window has {seconds_remaining:.1f}s remaining; waiting for the next window.",
-            flush=True,
+    if code_field is None and totp_field is None:
+        raise RuntimeError(
+            "Neither a verification-code nor a TOTP field appeared after email "
+            "submission; stopping without fallback entry."
         )
-        await asyncio.sleep(delay)
-    totp_code = current_totp(totp_secret)
-    seconds_remaining = 30 - (time.time() % 30)
-    print(
-        f"Generated a fresh TOTP with {seconds_remaining:.1f}s remaining; submitting immediately.",
-        flush=True,
-    )
-    await code_field.fill(totp_code, timeout=10_000)
-    if not await click_visible_button(page, ("continue", "verify", "submit")):
-        raise RuntimeError("Could not submit the TOTP verification form.")
-    print("Playwright clicked the TOTP Continue/Verify button.", flush=True)
-    await asyncio.sleep(2)
-    await diagnostics.capture(page, "07-totp-after-continue")
+
+    if code_field is not None:
+        await diagnostics.capture(page, "04-verification-code-prompt")
+        if not verification_code:
+            return "waiting_for_code"
+        await code_field.fill(verification_code, timeout=10_000)
+        if not await click_visible_button(page, ("continue", "verify", "submit")):
+            raise RuntimeError("Could not submit the verification code form.")
+        print("Playwright clicked the verification-code Continue/Verify button.", flush=True)
+        await asyncio.sleep(2)
+        await diagnostics.capture(page, "05-code-after-continue")
+
+    if totp_field is not None:
+        if not totp_secret:
+            raise RuntimeError(
+                "TOTP prompt appeared but CHATGPT_TOTP_SECRET is not configured."
+            )
+        await diagnostics.capture(page, "06-totp-prompt")
+        seconds_remaining = 30 - (time.time() % 30)
+        if seconds_remaining < 8:
+            delay = seconds_remaining + 0.2
+            print(
+                f"TOTP window has {seconds_remaining:.1f}s remaining; waiting for the next window.",
+                flush=True,
+            )
+            await asyncio.sleep(delay)
+        totp_code = current_totp(totp_secret)
+        await totp_field.fill(totp_code, timeout=10_000)
+        if not await click_visible_button(page, ("continue", "verify", "submit")):
+            raise RuntimeError("Could not submit the TOTP verification form.")
+        print("Playwright clicked the TOTP Continue/Verify button.", flush=True)
+        await asyncio.sleep(2)
+        await diagnostics.capture(page, "07-totp-after-continue")
 
     profile_challenge_clicked = False
     deadline = time.monotonic() + 120
     while time.monotonic() < deadline:
         if await is_logged_in(page):
             await diagnostics.capture(page, "08-profile-visible")
-            return
+            return "authenticated"
         if not profile_challenge_clicked and await has_human_verification_challenge(page):
             await diagnostics.capture(page, "08-cloudflare-before-profile-click")
             print(
@@ -343,12 +366,10 @@ def write_result(path: Path, status: str, stage: str, reason: str = "", diagnost
                 summary.write(f"- Result: {reason}\n")
 
 
-async def run(result_path: Path) -> int:
+async def run(result_path: Path, verification_code: str, totp_secret: str) -> int:
     stage = "preflight"
     try:
         email = required_secret("CHATGPT_LOGIN_EMAIL")
-        password = required_secret("CHATGPT_LOGIN_PASSWORD")
-        totp_secret = required_secret("CHATGPT_TOTP_SECRET")
         diagnostics = Diagnostics(result_path, email)
         if not os.environ.get("DISPLAY"):
             raise RuntimeError("DISPLAY is unset; run this check under xvfb-run.")
@@ -365,11 +386,7 @@ async def run(result_path: Path) -> int:
 
             async with async_playwright() as playwright:
                 browser_environment = os.environ.copy()
-                for secret_name in (
-                    "CHATGPT_LOGIN_EMAIL",
-                    "CHATGPT_LOGIN_PASSWORD",
-                    "CHATGPT_TOTP_SECRET",
-                ):
+                for secret_name in ("CHATGPT_LOGIN_EMAIL", "CHATGPT_VERIFICATION_CODE", "CHATGPT_TOTP_SECRET"):
                     browser_environment.pop(secret_name, None)
                 browser_environment.update(
                     {
@@ -412,14 +429,26 @@ async def run(result_path: Path) -> int:
                     page.set_default_timeout(20_000)
                     page.set_default_navigation_timeout(60_000)
                     stage = "chatgpt_login"
-                    await authenticate(
+                    status = await authenticate_email(
                         page,
                         email,
-                        password,
+                        verification_code,
                         totp_secret,
                         diagnostics,
                         attempt_cloudflare_click=True,
                     )
+                    if status == "waiting_for_code":
+                        reason = (
+                            "Email submitted; ChatGPT sent a verification code to the account. "
+                            "No code was provided, so the run paused at the code screen. "
+                            "Trigger workflow_dispatch with input verification_code to complete sign-in."
+                        )
+                        write_result(result_path, "waiting_for_code", "waiting_for_email_code", reason, diagnostics=diagnostics)
+                        print(
+                            "ChatGPT email submitted; waiting for verification code to complete sign-in.",
+                            flush=True,
+                        )
+                        return 0
                     write_result(result_path, "authenticated", "profile_control_visible", diagnostics=diagnostics)
                     print("ChatGPT authentication succeeded; signed-in profile control is visible.")
                     return 0
@@ -438,12 +467,7 @@ async def run(result_path: Path) -> int:
                             browser_process.wait(timeout=5)
     except Exception as error:
         reason = str(error)
-        # Do not serialize page contents, URLs with query strings, or secrets.
-        for secret_name in (
-            "CHATGPT_LOGIN_EMAIL",
-            "CHATGPT_LOGIN_PASSWORD",
-            "CHATGPT_TOTP_SECRET",
-        ):
+        for secret_name in ("CHATGPT_LOGIN_EMAIL", "CHATGPT_VERIFICATION_CODE", "CHATGPT_TOTP_SECRET"):
             secret = os.environ.get(secret_name, "")
             if secret:
                 reason = reason.replace(secret, "[redacted]")
@@ -456,8 +480,15 @@ async def run(result_path: Path) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--result-file", required=True, type=Path)
+    parser.add_argument(
+        "--verification-code",
+        default="",
+        help="One-time verification code emailed by ChatGPT to complete sign-in.",
+    )
     args = parser.parse_args()
-    return asyncio.run(run(args.result_file))
+    code = args.verification_code or optional_env("CHATGPT_VERIFICATION_CODE")
+    totp_secret = optional_env("CHATGPT_TOTP_SECRET")
+    return asyncio.run(run(args.result_file, code, totp_secret))
 
 
 if __name__ == "__main__":

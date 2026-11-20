@@ -9,6 +9,11 @@ on:
   # GitHub's Run workflow button requires this file to exist on the default
   # branch; push on auth-chatgpt-baseline is the working trigger while this stays here.
   workflow_dispatch:
+    inputs:
+      verification_code:
+        description: "One-time verification code emailed by ChatGPT to complete sign-in (optional on first run)."
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -31,7 +36,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Test TOTP and sign-in selector helpers
+      - name: Test email-only auth helpers
         run: python -m unittest discover -s auth_smoke -v
 
       - name: Install pinned Playwright browser
@@ -39,17 +44,18 @@ jobs:
           python -m pip install --disable-pip-version-check "playwright==1.58.0"
           python -m playwright install chromium
 
-      - name: Authenticate in headed Chromium under Xvfb
+      - name: Authenticate in headed Chromium under Xvfb (email-only)
         env:
           CHATGPT_LOGIN_EMAIL: ${{ secrets.CHATGPT_LOGIN_EMAIL }}
-          CHATGPT_LOGIN_PASSWORD: ${{ secrets.CHATGPT_LOGIN_PASSWORD }}
           CHATGPT_TOTP_SECRET: ${{ secrets.CHATGPT_TOTP_SECRET }}
+          CHATGPT_VERIFICATION_CODE: ${{ github.event.inputs.verification_code || '' }}
           PYTHONUNBUFFERED: "1"
         run: |
           mkdir -p auth-smoke-results
           xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' \
             python -u auth_smoke/chatgpt_auth_smoke.py \
-              --result-file auth-smoke-results/result.json
+              --result-file auth-smoke-results/result.json \
+              --verification-code "${CHATGPT_VERIFICATION_CODE}"
 
       - name: Upload authentication result
         if: always()
