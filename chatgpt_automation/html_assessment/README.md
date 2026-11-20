@@ -123,7 +123,7 @@ The Python script does not commit to GitHub or publish candidate pages. The Git 
 
 ## GitHub Actions sequence
 
-The public `chatgpt` branch now provides `.github/workflows/html-assessment.yml`, which uses NVIDIA NIM. Dispatch it once per candidate with an opaque private job ID, the private source run ID, and a private source candidate ID. Wait for each candidate workflow to finish before starting another candidate for that job. The source run ID disambiguates candidate names reused across separate runs. The workflow assesses `files/inlined/index-old.html` when that preserved original exists, falling back to `files/inlined/index.html` for legacy candidates without the backup. The configured job row supplies context, `result-slugs.json` locates the private customer folder, and the candidate's `debug/inputs.json` supplies the matching page URL used for asset loading. It does not fetch live page HTML. It:
+The public `chatgpt` branch contains `.github/workflows/html-assessment.yml`, which uses NVIDIA NIM. That workflow is manually disabled in GitHub Actions for now; do not dispatch it unless it is re-enabled. Historically, it was dispatched once per candidate with an opaque private job ID, source run ID, and candidate ID. The source run ID disambiguates candidate names reused across separate runs. The workflow assesses `files/inlined/index-old.html` when that preserved original exists, falling back to `files/inlined/index.html` for legacy candidates without the backup. The configured job row supplies context, `result-slugs.json` locates the private customer folder, and the candidate's `debug/inputs.json` supplies the matching page URL used for asset loading. It does not fetch live page HTML. It:
 
 - Reads the selected job's authoritative private target row and verifies that the selected candidate belongs to that customer's configured result slug.
 - Installs Python, Playwright, and headless Chromium.
@@ -136,7 +136,7 @@ Capture and inference occur in the Actions runner; screenshots are produced by h
 
 The dispatch input `revision_mode` defaults to `repair`. Choose `full_rebuild` to have Nemotron generate the complete HTML/CSS page using the preserved original, code review, screenshots, and deterministic baseline QA as evidence. The full rebuild must retain exact image `src`/`srcset` values, existing link destinations, form actions and controls, and the `styles.css` link; otherwise it falls back safely and remains subject to the same pending gates.
 
-The original ChatGPT generation workflow does not post to Cloudflare before assessment. Once at least three candidates in the latest successful run pass deterministic repository QA, the assessment workflow refreshes `successful-passes/` and dispatches the unchanged `content-post` workflow. Configure `CONTENT_POST_DISPATCH_TOKEN` in the public Git Content repository; otherwise, start the existing publisher manually.
+The current ChatGPT generation workflow stages three passing inline HTML files on `content-post` slot branches. A person can revise each slot branch's `sites/<site-slug>/revised/index.html`, then run `python scripts/promote_slot_revision.py --slot-branch chatgpt-slotN --site-slug <site-slug>` from a clean local checkout of `content-post` to promote it to `main`. Cloudflare publication waits for all three same-batch candidates on `main`.
 
 ## API retries
 

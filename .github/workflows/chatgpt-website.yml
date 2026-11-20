@@ -530,3 +530,29 @@ jobs:
             exit 1
           fi
           echo "Three complete candidates passed the automated gate. Human visual and image review remain pending."
+
+      - name: Verify the content-post slot token is configured
+        if: steps.require_three.outcome == 'success'
+        env:
+          CONTENT_POST_DISPATCH_TOKEN: ${{ secrets.CONTENT_POST_DISPATCH_TOKEN }}
+        run: test -n "$CONTENT_POST_DISPATCH_TOKEN" || { echo "CONTENT_POST_DISPATCH_TOKEN is required to stage passing candidates."; exit 1; }
+
+      - name: Check out content-post slot branches
+        if: steps.require_three.outcome == 'success'
+        uses: actions/checkout@v4
+        with:
+          repository: hometownredesignsites/content-post
+          ref: main
+          token: ${{ secrets.CONTENT_POST_DISPATCH_TOKEN }}
+          path: content-post
+          fetch-depth: 0
+
+      - name: Stage passing inline HTML in three content-post draft slots
+        if: steps.require_three.outcome == 'success'
+        run: |
+          set -euo pipefail
+          JOB_FILE="${PRIVATE_SOURCE_ROOT}/private_automation/queue/jobs/${JOB_ID}.json"
+          python chatgpt_automation/scripts/push_chatgpt_slot_drafts.py \
+            --candidates-dir chatgpt-runs \
+            --job-file "$JOB_FILE" \
+            --content-post-dir content-post
