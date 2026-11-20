@@ -1,5 +1,32 @@
 # ChatGPT website redesign workflow
 
+## Repository ownership and handoffs
+
+This workflow crosses three repositories. Each repository has a distinct owner role; the public repository coordinates work but does not own the private customer queue, slot ledger, or publish-ready HTML.
+
+| Repository | Owns | Sends / receives |
+| --- | --- | --- |
+| [`git-content`](https://github.com/hometownredesignsites/git-content) (public, `chatgpt` branch) | Generation workflows and scripts, automated candidate validation, staging logic, and the hourly slot orchestrator. The orchestrator's public logs must remain free of customer identifiers and HTML. | Reads an opaque job marker and job data from `git-content-private`; writes successful validated drafts and immutable batch snapshots to the three `content-post` slot branches; reads slot assignments, worker returns, the private ledger, and promotion progress from `content-post`. It assigns work but does not revise HTML or publish it. |
+| [`git-content-private`](https://github.com/hometownredesignsites/git-content-private) (private) | The source customer/job data and private generation results: candidate HTML, source evidence, screenshots, prompts, logs, and review records. | Supplies authorized job inputs to the public generation workflow and receives its private candidate evidence/results. It is not the slot assignment ledger and does not promote or publish slot revisions. |
+| [`content-post`](https://github.com/hometownredesignsites/content-post) (private) | The three worker slots, their active task files and return folders, the authoritative `automation/slot-ledger.json`, durable revised HTML, manual promotion records on `main`, and Cloudflare publishing. | Receives generation-approved drafts from `git-content`; gives one task at a time to each external worker through its slot branch; receives the worker's revised HTML and metadata; after manual promotion, publishes only when all three candidates for the same batch are present. |
+
+### End-to-end handoff
+
+1. `git-content-private` provides the private job input. The public `git-content` Action generates candidate pages, runs its own automated validation, and stores candidate evidence/results back in `git-content-private`.
+2. Once three candidates pass, `git-content` stages one draft per slot on `content-post` branches `chatgpt-slot1`, `chatgpt-slot2`, and `chatgpt-slot3`. Each branch keeps `sites/<site-slug>/draft/index.html` and an immutable copy under `sites/<site-slug>/queue/<batch-id>/`.
+3. The hourly `git-content` orchestrator reads and updates the ledger in `content-post/main`. When a complete batch is available, it assigns one company to all three slots by writing `sites/<site-slug>/todo-today/index.html` and `assignment.json` on each slot branch. Three external workers, one per slot, read their own assignment and return `todo-today/revised/index.html` plus `todo-today/revised/metadata.json`. Workers do not choose a company, edit the ledger, promote candidates, or deploy.
+4. The orchestrator validates the return metadata and HTML, archives accepted files under `sites/<site-slug>/revised/`, and reconciles promotion progress from `content-post/main`. Assignment and reconciliation run hourly at minute 17 UTC; at most one new batch is assigned per Eastern calendar day. Schedule the workers after the 12:17 UTC run (adjust if the Action schedule changes).
+5. A human reviews each revision and manually runs `content-post/scripts/promote_slot_revision.py` for the corresponding slot and site. The script updates the numbered candidate and batch progress on `content-post/main`. Only a complete same-batch set of all three candidates creates the ready marker that triggers Cloudflare publishing.
+
+### Source of truth by state
+
+- **Job and customer input / generation evidence:** `git-content-private`.
+- **Draft, active worker assignment, and returned revision:** the matching `content-post` slot branch.
+- **Slot assignment and reconciliation state:** `content-post/main` at `automation/slot-ledger.json`, maintained by the public `git-content` orchestrator.
+- **Promoted candidate and publish readiness:** `content-post/main`, recorded in the candidate files and `progress.json`; `ready-for-cloudflare.json` is created only for a complete same-batch set.
+
+The public Action needs the `CONTENT_POST_DISPATCH_TOKEN` secret, scoped to the private `content-post` repository with Contents read/write permission. External workers need their own authorized Git write route to their assigned slot branch. These are separate credentials and roles.
+
 The `chatgpt` branch now has a CSV-driven website workflow that follows this sequence:
 
 ```mermaid

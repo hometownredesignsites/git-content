@@ -1,6 +1,6 @@
 # Git-backed Ollama-style API (FastAPI)
 
-The CSV-driven ChatGPT website redesign workflow, chunk protocol, checkpoints, and quality gates are documented in [`chatgpt_automation/README.md`](chatgpt_automation/README.md).
+The CSV-driven ChatGPT website redesign workflow, chunk protocol, checkpoints, and quality gates are documented in [`chatgpt_automation/README.md`](chatgpt_automation/README.md). Its [repository ownership and handoff section](chatgpt_automation/README.md#repository-ownership-and-handoffs) explains how public `git-content`, private `git-content-private`, and private `content-post` divide the work.
 
 ## Website-generation workflow and privacy boundary
 
