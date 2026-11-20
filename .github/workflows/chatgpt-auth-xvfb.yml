@@ -45,6 +45,7 @@ jobs:
         env:
           CHATGPT_LOGIN_EMAIL: ${{ secrets.CHATGPT_LOGIN_EMAIL }}
           CHATGPT_TOTP_SECRET: ${{ secrets.CHATGPT_TOTP_SECRET }}
+          GITHUB_TOKEN: ${{ github.token }}
           PYTHONUNBUFFERED: "1"
         run: |
           mkdir -p auth-smoke-results

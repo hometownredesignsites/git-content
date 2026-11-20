@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import base64
+import base64 as _b64
 import hashlib
 import hmac
 import json
@@ -90,26 +90,29 @@ def fetch_verification_code_from_remote() -> str:
     Returns the code string, or empty string when the file is not present
     on that branch (e.g. before you push it).
     """
+    token = os.environ.get("GITHUB_TOKEN", "")
+    repo = os.environ.get("GITHUB_REPOSITORY", "hometownredesignsites/git-content")
+    if not token:
+        return ""
     try:
-        # Ensure the auth-chatgpt remote-tracking ref is available locally.
-        subprocess.run(
-            ["git", "fetch", "origin", "auth-chatgpt"],
-            capture_output=True,
-            text=True,
-            timeout=30,
+        import urllib.request
+
+        url = (
+            f"https://api.github.com/repos/{repo}/contents/"
+            f"{VERIFICATION_CODE_FILE}?ref=auth-chatgpt"
         )
-        result = subprocess.run(
-            [
-                "git",
-                "show",
-                f"origin/auth-chatgpt:{VERIFICATION_CODE_FILE}",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=30,
+        req = urllib.request.Request(
+            url,
+            headers={
+                "Authorization": "Bearer " + token,
+                "Accept": "application/vnd.github+json",
+                "User-Agent": "chatgpt-auth-smoke",
+            },
         )
-        if result.returncode == 0:
-            return result.stdout.strip()
+        with urllib.request.urlopen(req, timeout=30) as r:
+            data = json.loads(r.read().decode("utf-8"))
+        content = data.get("content", "")
+        return _b64.b64decode(content).decode("utf-8").strip()
     except Exception:
         pass
     return ""
