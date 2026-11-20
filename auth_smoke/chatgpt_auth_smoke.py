@@ -175,6 +175,27 @@ async def has_cloudflare_challenge(page) -> bool:
         return False
 
 
+async def has_human_verification_challenge(page) -> bool:
+    """Detect the visible Cloudflare checkbox challenge without matching generic scripts."""
+    try:
+        body = (await page.locator("body").inner_text(timeout=3_000)).lower()
+        markup = (await page.content()).lower()
+        if "verify you are human" in body or "checking your browser" in body:
+            return True
+        if any(
+            marker in markup
+            for marker in (
+                "challenges.cloudflare.com/turnstile",
+                "cf-turnstile",
+                "cf-chl-",
+            )
+        ):
+            return True
+        return bool(await page.locator('iframe[src*="challenges.cloudflare.com"]').count())
+    except Exception:
+        return False
+
+
 async def authenticate(
     page,
     email: str,
@@ -278,11 +299,23 @@ async def authenticate(
     await asyncio.sleep(2)
     await diagnostics.capture(page, "07-totp-after-continue")
 
+    profile_challenge_clicked = False
     deadline = time.monotonic() + 120
     while time.monotonic() < deadline:
         if await is_logged_in(page):
             await diagnostics.capture(page, "08-profile-visible")
             return
+        if not profile_challenge_clicked and await has_human_verification_challenge(page):
+            await diagnostics.capture(page, "08-cloudflare-before-profile-click")
+            print(
+                "Cloudflare verification appeared during profile wait; clicking viewport "
+                "coordinate (345, 510) once.",
+                flush=True,
+            )
+            await page.mouse.click(345, 510)
+            profile_challenge_clicked = True
+            await page.wait_for_timeout(5_000)
+            await diagnostics.capture(page, "09-cloudflare-after-profile-click")
         await asyncio.sleep(1)
     await diagnostics.capture(page, "08-profile-timeout")
     raise RuntimeError("Timed out waiting for ChatGPT's signed-in profile control.")
