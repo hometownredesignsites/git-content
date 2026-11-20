@@ -1,1 +1,0 @@
-I currently cannot generate images in this session because you are not logged in. You would need to log in to use image generation. Once you’re logged in, I can generate the dog image and provide it encoded in base64.

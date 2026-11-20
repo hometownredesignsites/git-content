@@ -1,1 +1,0 @@
-Indianapolis, IN: 72°F, partly cloudy. Light breeze from the NE at 7 mph. No significant rain expected today.

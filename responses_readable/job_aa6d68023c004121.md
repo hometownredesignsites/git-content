@@ -1,1 +1,0 @@
-HEARTBEAT_OK

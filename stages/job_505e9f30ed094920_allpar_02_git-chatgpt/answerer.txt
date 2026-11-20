@@ -1,3 +1,0 @@
-Indianapolis, IN — Current: 68°F, mostly clear. Light wind at 5 mph. No significant rain expected overnight.
-
-(Telegram update ready to send.)

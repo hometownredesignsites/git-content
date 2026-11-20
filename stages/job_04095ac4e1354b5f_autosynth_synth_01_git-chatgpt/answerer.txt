@@ -1,1 +1,0 @@
-Indianapolis, IN — 60°F, rainy. Light NW wind around 7 mph. Chance of showers up to 60%; wind gusts minor, no severe risk.

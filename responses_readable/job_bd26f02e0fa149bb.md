@@ -1,1 +1,0 @@
-It seems like you're asking about weather information. Since live web lookup is unavailable, I cannot provide current weather details. You can check a weather website or app like Weather.com or use your phone’s weather service for up-to-date info.

@@ -1,2 +1,0 @@
-Bake 15–20 min until crust is golden and cheese bubbles.
-happyhooligans

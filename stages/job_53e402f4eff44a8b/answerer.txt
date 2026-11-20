@@ -1,1 +1,0 @@
-TELEGRAM_OK_2
