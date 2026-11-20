@@ -65,7 +65,7 @@ def current_totp(secret: str, timestamp: float | None = None) -> str:
     """Generate a six-digit RFC 6238 TOTP using SHA-1 and a 30-second step."""
     normalized = re.sub(r"\s+", "", secret).upper()
     normalized += "=" * ((8 - len(normalized) % 8) % 8)
-    key = base64.b32decode(normalized, casefold=True)
+    key = _b64.b32decode(normalized, casefold=True)
     counter = int((time.time() if timestamp is None else timestamp) // 30)
     digest = hmac.new(key, struct.pack(">Q", counter), hashlib.sha1).digest()
     offset = digest[-1] & 0x0F
