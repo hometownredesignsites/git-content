@@ -56,6 +56,10 @@ TOTP_SELECTORS = (
     'input[id*="totp" i]',
 )
 
+VERIFICATION_CODE_FILE = "verification_code.txt"
+CODE_POLL_INTERVAL_SECONDS = 10
+CODE_POLL_DEADLINE_SECONDS = 100
+
 
 def current_totp(secret: str, timestamp: float | None = None) -> str:
     """Generate a six-digit RFC 6238 TOTP using SHA-1 and a 30-second step."""
@@ -78,6 +82,30 @@ def required_secret(name: str) -> str:
 
 def optional_env(name: str) -> str:
     return os.environ.get(name, "").strip()
+
+
+def fetch_verification_code_from_remote() -> str:
+    """Read verification_code.txt from origin/auth-chatgpt if it exists.
+
+    Returns the code string, or empty string when the file is not present
+    on that branch (e.g. before you push it).
+    """
+    try:
+        result = subprocess.run(
+            [
+                "git",
+                "show",
+                f"origin/auth-chatgpt:{VERIFICATION_CODE_FILE}",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except Exception:
+        pass
+    return ""
 
 
 async def is_logged_in(page) -> bool:
@@ -302,8 +330,36 @@ async def authenticate_email(
 
     if code_field is not None:
         await diagnostics.capture(page, "04-verification-code-prompt")
+
+        # Poll origin/auth-chatgpt:verification_code.txt for the code you push.
+        # This keeps the run in a single invocation instead of needing a second
+        # workflow_dispatch trigger with a freshly-emailed code.
+        verification_code = verification_code or ""
         if not verification_code:
-            return "waiting_for_code"
+            print(
+                "Email submitted; waiting for verification code pushed to "
+                f"origin/auth-chatgpt:{VERIFICATION_CODE_FILE} ...",
+                flush=True,
+            )
+            deadline = time.monotonic() + CODE_POLL_DEADLINE_SECONDS
+            while time.monotonic() < deadline:
+                verification_code = fetch_verification_code_from_remote()
+                if verification_code:
+                    print(
+                        f"Verification code found on origin/auth-chatgpt: "
+                        f"{VERIFICATION_CODE_FILE}; entering it now.",
+                        flush=True,
+                    )
+                    break
+                await asyncio.sleep(CODE_POLL_INTERVAL_SECONDS)
+
+        if not verification_code:
+            raise RuntimeError(
+                "No verification code was pushed to "
+                f"origin/auth-chatgpt:{VERIFICATION_CODE_FILE} within the "
+                "polling window; stopping without fallback entry."
+            )
+
         await code_field.fill(verification_code, timeout=10_000)
         if not await click_visible_button(page, ("continue", "verify", "submit")):
             raise RuntimeError("Could not submit the verification code form.")
@@ -448,18 +504,6 @@ async def run(result_path: Path, verification_code: str, totp_secret: str) -> in
                         diagnostics,
                         attempt_cloudflare_click=True,
                     )
-                    if status == "waiting_for_code":
-                        reason = (
-                            "Email submitted; ChatGPT sent a verification code to the account. "
-                            "No code was provided, so the run paused at the code screen. "
-                            "Trigger workflow_dispatch with input verification_code to complete sign-in."
-                        )
-                        write_result(result_path, "waiting_for_code", "waiting_for_email_code", reason, diagnostics=diagnostics)
-                        print(
-                            "ChatGPT email submitted; waiting for verification code to complete sign-in.",
-                            flush=True,
-                        )
-                        return 0
                     write_result(result_path, "authenticated", "profile_control_visible", diagnostics=diagnostics)
                     print("ChatGPT authentication succeeded; signed-in profile control is visible.")
                     return 0
