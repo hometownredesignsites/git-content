@@ -109,7 +109,40 @@ jobs:
               job = {"job_id": job_id, "batch_id": batch_id, "provider": "chatgpt", "result_slug": slug, "candidate_attempt_limit": 12, "row": target}
               (jobs_dir / f"{job_id}.json").write_text(json.dumps(job, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
               job_ids.append(job_id)
-          batch = {"schema_version": 1, "batch_id": batch_id, "created_at": datetime.now(timezone.utc).isoformat(), "source": "website-lead-hunting-operations/scores/HIGH_MEDIUM_CANDIDATES.csv", "selection": "final_outcome=high, assessment_state=complete, confidence_level=3", "job_ids": job_ids, "target_count": len(job_ids)}
+          created_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+          batch = {
+              "schema_version": 2,
+              "batch_id": batch_id,
+              "created_at": created_at,
+              "source": "website-lead-hunting-operations/scores/HIGH_MEDIUM_CANDIDATES.csv",
+              "selection": "final_outcome=high, assessment_state=complete, confidence_level=3",
+              "job_ids": job_ids,
+              "target_count": len(job_ids),
+              "lifecycle": {
+                  "created_at": created_at,
+                  "started_at": None,
+                  "finished_at": None,
+                  "status": "queued",
+                  "target_count": len(job_ids),
+                  "completed_count": 0,
+                  "failed_count": 0,
+                  "pending_count": len(job_ids),
+                  "attempt_count": 0,
+                  "source_run_ids": [str(os.environ.get("GITHUB_RUN_ID", ""))] if os.environ.get("GITHUB_RUN_ID") else [],
+                  "items": {
+                      job_id: {
+                          "job_id": job_id,
+                          "status": "pending",
+                          "attempt_count": 0,
+                          "attempts": [],
+                          "failure_category": None,
+                          "failure_details": None,
+                          "diagnostic_url": None,
+                          "source_run_ids": [],
+                      } for job_id in job_ids
+                  },
+              },
+          }
           (batch_dir / f"{batch_id}.json").write_text(json.dumps(batch, indent=2) + "\n", encoding="utf-8")
           slug_path.parent.mkdir(parents=True, exist_ok=True); slug_path.write_text(json.dumps(slug_map, indent=2, sort_keys=True) + "\n", encoding="utf-8")
           repo = "private-chatgpt"
