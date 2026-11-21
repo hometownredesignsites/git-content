@@ -278,13 +278,14 @@ jobs:
           print(json.load(open(sys.argv[1], encoding="utf-8")).get("batch_id", ""))
           PY
           )"
-              batch_file="private-results/private_automation/queue/batches/${batch_id}.json"
+              batch_rel="private_automation/queue/batches/${batch_id}.json"
+              batch_file="private-results/$batch_rel"
               python chatgpt_automation/scripts/update_batch_lifecycle.py \
                 --batch-file "$batch_file" --job-id "$JOB_ID" \
                 --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" \
                 --event attempt --candidate-dir "$candidate_dir" \
                 --failure-details "$(python chatgpt_automation/scripts/summarize_candidate_failure.py "$candidate_dir")"
-              git -C private-results add -- "$relative_candidate" "private_automation/queue/jobs/${JOB_ID}.json" "$batch_file"
+              git -C private-results add -- "$relative_candidate" "private_automation/queue/jobs/${JOB_ID}.json" "$batch_rel"
               if git -C private-results diff --cached --quiet; then
                 echo "Candidate evidence already exists on private ${target_branch}: ${candidate_name}."
                 return 0
