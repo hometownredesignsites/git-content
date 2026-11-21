@@ -273,7 +273,18 @@ jobs:
               cp -a "$payload/." "private-results/${relative_candidate}/"
               mkdir -p "private-results/private_automation/queue/jobs"
               cp "$PRIVATE_SOURCE_ROOT/private_automation/queue/jobs/${JOB_ID}.json" "private-results/private_automation/queue/jobs/${JOB_ID}.json"
-              git -C private-results add -- "$relative_candidate" "private_automation/queue/jobs/${JOB_ID}.json"
+              batch_id="$(python - "private-results/private_automation/queue/jobs/${JOB_ID}.json" <<'PY'
+          import json, sys
+          print(json.load(open(sys.argv[1], encoding="utf-8")).get("batch_id", ""))
+          PY
+          )"
+              batch_file="private-results/private_automation/queue/batches/${batch_id}.json"
+              python chatgpt_automation/scripts/update_batch_lifecycle.py \
+                --batch-file "$batch_file" --job-id "$JOB_ID" \
+                --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" \
+                --event attempt --candidate-dir "$candidate_dir" \
+                --failure-details "Candidate attempt did not pass; see the linked Actions run."
+              git -C private-results add -- "$relative_candidate" "private_automation/queue/jobs/${JOB_ID}.json" "$batch_file"
               if git -C private-results diff --cached --quiet; then
                 echo "Candidate evidence already exists on private ${target_branch}: ${candidate_name}."
                 return 0
@@ -501,8 +512,23 @@ jobs:
             cp -a "$saved_result/." "$result_dir/"
             mkdir -p "private_automation/queue/jobs"
             cp "$saved_job" "private_automation/queue/jobs/${JOB_ID}.json"
+            batch_id="$(python - "private_automation/queue/jobs/${JOB_ID}.json" <<'PY'
+          import json, sys
+          print(json.load(open(sys.argv[1], encoding="utf-8")).get("batch_id", ""))
+          PY
+          )"
+            batch_file="private_automation/queue/batches/${batch_id}.json"
+            lifecycle_status="failed"
+            lifecycle_category="quality_gate_failed"
+            if [[ "$status" == "passed" ]]; then lifecycle_status="completed"; lifecycle_category=""; fi
+            python "$GITHUB_WORKSPACE/chatgpt_automation/scripts/update_batch_lifecycle.py" \
+              --batch-file "$batch_file" --job-id "$JOB_ID" \
+              --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" \
+              --event final --status "$lifecycle_status" \
+              --failure-category "$lifecycle_category" \
+              --failure-details "Workflow did not meet the three-passing-candidate gate; inspect the linked Actions run."
             python private_automation/scripts/build_results_index.py --provider chatgpt
-            git add -- "private_automation/queue/jobs/${JOB_ID}.json" "results/${result_slug}" results/README.md results/successful.csv
+            git add -- "private_automation/queue/jobs/${JOB_ID}.json" "$batch_file" "results/${result_slug}" results/README.md results/successful.csv
             if git diff --cached --quiet; then
               echo "Private evidence for workflow ${GITHUB_RUN_ID} is already present on ${TARGET_BRANCH}."
               exit 0
