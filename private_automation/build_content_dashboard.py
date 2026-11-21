@@ -73,6 +73,22 @@ def build(root,action_runs):
           "finished_at":(action or {}).get("updated_at","") if (action or {}).get("status")=="completed" else "",
           "duration_seconds":duration(action)})
     job_rows.sort(key=lambda row:(row["started_at"] or "",row["job_id"]),reverse=True)
+    # Candidate completion is a business-level result: the same business may be
+    # represented by multiple URLs (for example, a custom domain and WordPress).
+    business_candidates={}
+    for row in job_rows:
+        key=(str(row.get("business") or "").strip().casefold(),str(row.get("location") or "").strip().casefold())
+        try: count=int(row.get("successful_candidates") or 0)
+        except (TypeError,ValueError): count=0
+        current=business_candidates.get(key,{"count":0,"source":""})
+        if count>current["count"]:
+            business_candidates[key]={"count":count,"source":row.get("website","")}
+    for row in job_rows:
+        key=(str(row.get("business") or "").strip().casefold(),str(row.get("location") or "").strip().casefold())
+        completion=business_candidates.get(key,{"count":0,"source":""})
+        row["business_successful_candidates"]=completion["count"]
+        row["business_completion"]="complete" if completion["count"]>=3 else "incomplete"
+        row["business_completion_source"]=completion["source"]
     batch_rows=[]
     for path in batches_dir.glob("*.json") if batches_dir.exists() else []:
         manifest=load(path)
@@ -101,7 +117,7 @@ def build(root,action_runs):
     counts={"queued":sum(1 for j in job_rows if j["status"] in {"queued","waiting"}),
       "running":sum(1 for j in job_rows if j["status"] in {"in_progress","in progress"}),
       "failed":sum(1 for j in job_rows if j["status"] in {"failed","failure","cancelled","timed_out"}),
-      "three_pass":sum(1 for j in job_rows if str(j.get("successful_candidates")) not in {"","None"} and int(j.get("successful_candidates") or 0)>=3)}
+      "three_pass":len({(str(j.get("business") or "").strip().casefold(),str(j.get("location") or "").strip().casefold()) for j in job_rows if str(j.get("business_successful_candidates")) not in {"","None"} and int(j.get("business_successful_candidates") or 0)>=3})}
     return {"generated_at":iso(datetime.now(timezone.utc)),"source_revision":os.environ.get("GITHUB_SHA",""),"counts":counts,"jobs":job_rows,"batches":batch_rows}
 
 def write_csv(path,rows,fields):
