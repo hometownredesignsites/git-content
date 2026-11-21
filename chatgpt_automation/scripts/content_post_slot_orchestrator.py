@@ -226,7 +226,10 @@ def commit_slot_branch(repo: Path, branch: str, mutate, message: str) -> bool:
         if should_commit is False:
             git(repo, "switch", "--force-create", "main", "origin/main")
             return False
-        git(repo, "add", "-A", "--", "sites")
+        # Slot assignments live at the repository root, while durable queue
+        # snapshots and revised files live under sites/. Stage both trees so
+        # the assignment survives switching back to main and is pushed.
+        git(repo, "add", "-A", "--", "sites", "todo-today")
         if git(repo, "diff", "--cached", "--quiet", check=False).returncode == 0:
             git(repo, "switch", "--force-create", "main", "origin/main")
             return False
