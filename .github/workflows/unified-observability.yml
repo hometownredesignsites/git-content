@@ -32,12 +32,24 @@ jobs:
 
       - name: Fetch public lead-hunting snapshot
         working-directory: content-data
+        timeout-minutes: 20
         run: |
           mkdir -p tmp
-          curl --fail --silent --show-error --location \
-            "https://raw.githubusercontent.com/hometownredesignsites/website-lead-hunting-operations/git-chatgpt/observability/chatgpt/snapshot.json" \
-            -o tmp/lead_snapshot.json
-          python -m json.tool tmp/lead_snapshot.json > /dev/null
+          snapshot_url="https://raw.githubusercontent.com/hometownredesignsites/website-lead-hunting-operations/git-chatgpt/observability/chatgpt/snapshot.json"
+          max_attempts=24
+          for attempt in $(seq 1 "$max_attempts"); do
+            if curl --fail --silent --show-error --location "$snapshot_url" -o tmp/lead_snapshot.json \
+              && python -m json.tool tmp/lead_snapshot.json > /dev/null; then
+              echo "Lead-hunting snapshot fetched and validated on attempt $attempt."
+              exit 0
+            fi
+            if [ "$attempt" -lt "$max_attempts" ]; then
+              echo "Snapshot not available or invalid yet (attempt $attempt/$max_attempts); retrying in 30 seconds."
+              sleep 30
+            fi
+          done
+          echo "::error::Lead-hunting snapshot was unavailable or invalid after $max_attempts attempts."
+          exit 1
 
       - name: Build unified dashboard
         working-directory: content-data
