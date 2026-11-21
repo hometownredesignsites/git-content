@@ -3,7 +3,7 @@ run-name: Refresh ChatGPT content dashboard (${{ github.event_name }})
 
 on:
   schedule:
-    - cron: "23 * * * *"
+    - cron: "23 */2 * * *"
   workflow_dispatch:
   workflow_run:
     workflows:
