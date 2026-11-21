@@ -78,16 +78,24 @@ def build(root,action_runs):
         manifest=load(path)
         if not manifest:continue
         ids=[str(v) for v in manifest.get("job_ids",[])]; group=[row for row in job_rows if row["job_id"] in ids]
+        lifecycle=manifest.get("lifecycle") if isinstance(manifest.get("lifecycle"),dict) else {}
         in_flight=sum(1 for row in group if row["status"] in {"queued","waiting","in_progress","in progress"})
-        failed=sum(1 for row in group if row["status"] in {"failed","failure","cancelled","timed_out"})
+        failed=int(lifecycle.get("failed_count",sum(1 for row in group if row["status"] in {"failed","failure","cancelled","timed_out"})) or 0)
         passed=sum(1 for row in group if str(row.get("successful_candidates")) not in {"","None"} and int(row.get("successful_candidates") or 0)>=3)
         starts=[dt(row["started_at"]) for row in group if dt(row["started_at"])];ends=[dt(row["finished_at"]) for row in group if dt(row["finished_at"])]
-        start=min(starts) if starts else None;end=max(ends) if ends else None
-        if in_flight and start:end=datetime.now(timezone.utc)
-        state="in progress" if any(row["status"] in {"in_progress","in progress"} for row in group) else "queued" if in_flight else "failed / partial" if failed else "completed" if ids and len(group)>=len(ids) else "queued / incomplete"
-        batch_rows.append({"batch_id":manifest.get("batch_id",path.stem),"created_at":manifest.get("created_at",""),
-          "target_count":manifest.get("target_count",len(ids)),"jobs_with_status":len(group),"three_pass_sites":passed,
-          "queued_or_running":in_flight,"failed":failed,"status":state,"started_at":iso(start),"finished_at":iso(end),
+        start=dt(lifecycle.get("started_at")) or (min(starts) if starts else None)
+        end=dt(lifecycle.get("finished_at")) or (max(ends) if ends else None)
+        if lifecycle and lifecycle.get("status"): state=str(lifecycle["status"])
+        else:
+            if in_flight and start:end=datetime.now(timezone.utc)
+            state="in progress" if any(row["status"] in {"in_progress","in progress"} for row in group) else "queued" if in_flight else "failed / partial" if failed else "completed" if ids and len(group)>=len(ids) else "queued / incomplete"
+        batch_rows.append({"batch_id":manifest.get("batch_id",path.stem),"created_at":lifecycle.get("created_at",manifest.get("created_at","")),
+          "target_count":lifecycle.get("target_count",manifest.get("target_count",len(ids))),"jobs_with_status":len(group),"three_pass_sites":passed,
+          "queued_or_running":int(lifecycle.get("pending_count",in_flight) or 0),"failed":failed,"status":state,
+          "completed_count":lifecycle.get("completed_count",len(ids)-failed-in_flight),"pending_count":lifecycle.get("pending_count",in_flight),
+          "attempt_count":lifecycle.get("attempt_count",sum(int(row.get("attempts") or 0) for row in group)),
+          "failure_category":lifecycle.get("failure_category",""),"failure_details":lifecycle.get("failure_details",""),
+          "source_run_ids":lifecycle.get("source_run_ids",[]),"started_at":iso(start),"finished_at":iso(end),
           "duration_seconds":int((end-start).total_seconds()) if start and end else None,"continuation_of":manifest.get("continuation_of","")})
     batch_rows.sort(key=lambda row:str(row.get("created_at") or ""),reverse=True)
     counts={"queued":sum(1 for j in job_rows if j["status"] in {"queued","waiting"}),
