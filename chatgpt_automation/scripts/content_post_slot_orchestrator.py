@@ -286,7 +286,7 @@ def reconcile_returns(repo: Path, ledger: dict) -> bool:
                     durable_metadata = dict(assignment)
                     durable_metadata.update({
                         "received_at_utc": utc_now(),
-                        "worker_commit": git(repo, "rev-parse", "HEAD"),
+                        "worker_commit": git(repo, "rev-parse", "HEAD").stdout.strip(),
                     })
                     (repo / stable_metadata).write_text(
                         json.dumps(durable_metadata, indent=2, ensure_ascii=False) + "\n", encoding="utf-8",
