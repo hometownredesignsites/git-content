@@ -261,10 +261,11 @@ def reconcile_returns(repo: Path, ledger: dict) -> bool:
             accepted: dict = {}
 
             def save_revision() -> bool:
-                assignment = read_json((repo / base / "todo-today" / "assignment.json").read_bytes()) if (repo / base / "todo-today" / "assignment.json").is_file() else {}
-                result_metadata_path = repo / base / "todo-today" / "revised" / "metadata.json"
+                assignment_path = repo / "todo-today" / "assignment.json"
+                assignment = read_json(assignment_path.read_bytes()) if assignment_path.is_file() else {}
+                result_metadata_path = repo / "todo-today" / "revised" / "metadata.json"
                 result_metadata = read_json(result_metadata_path.read_bytes()) if result_metadata_path.is_file() else {}
-                revised_path = repo / base / "todo-today" / "revised" / "index.html"
+                revised_path = repo / "todo-today" / "revised" / "index.html"
                 revised = revised_path.read_bytes() if revised_path.is_file() else None
                 if not check_task_identity(task, assignment, slot):
                     return False
@@ -370,7 +371,7 @@ def ensure_active_assignment(repo: Path, ledger: dict) -> bool:
         branch = SLOT_BRANCHES[slot]
         source_path = task["slots"][str(slot)]["source_path"]
         current_assignment = read_json(read_ref(
-            repo, f"origin/{branch}", f"sites/{slug}/todo-today/assignment.json",
+            repo, f"origin/{branch}", "todo-today/assignment.json",
         ))
         if check_task_identity(task, current_assignment, slot):
             if task["slots"][str(slot)].get("status") not in {"assigned", "revision_received", "promoted"}:
@@ -399,18 +400,15 @@ def ensure_active_assignment(repo: Path, ledger: dict) -> bool:
         }
 
         def write_assignment() -> bool:
-            existing = repo / "sites" / slug / "todo-today" / "assignment.json"
+            existing = repo / "todo-today" / "assignment.json"
             existing_data = read_json(existing.read_bytes()) if existing.is_file() else {}
             if check_task_identity(task, existing_data, slot):
                 return False
-            sites_root = repo / "sites"
-            if sites_root.exists():
-                for existing in sites_root.glob("*/todo-today"):
-                    if existing.is_dir():
-                        shutil.rmtree(existing)
-                    elif existing.exists():
-                        existing.unlink()
-            todo = repo / "sites" / slug / "todo-today"
+            todo = repo / "todo-today"
+            if todo.is_dir():
+                shutil.rmtree(todo)
+            elif todo.exists():
+                todo.unlink()
             todo.mkdir(parents=True, exist_ok=True)
             (todo / "index.html").write_bytes(source)
             (todo / "assignment.json").write_text(
