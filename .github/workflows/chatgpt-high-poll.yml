@@ -63,6 +63,13 @@ jobs:
               value = (value or "").strip()
               parsed = urlsplit(value if "://" in value else "https://" + value)
               return (parsed.hostname or "").lower().removeprefix("www.").rstrip(".")
+          delivery_ready_exceptions = {
+              "gino’s shoes & repair",
+              "antique emporium of carmel",
+              "goodfellas landscape",
+          }
+          def normalized_business(value):
+              return " ".join((value or "").casefold().replace("’", "'").split())
           seen = set()
           for path in jobs_dir.glob("*.json") if jobs_dir.exists() else []:
               record = json.loads(path.read_text(encoding="utf-8"))
@@ -78,6 +85,7 @@ jobs:
                   legacy_previews = (row.get("Preview_URLs_json") or "").strip()
                   if preview_url or (legacy_previews and legacy_previews not in {"[]", "null"}): continue
                   website, business = (row.get("website_url") or "").strip(), (row.get("business_name") or "").strip()
+                  if normalized_business(business) in delivery_ready_exceptions: continue
                   site_host = host(website); parsed = urlsplit(website)
                   if not site_host or site_host in seen or not business or parsed.scheme not in {"http", "https"} or not parsed.hostname: continue
                   target = {"website": website, "business": business, "category": (row.get("category") or "").strip() or "Local business"}
