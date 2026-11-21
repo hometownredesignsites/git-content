@@ -4,7 +4,7 @@ run-name: Unified Operations Dashboard (${{ github.event_name }})
 on:
   workflow_dispatch:
   schedule:
-    - cron: "47 * * * *"
+    - cron: "47 */2 * * *"
 
 permissions:
   contents: read
