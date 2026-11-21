@@ -75,6 +75,11 @@ def main() -> int:
         item["source_run_ids"].append(run_id)
 
     if args.event == "attempt":
+        item["status"] = "running"
+        item["failure_category"] = None
+        item["failure_details"] = None
+        item["diagnostic_url"] = None
+        lifecycle["finished_at"] = None
         candidate = args.candidate_dir
         notes = read_json(candidate / "run_notes.json") if candidate else {}
         attempt_key = f"{run_id}-{args.run_attempt}-{candidate.name if candidate else 'unknown'}"
