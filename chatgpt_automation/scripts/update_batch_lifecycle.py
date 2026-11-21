@@ -45,7 +45,9 @@ def main() -> int:
 
     stamp = now()
     lifecycle = batch.setdefault("lifecycle", {})
+    batch["schema_version"] = 2
     lifecycle.setdefault("created_at", batch.get("created_at") or stamp)
+    lifecycle.setdefault("target_count", int(batch.get("target_count", len(batch.get("job_ids", []))) or 0))
     lifecycle.setdefault("started_at", None)
     lifecycle.setdefault("finished_at", None)
     lifecycle.setdefault("source_run_ids", [])
