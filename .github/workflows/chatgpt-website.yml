@@ -283,7 +283,7 @@ jobs:
                 --batch-file "$batch_file" --job-id "$JOB_ID" \
                 --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" \
                 --event attempt --candidate-dir "$candidate_dir" \
-                --failure-details "Candidate attempt did not pass; see the linked Actions run."
+                --failure-details "$(python chatgpt_automation/scripts/summarize_candidate_failure.py "$candidate_dir")"
               git -C private-results add -- "$relative_candidate" "private_automation/queue/jobs/${JOB_ID}.json" "$batch_file"
               if git -C private-results diff --cached --quiet; then
                 echo "Candidate evidence already exists on private ${target_branch}: ${candidate_name}."
