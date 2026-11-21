@@ -1,0 +1,58 @@
+name: Unified Operations Dashboard
+run-name: Unified Operations Dashboard (${{ github.event_name }})
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 * * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: unified-operations-dashboard
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out public workflow repository
+        uses: actions/checkout@v4
+
+      - name: Check out private reporting repository
+        uses: actions/checkout@v4
+        with:
+          repository: hometownredesignsites/git-content-private
+          ref: chatgpt
+          path: content-data
+          token: ${{ secrets.PRIVATE_RESULTS_TOKEN }}
+          persist-credentials: true
+
+      - name: Fetch public lead-hunting snapshot
+        working-directory: content-data
+        run: |
+          mkdir -p tmp
+          curl --fail --silent --show-error --location \
+            "https://raw.githubusercontent.com/hometownredesignsites/website-lead-hunting-operations/git-chatgpt/observability/chatgpt/snapshot.json" \
+            -o tmp/lead_snapshot.json
+          python -m json.tool tmp/lead_snapshot.json > /dev/null
+
+      - name: Build unified dashboard
+        working-directory: content-data
+        run: python3 private_automation/build_unified_dashboard.py
+
+      - name: Commit generated dashboard to private repository
+        working-directory: content-data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase --autostash origin chatgpt
+          git add observability/chatgpt/index.html observability/chatgpt/unified_snapshot.json
+          if git diff --cached --quiet; then
+            echo "No dashboard changes."
+            exit 0
+          fi
+          git commit -m "Refresh unified operations dashboard"
+          git push origin HEAD:chatgpt
