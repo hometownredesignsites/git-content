@@ -189,7 +189,7 @@ def _fallback_pool(category: str) -> tuple[tuple[str, str], ...]:
         (r"brewery|breweries|winery|wineries|distillery|distilleries|cidery|cideries|taproom|tasting room|wine bar|craft beer", "beverage"),
         (r"restaurant|food|beverage|cater|bakery|bakeries|coffee|deli|butcher|ice cream|food truck|donut|candy", "food_beverage"),
         (r"hotel|hospitality|inn|bed and breakfast|bed breakfasts|lodging|resort", "hospitality"),
-        (r"salon|barber|nail|\\bspa\\b|tailor|alteration|dry cleaner|shoe repair|watch repair|photograph", "personal_services"),
+        (r"salon|barber|nail|\\bspas?\\b|tailor|alteration|dry cleaner|shoe repair|watch repair|photograph", "personal_services"),
         (r"farm|agricultur|rural|orchard|livestock|\\btractor\\b|feed mill|equestrian|agritourism|pumpkin", "agriculture_rural"),
         (r"recreation|bowling|mini golf|go kart|escape room|playground|dance|martial arts|gym|kayak|fishing|makerspace|pottery|music school|art studio|woodworking studio", "recreation"),
         (r"florist|flower shop|garden center|nursery|nurseries|plant nursery", "garden_floral"),
