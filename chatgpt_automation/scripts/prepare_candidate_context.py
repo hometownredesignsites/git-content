@@ -188,6 +188,36 @@ FALLBACK_IMAGES = {
         ("https://images.unsplash.com/photo-1679205700241-bd122d6beaa3?auto=format&fit=crop&fm=jpg&ixid=NHwxMjA3fDA%3D&ixlib=rb-4.1.0&q=60&w=3000", "arcade game room with machines and lights"),
         ("https://images.unsplash.com/photo-1761207850889-75d5765d33c0?auto=format&fit=crop&fm=jpg&ixid=NHwxMjA3fDA%3D&ixlib=rb-4.1.0&q=60&w=3000", "escape room entrance with illuminated signage"),
     ),
+    "wellness_spa": (
+        ("https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=1800&q=85", "spa treatment room and relaxation setting"),
+        ("https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?auto=format&fit=crop&w=1800&q=85", "spa massage and wellness treatment"),
+        ("https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&w=1800&q=85", "wellness spa interior and treatment setting"),
+    ),
+    "photography_studios": (
+        ("https://images.unsplash.com/photo-1452587925148-ce544e77e70d?auto=format&fit=crop&w=1800&q=85", "photographer working with a camera"),
+        ("https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=1800&q=85", "camera and photography equipment"),
+        ("https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?auto=format&fit=crop&w=1800&q=85", "photography studio and portrait session"),
+    ),
+    "sports_outdoor_retail": (
+        ("https://images.unsplash.com/photo-1485965120184-e220f721d03e?auto=format&fit=crop&w=1800&q=85", "bicycle displayed for sale"),
+        ("https://images.unsplash.com/photo-1532298229144-0ec0c57515c7?auto=format&fit=crop&w=1800&q=85", "road bicycle and cycling equipment"),
+        ("https://images.unsplash.com/photo-1517649763962-0c623066013b?auto=format&fit=crop&w=1800&q=85", "cycling and outdoor sports equipment"),
+    ),
+    "craft_hobby_retail": (
+        ("https://images.unsplash.com/photo-1452860606245-08befc0ff44b?auto=format&fit=crop&w=1800&q=85", "crafting and handmade creative supplies"),
+        ("https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&w=1800&q=85", "art supplies and creative materials"),
+        ("https://images.unsplash.com/photo-1455390582262-044c845c0f4b?auto=format&fit=crop&w=1800&q=85", "creative hobby workspace and materials"),
+    ),
+    "specialty_food_retail": (
+        ("https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1800&q=85", "fresh produce in a specialty food market"),
+        ("https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=1800&q=85", "artisan bread and specialty bakery goods"),
+        ("https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=1800&q=85", "fresh specialty food ingredients and market display"),
+    ),
+    "formalwear_retail": (
+        ("https://images.unsplash.com/photo-1598033129183-c4f50c736f10?auto=format&fit=crop&w=1800&q=85", "formal suit and menswear display"),
+        ("https://images.unsplash.com/photo-1591047139829-d91aecb6caea?auto=format&fit=crop&w=1800&q=85", "formal clothing and boutique apparel"),
+        ("https://images.unsplash.com/photo-1592878904946-b3cd8ae243d0?auto=format&fit=crop&w=1800&q=85", "formalwear and tailored suit styling"),
+    ),
 }
 
 
