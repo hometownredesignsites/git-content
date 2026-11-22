@@ -173,6 +173,9 @@ def _fallback_pool(category: str) -> tuple[tuple[str, str], ...]:
     # pet, event, and home-service matches.
     rules = (
         (r"used auto parts|auto parts|automotive parts", "auto_parts"),
+        (r"performance shop|performance tuning|automotive performance", "automotive"),
+        (r"pet store|pet supply|pet food store|independent pet store", "retail"),
+        (r"aquarium fish store|aquarium store|fish store", "specialty_inventory"),
         (r"used book|bookstore|book shop|record store|vinyl", "books_records"),
         (r"musical instrument|instrument store|antique|salvage|reclamation|estate sale|pawn|used furniture", "specialty_inventory"),
         (r"horse boarding|horse stable|riding school|farrier|equestrian|tack shop", "equestrian"),
@@ -180,16 +183,16 @@ def _fallback_pool(category: str) -> tuple[tuple[str, str], ...]:
         (r"wedding.*farm|event.*farm|agritourism|orchard|christmas tree farm|pumpkin farm|farm market|local farm", "agriculture_rural"),
         (r"aquarium maintenance|aquarium service|fish tank maintenance", "pet_services"),
         (r"upholstery|furniture restoration|furniture repair", "upholstery"),
-        (r"auto|automotive|mechanic|collision|tire|transmission|vehicle|motorcycle|rv repair|boat repair|towing|exhaust|car audio|classic car|small engine", "automotive"),
-        (r"pet|dog|cat|groom|kennel|boarding|animal|pet sitter|daycare", "pet_services"),
+        (r"auto|automotive|mechanic|collision|tire|transmission|vehicle|motorcycle|rv repair|boat repair|trailer repair|towing|exhaust|car audio|classic car|small engine", "automotive"),
+        (r"pet|dog|\\bcat\\b|groom|kennel|dog boarding|pet boarding|animal|pet sitter|daycare", "pet_services"),
         (r"event|venue|wedding|party|banquet|tent rental|dj|bounce house|photo booth|planner|limousine|bridal|tuxedo", "events_venues"),
-        (r"brewery|winery|distillery|cidery|taproom|tasting room|wine bar|craft beer", "beverage"),
-        (r"restaurant|food|beverage|cater|bakery|coffee|deli|butcher|ice cream|food truck|donut|candy", "food_beverage"),
-        (r"hotel|hospitality|inn|bed and breakfast|lodging|resort", "hospitality"),
+        (r"brewery|breweries|winery|wineries|distillery|distilleries|cidery|cideries|taproom|tasting room|wine bar|craft beer", "beverage"),
+        (r"restaurant|food|beverage|cater|bakery|bakeries|coffee|deli|butcher|ice cream|food truck|donut|candy", "food_beverage"),
+        (r"hotel|hospitality|inn|bed and breakfast|bed breakfasts|lodging|resort", "hospitality"),
         (r"salon|barber|nail|spa|tailor|alteration|dry cleaner|shoe repair|watch repair|photograph", "personal_services"),
-        (r"farm|agricultur|rural|orchard|livestock|tractor|feed mill|equestrian|agritourism|pumpkin", "agriculture_rural"),
+        (r"farm|agricultur|rural|orchard|livestock|\\btractor\\b|feed mill|equestrian|agritourism|pumpkin", "agriculture_rural"),
         (r"recreation|bowling|mini golf|go kart|escape room|playground|dance|martial arts|gym|kayak|fishing|makerspace|pottery|music school|art studio|woodworking studio", "recreation"),
-        (r"florist|flower shop|garden center|nursery|plant nursery", "garden_floral"),
+        (r"florist|flower shop|garden center|nursery|nurseries|plant nursery", "garden_floral"),
         (r"retail|store|shop|jewelry|furniture|mattress|appliance|lighting|bicycle|golf|clothing|flooring showroom|cabinet showroom|fireplace|kitchen bath|pool spa", "retail"),
         (r"fenc|gate", "fence"),
         (r"deck|patio", "deck"),
@@ -197,7 +200,7 @@ def _fallback_pool(category: str) -> tuple[tuple[str, str], ...]:
         (r"kitchen", "kitchen"),
         (r"bath", "bathroom"),
         (r"carpent|woodwork", "carpentry"),
-        (r"hvac|plumb|electric|roof|siding|general contractor|remodel|renovat|masonry|concrete|excavation|pressure wash|window cleaning|gutter|chimney|pest control|septic|well service|garage door|locksmith|home inspector|home service|construction", "home"),
+        (r"hvac|plumb|electric|roof|siding|general contractor|remodel|renovat|masonry|concrete|excavation|pressure wash|window cleaning|gutter|chimney|pest control|septic|well service|garage door|locksmith|home inspector|home service|construction|pool installer", "home"),
     )
     for pattern, pool_name in rules:
         if re.search(pattern, lowered):
