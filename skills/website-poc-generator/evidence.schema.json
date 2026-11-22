@@ -53,6 +53,10 @@
           "type": "string",
           "enum": ["skill", "workflow"]
         },
+        "runtime_profile": {
+          "type": "string",
+          "enum": ["full_parity", "browser_github_limited", "limited", "workflow"]
+        },
         "created_at": {
           "type": "string",
           "format": "date-time"
@@ -82,7 +86,16 @@
           "type": "object",
           "properties": {},
           "required": [],
-          "additionalProperties": true
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "status": {"type": "string", "enum": ["available", "unavailable", "not_checked"]},
+              "tool": {"type": "string"},
+              "evidence": {"type": "string"}
+            },
+            "required": ["status"],
+            "additionalProperties": true
+          }
         },
         "failure_summary": {
           "type": "string"
@@ -103,12 +116,39 @@
         "record_type",
         "run_id",
         "execution_mode",
+        "runtime_profile",
         "created_at",
         "output_root",
         "source_url",
         "candidate_ids",
         "deliverables",
+        "evidence_index",
+        "tool_availability",
+        "failure_summary",
         "status"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {"execution_mode": {"const": "workflow"}},
+            "required": ["execution_mode"]
+          },
+          "then": {
+            "properties": {"runtime_profile": {"const": "workflow"}}
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "execution_mode": {"const": "skill"},
+              "status": {"const": "PASS"}
+            },
+            "required": ["execution_mode", "status"]
+          },
+          "then": {
+            "properties": {"runtime_profile": {"const": "full_parity"}}
+          }
+        }
       ],
       "additionalProperties": true
     },

@@ -453,11 +453,24 @@ def main() -> None:
     status = "PASS" if len(passing) == 3 and all(item["status"] == "PASS" for item in passing.values()) else "BLOCKED" if len(passing) == 3 else "FAIL"
     write_json(evidence_root / "run.json", {
         "schema_version": "1.0", "record_type": "run", "run_id": args.run_id,
-        "execution_mode": "workflow", "created_at": stamp(),
+        "execution_mode": "workflow", "runtime_profile": "workflow", "created_at": stamp(),
         "output_root": str(root), "source_url": args.source_url, "candidate_ids": ["forty", "landed", "story"],
         "deliverables": deliverables, "evidence_index": "evidence/run.json",
-        "tool_availability": {"static_qa": True, "chromium_qa": True, "jsonschema_validation": True,
-                              "image_review": "human review pending until supplied"},
+        "tool_availability": {
+            "source_page_read": {"status": "available", "tool": "workflow Python collector and optional Playwright supplement"},
+            "github_source_read": {"status": "available", "tool": "GitHub Actions checkout"},
+            "candidate_file_authoring": {"status": "available", "tool": "workflow Python scripts"},
+            "static_qa": {"status": "available", "tool": "site_quality.py"},
+            "candidate_preview": {"status": "available", "tool": "Playwright Chromium"},
+            "browser_measurements_and_screenshots": {"status": "available", "tool": "browser_qa.py"},
+            "image_byte_validation": {"status": "available", "tool": "prepare_candidate_context.py and site_quality.py"},
+            "sha256": {"status": "available", "tool": "workflow Python scripts"},
+            "jsonschema_validation": {"status": "available", "tool": "package_website_poc.py"},
+            "persistent_checkpoint": {"status": "available", "tool": "private-results repository"},
+            "human_image_visual_review": {"status": "available", "tool": "human reviewer required; see image-review status"},
+        },
+        "github_ref": __import__("os").environ.get("GITHUB_REF", ""),
+        "github_commit": __import__("os").environ.get("GITHUB_SHA", ""),
         "failure_summary": "" if status == "PASS" else "One or more required review gates or template slots remain incomplete.",
         "status": status,
     })

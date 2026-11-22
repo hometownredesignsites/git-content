@@ -1,0 +1,959 @@
+{
+  "schema_version": "1.0",
+  "source_script": "chatgpt_automation/scripts/prepare_candidate_context.py",
+  "source_commit": "5ce8c97aef4741e3615262720cb4a9eacd0476d9",
+  "fallback_policy": "Fixed curated URL pools only; no dynamic stock search or licensing verification.",
+  "fallback_pool_count": 59,
+  "category_mapping_count": 116,
+  "max_fallback_images_per_candidate": 3,
+  "fallback_pools": {
+    "landscap": [
+      {
+        "url": "https://images.unsplash.com/photo-1416879595882-3373a0480b5b?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "garden planting and landscape work"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1585320806297-9794b3e4eeae?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "garden plants and outdoor design"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "plants and garden detail"
+      }
+    ],
+    "home": [
+      {
+        "url": "https://images.unsplash.com/photo-1600585154340-be6161a56c0?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "residential exterior and home improvement"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "finished home interior and renovation"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "residential construction work"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "home renovation interior"
+      }
+    ],
+    "fence": [
+      {
+        "url": "https://images.unsplash.com/photo-1769831190663-95fe8454d8c9?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "wooden backyard fence with a gate"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1792628953895-5d46f431b402?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "backyard with wooden privacy fence and patio"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1769690177043-c28ce822a4f7?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "wooden gate and fence among garden plants"
+      }
+    ],
+    "deck": [
+      {
+        "url": "https://images.unsplash.com/photo-1773979638724-c6ffed7fe0de?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "wooden deck and steps leading to a grassy yard"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1716904519810-349244919824?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "wooden outdoor deck with table and chairs"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1741277031817-146e7ed13f8d?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "sunny backyard pool and wooden deck"
+      }
+    ],
+    "kitchen": [
+      {
+        "url": "https://images.unsplash.com/photo-1770063817031-f3b98dff347f?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "modern kitchen with white cabinets and stainless appliances"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1761656630581-69a58e4e1c09?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "modern kitchen with wooden cabinets and stainless appliances"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1764526624453-db32c24eca55?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "modern kitchen with wooden cabinets and island"
+      }
+    ],
+    "bathroom": [
+      {
+        "url": "https://images.unsplash.com/photo-1771239048293-72abf673adb2?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "modern bathroom with glass shower and vanity"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1758239873506-82d0e76244f6?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "modern bathroom with a vanity and tiled floor"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1690603935238-b60582bcb273?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "bathroom with tiled walls and a shower"
+      }
+    ],
+    "carpentry": [
+      {
+        "url": "https://images.unsplash.com/photo-1769353086138-19ee65291a04?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "carpenter working with wood in a workshop"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1722411927625-0e478acf502b?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "woodworker shaping a piece of wood in a workshop"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1759756480941-7230dedf5fc9?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "woodworking shop with tools and machinery"
+      }
+    ],
+    "automotive": [
+      {
+        "url": "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "vehicle being serviced in an automotive workshop"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1486006920555-c77dcf18193c?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "automotive garage and repair workspace"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "sports car exterior"
+      }
+    ],
+    "pet_services": [
+      {
+        "url": "https://images.unsplash.com/photo-1548199973-03cce0bbc87b?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "dogs outdoors together"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1552053831-71594a27632d?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "dog portrait"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1516734212186-a967f81ad0d7?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "dog being cared for"
+      }
+    ],
+    "events_venues": [
+      {
+        "url": "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "wedding ceremony and outdoor event setup"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "event reception tables and venue lighting"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "celebration table setting"
+      }
+    ],
+    "food_beverage": [
+      {
+        "url": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "prepared food on a restaurant table"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "restaurant dining room"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "restaurant interior and dining tables"
+      }
+    ],
+    "retail": [
+      {
+        "url": "https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "retail clothing store interior"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "retail storefront and merchandise"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "retail clothing and accessories display"
+      }
+    ],
+    "hospitality": [
+      {
+        "url": "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "hotel exterior and pool"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1611892440504-42a792e24d32?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "welcoming hotel guest room"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1571896349842-33c89424de2d?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "resort hospitality setting"
+      }
+    ],
+    "personal_services": [
+      {
+        "url": "https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "salon styling station"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "beauty salon interior"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "personal care service setting"
+      }
+    ],
+    "agriculture_rural": [
+      {
+        "url": "https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "open farmland and fields"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1500595046743-cd271d694d30?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "farm landscape with livestock"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1472396961693-142e6e269027?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "rural landscape and wildlife"
+      }
+    ],
+    "recreation": [
+      {
+        "url": "https://images.unsplash.com/photo-1517649763962-0c623066013b?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "outdoor cycling and recreation"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1530549387789-4c1017266635?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "swimming pool recreation"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "fitness and movement studio"
+      }
+    ],
+    "specialty_inventory": [
+      {
+        "url": "https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "carefully arranged specialty products"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1531058020387-3be344556be6?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "specialty retail display"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1490312278390-ab64016e0aa9?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "curated shop interior"
+      }
+    ],
+    "equestrian": [
+      {
+        "url": "https://images.unsplash.com/photo-1761839256951-10c4468c3621?auto=format&fit=crop&fm=jpg&ixid=NHwxMjA3fDA%3D&ixlib=rb-4.1.0&q=60&w=3000",
+        "pool_label": "two people interacting with a horse at a stable"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1676504848722-aa8ac23bcc8b?auto=format&fit=crop&fm=jpg&ixid=NHwxMjA3fDA%3D&ixlib=rb-4.1.0&q=60&w=3000",
+        "pool_label": "horse and rider in front of a barn"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1536032641136-b9b7cb255c8a?auto=format&fit=crop&fm=jpg&ixid=NHwxMjA3fDA%3D&ixlib=rb-4.1.0&q=60&w=3000",
+        "pool_label": "horse inside a stable"
+      }
+    ],
+    "auto_parts": [
+      {
+        "url": "https://images.unsplash.com/photo-1777213003360-0419fd2fbfdf?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "assorted automotive spare parts and vehicle lights in retail bins"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1486006920555-c77dcf18193c?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "automotive garage and repair workspace"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1487754180451-c456f719a1fc?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "vehicle engine and automotive parts detail"
+      }
+    ],
+    "books_records": [
+      {
+        "url": "https://images.unsplash.com/photo-1507842217343-583bb7270b66?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "independent bookstore shelves"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1519682337058-a94d519337bc?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "books and reading"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1495446815901-a7297e633e8d?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "curated bookshop interior"
+      }
+    ],
+    "upholstery": [
+      {
+        "url": "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "upholstered furniture in a living room"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1567538096630-e0c55bd6374c?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "furniture and upholstery detail"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1493663284031-b7e3aefcae8e?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "furniture and interior furnishings"
+      }
+    ],
+    "garden_floral": [
+      {
+        "url": "https://images.unsplash.com/photo-1490750967868-88aa4486c946?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "floral arrangement and flower shop inspiration"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1416879595882-3373a0480b5b?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "garden planting and landscape work"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1585320806297-9794b3e4eeae?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "garden plants and outdoor design"
+      }
+    ],
+    "beverage": [
+      {
+        "url": "https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "wine glasses and bottle"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "bar and beverage service setting"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1513558161293-cdaf765edfd7?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "craft beverage and tasting setting"
+      }
+    ],
+    "aquarium_retail": [
+      {
+        "url": "https://images.unsplash.com/photo-1721074191839-981badf62902?auto=format&fit=crop&fm=jpg&ixid=NHwxMJA3fDA%3D&ixlib=rb-4.1.0&q=60&w=3000",
+        "pool_label": "aquarium fish in a retail tank"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1711539137969-02af23c949ae?auto=format&fit=crop&fm=jpg&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&ixlib=rb-4.1.0&q=60&w=3000",
+        "pool_label": "goldfish in an aquarium tank"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1764175760902-9cf284d444de?auto=format&fit=crop&fm=jpg&ixid=NHwxMJA3fDA%3D&ixlib=rb-4.1.0&q=60&w=3000",
+        "pool_label": "large aquarium with colorful fish and plants"
+      }
+    ],
+    "pool_spa": [
+      {
+        "url": "https://images.unsplash.com/photo-1753194931548-065891743746?auto=format&fit=crop&fm=jpg&ixid=NHwxMJA3fDA%3D&ixlib=rb-4.1.0&q=60&w=3000",
+        "pool_label": "swimming pool and attached spa with landscaping"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1722247523673-7a224fb36874?auto=format&fit=crop&fm=jpg&ixid=NHwxMJA3fDA%3D&ixlib=rb-4.1.0&q=60&w=3000",
+        "pool_label": "backyard swimming pool"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1773423386572-4ad451dc6c26?auto=format&fit=crop&fm=jpg&ixid=NHwxMJA3fDA%3D&ixlib=rb-4.1.0&q=60&w=3000",
+        "pool_label": "indoor tiled hot tub and spa"
+      }
+    ],
+    "home_showrooms": [
+      {
+        "url": "https://images.unsplash.com/photo-1791388490412-621c2b5e6a13?auto=format&fit=crop&fm=jpg&ixid=NHwxMjA3fDA%3D&ixlib=rb-4.1.0&q=60&w=3000",
+        "pool_label": "sofas displayed in a furniture store"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1567538096630-e0c55bd6374c?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "furniture and upholstery detail"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1493663284031-b7e3aefcae8e?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "furniture and interior furnishings"
+      }
+    ],
+    "creative_studios": [
+      {
+        "url": "https://images.unsplash.com/photo-1771523350488-32af5ba560e6?auto=format&fit=crop&fm=jpg&ixid=NHwxMjA3fDA%3D&ixlib=rb-4.1.0&q=60&w=3000",
+        "pool_label": "hands shaping clay on a pottery wheel"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1771440047988-766001f543a6?auto=format&fit=crop&fm=jpg&ixid=NHwxMjA3fDA%3D&ixlib=rb-4.1.0&q=60&w=3000",
+        "pool_label": "art studio with supplies and lighting equipment"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1769353086138-19ee65291a04?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "carpenter working with wood in a workshop"
+      }
+    ],
+    "indoor_attractions": [
+      {
+        "url": "https://images.unsplash.com/photo-1650313525165-40c8132c0ae0?auto=format&fit=crop&fm=jpg&ixid=NHwxMjA3fDA%3D&ixlib=rb-4.1.0&q=60&w=3000",
+        "pool_label": "neon-lit bowling alley"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1679205700241-bd122d6beaa3?auto=format&fit=crop&fm=jpg&ixid=NHwxMjA3fDA%3D&ixlib=rb-4.1.0&q=60&w=3000",
+        "pool_label": "arcade game room with machines and lights"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1761207850889-75d5765d33c0?auto=format&fit=crop&fm=jpg&ixid=NHwxMjA3fDA%3D&ixlib=rb-4.1.0&q=60&w=3000",
+        "pool_label": "escape room entrance with illuminated signage"
+      }
+    ],
+    "wellness_spa": [
+      {
+        "url": "https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "spa treatment room and relaxation setting"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "spa massage and wellness treatment"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "wellness spa interior and treatment setting"
+      }
+    ],
+    "photography_studios": [
+      {
+        "url": "https://images.unsplash.com/photo-1452587925148-ce544e77e70d?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "photographer working with a camera"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "camera and photography equipment"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "photography studio and portrait session"
+      }
+    ],
+    "sports_outdoor_retail": [
+      {
+        "url": "https://images.unsplash.com/photo-1485965120184-e220f721d03e?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "bicycle displayed for sale"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1532298229144-0ec0c57515c7?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "road bicycle and cycling equipment"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1517649763962-0c623066013b?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "cycling and outdoor sports equipment"
+      }
+    ],
+    "craft_hobby_retail": [
+      {
+        "url": "https://images.unsplash.com/photo-1452860606245-08befc0ff44b?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "crafting and handmade creative supplies"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "art supplies and creative materials"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1455390582262-044c845c0f4b?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "creative hobby workspace and materials"
+      }
+    ],
+    "specialty_food_retail": [
+      {
+        "url": "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "fresh produce in a specialty food market"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "artisan bread and specialty bakery goods"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "fresh specialty food ingredients and market display"
+      }
+    ],
+    "formalwear_retail": [
+      {
+        "url": "https://images.unsplash.com/photo-1598033129183-c4f50c736f10?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "formal suit and menswear display"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "formal clothing and boutique apparel"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1592878904946-b3cd8ae243d0?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "formalwear and tailored suit styling"
+      }
+    ],
+    "jewelry_retail": [
+      {
+        "url": "https://images.unsplash.com/photo-1617038220319-276d3cfab638?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "jewelry and fine accessories display"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1611652022419-a9419f74343d?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "jewelry retail and product detail"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1611591437281-460bfbe1220a?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "jewelry pieces and accessories"
+      }
+    ],
+    "music_education": [
+      {
+        "url": "https://images.unsplash.com/photo-1511379938547-c1f69419868d?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "music studio and instruments"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1510915361894-db8b60106cb1?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "guitar lesson and music practice"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1516280440614-37939bbacd81?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "music instruction and ensemble performance"
+      }
+    ],
+    "garment_care": [
+      {
+        "url": "https://images.unsplash.com/photo-1590736969955-71cc94901144?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "sewing and garment alteration workspace"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1582735689369-4fe89db7114c?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "laundry and professional garment care"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1523381210434-271e8be1f52b?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "clothing racks and apparel care"
+      }
+    ],
+    "watch_repair": [
+      {
+        "url": "https://images.unsplash.com/photo-1524592094714-0f0654e20314?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "wristwatch close-up and timepiece detail"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1523170335258-f5ed11844a49?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "precision wristwatch and watchmaking detail"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1524805444758-089113d48a6d?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "watch face and fine timepiece detail"
+      }
+    ],
+    "golf_retail": [
+      {
+        "url": "https://images.unsplash.com/photo-1505413461823-c5628c330608?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "close-up display of golf clubs and equipment"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1691608787437-0b9d184984ae?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "golf iron and club product detail"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1587174486073-ae5e5cff23aa?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "golf bag and equipment"
+      }
+    ],
+    "butcher_deli_retail": [
+      {
+        "url": "https://images.unsplash.com/photo-1584048603508-4b31894439a9?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "raw meat displayed at a butcher and deli counter"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1603048297172-c92544798d5a?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "butcher counter and fresh meat selection"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "fresh deli ingredients and prepared food display"
+      }
+    ],
+    "family_attractions": [
+      {
+        "url": "https://images.unsplash.com/photo-1564429238817-393bd4286b2d?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "indoor family entertainment and activity space"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1511882150382-421056c89033?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "children's play area and family recreation"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "go-kart and indoor racing activity"
+      }
+    ],
+    "equestrian_retail": [
+      {
+        "url": "https://images.unsplash.com/photo-1598974357801-cbca100e65d3?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "horse saddle and riding equipment"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1534307675428-6f4f4c8d8f6a?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "equestrian tack and leather riding gear"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1553284965-83fd3e82fa5a?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "horse tack and stable equipment"
+      }
+    ],
+    "marine_repair": [
+      {
+        "url": "https://images.unsplash.com/photo-1605281317010-fe5ffe798166?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "motorboat and marine equipment"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1567899378494-47b22a2ae96a?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "boat maintenance and marine workshop"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "boat and marine service setting"
+      }
+    ],
+    "powersports_repair": [
+      {
+        "url": "https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "motorcycle in a service workshop"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1558981403-c5f9899a28bc?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "motorcycle engine and mechanical detail"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1771402629408-968fc5cdc505?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "motorcycle being serviced by a mechanic in a workshop"
+      }
+    ],
+    "home_materials_showrooms": [
+      {
+        "url": "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "interior flooring and finished room materials"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "cabinetry and kitchen interior showroom"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1600585154340-be6161a56c0?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "home fixtures and architectural finishes"
+      }
+    ],
+    "pet_retail": [
+      {
+        "url": "https://images.unsplash.com/photo-1589924691995-400dc9ecc119?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "pet food and supplies retail display"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1601758228041-f3b2795255f1?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "pet products and dog accessories"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1583337130417-3346a1be7dee?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "dog with pet care products"
+      }
+    ],
+    "musical_instrument_retail": [
+      {
+        "url": "https://images.unsplash.com/photo-1510915361894-db8b60106cb1?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "guitars and musical instruments in a shop"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1520523839897-bd0b52f945a0?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "acoustic guitar and musical equipment"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1511379938547-c1f69419868d?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "music equipment and instruments in a studio"
+      }
+    ],
+    "feed_retail": [
+      {
+        "url": "https://images.unsplash.com/photo-1589924691995-400dc9ecc119?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "animal feed and pet supply products"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1605000797499-95a51c5269ae?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "farm feed and agricultural supplies"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "farm setting for agricultural supply business"
+      }
+    ],
+    "farm_equipment_retail": [
+      {
+        "url": "https://images.unsplash.com/photo-1530267981375-f0de937f5f13?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "tractor and agricultural machinery"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1592982537447-6f2a6a0a0b9e?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "farm machinery and tractor equipment"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1645012861926-d352a6d22e51?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "tractor and farm implement displayed beside a farm building"
+      }
+    ],
+    "trailer_repair": [
+      {
+        "url": "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "vehicle repair technician working in a service workshop"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "truck and trailer at a service facility"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1586191582151-f73872dfd183?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "utility trailer and hauling equipment"
+      }
+    ],
+    "appliance_retail": [
+      {
+        "url": "https://images.unsplash.com/photo-1556911220-bff31c812dba?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "kitchen appliances displayed in a modern kitchen"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1556912172-45b7abe8b7e1?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "built-in kitchen appliances and cabinetry"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "modern home appliance and kitchen interior"
+      }
+    ],
+    "lighting_retail": [
+      {
+        "url": "https://images.unsplash.com/photo-1507473885765-e6ed057f782c?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "decorative pendant lights in an interior"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1513506003901-1e6a229e2d15?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "table lamps and decorative lighting"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "architectural lighting fixtures and illuminated space"
+      }
+    ],
+    "livestock_services": [
+      {
+        "url": "https://images.unsplash.com/photo-1690458401581-b98997f622b7?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "cattle herd in an open pasture"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1588152850700-c82ecb8ba9b1?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "livestock cattle housed in a farm barn"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1500595046743-cd271d694d30?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "farm livestock and agricultural setting"
+      }
+    ],
+    "comic_retail": [
+      {
+        "url": "https://images.unsplash.com/photo-1785913957077-6d594a2a841e?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "comic books and graphic novels displayed in a shop window"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1689277037704-49a09b66f27f?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "comic books and collectibles displayed in a store"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1639634252346-0a27c7d168dc?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "collection of comic books spread out for browsing"
+      }
+    ],
+    "fabric_quilting_retail": [
+      {
+        "url": "https://images.unsplash.com/photo-1775662039200-8e9e4a635367?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "fabric shop shelves filled with colorful textiles"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1772290660319-ed78b7a2b469?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "fabric sewing and quilting work with thread and tools"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1590736969955-71cc94901144?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "sewing and textile workspace with materials"
+      }
+    ],
+    "classic_car_restoration": [
+      {
+        "url": "https://images.unsplash.com/photo-1792789539830-81fc2bd5aacc?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "vintage classic car in a dimly lit garage"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "sports car exterior and automotive detailing"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1486006920555-c77dcf18193c?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "automotive garage and restoration workspace"
+      }
+    ],
+    "exhaust_performance": [
+      {
+        "url": "https://images.unsplash.com/photo-1759419281480-bacc913c9606?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "automotive exhaust systems and catalytic converter parts"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1487754180451-c456f719a1fc?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "vehicle engine and mechanical parts detail"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "automotive service bay and performance work"
+      }
+    ],
+    "event_planning": [
+      {
+        "url": "https://images.unsplash.com/photo-1705592388467-e70cebf44725?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "event planner designed reception table and chair setup"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "wedding ceremony planning and event design"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "event tablescape and celebration styling"
+      }
+    ],
+    "event_rentals": [
+      {
+        "url": "https://images.unsplash.com/photo-1705592388467-e70cebf44725?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "event tables and chair covers arranged for a rental setup"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "event reception seating, tables, and lighting"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?auto=format&fit=crop&w=1800&q=85",
+        "pool_label": "party and event table setup"
+      }
+    ]
+  },
+  "category_to_pool": {
+    "Antique shops": "specialty_inventory",
+    "Vintage clothing stores": "retail",
+    "Consignment shops": "retail",
+    "Thrift stores": "retail",
+    "Comic book shops": "comic_retail",
+    "Independent bookstores": "books_records",
+    "Craft stores": "craft_hobby_retail",
+    "Quilt/fabric shops": "fabric_quilting_retail",
+    "Florists": "garden_floral",
+    "Garden centers": "garden_floral",
+    "Nurseries": "garden_floral",
+    "Feed stores": "feed_retail",
+    "Tack shops": "equestrian_retail",
+    "Independent pet stores": "pet_retail",
+    "Aquarium/fish stores": "aquarium_retail",
+    "Jewelry stores": "jewelry_retail",
+    "Pawn shops": "specialty_inventory",
+    "Independent furniture stores": "home_showrooms",
+    "Flooring showrooms": "home_materials_showrooms",
+    "Cabinet showrooms": "home_materials_showrooms",
+    "Appliance stores": "appliance_retail",
+    "Lighting stores": "lighting_retail",
+    "Kitchen/bath showrooms": "home_materials_showrooms",
+    "Bicycle shops": "sports_outdoor_retail",
+    "Golf pro shops": "golf_retail",
+    "Breweries": "beverage",
+    "Wineries": "beverage",
+    "Distilleries": "beverage",
+    "Cideries": "beverage",
+    "Taprooms": "beverage",
+    "Coffee shops": "food_beverage",
+    "Specialty food stores": "specialty_food_retail",
+    "Butcher shops": "butcher_deli_retail",
+    "Delis": "butcher_deli_retail",
+    "Family-owned restaurants": "food_beverage",
+    "Catering companies": "food_beverage",
+    "Food trucks": "food_beverage",
+    "Bed & breakfasts": "hospitality",
+    "Boutique inns": "hospitality",
+    "General contractors": "home",
+    "Remodelers": "home",
+    "Kitchen remodelers": "kitchen",
+    "Bathroom remodelers": "bathroom",
+    "Flooring contractors": "home",
+    "Custom carpenters": "carpentry",
+    "Masonry companies": "home",
+    "Concrete contractors": "home",
+    "Excavation companies": "home",
+    "Landscaping companies": "landscap",
+    "Fence companies": "fence",
+    "Deck builders": "deck",
+    "Pool installers": "pool_spa",
+    "Pressure washing": "home",
+    "Window cleaning": "home",
+    "Gutter companies": "home",
+    "Chimney sweeps": "home",
+    "Home inspectors": "home",
+    "Independent auto repair shops": "automotive",
+    "Transmission shops": "automotive",
+    "Tire shops": "automotive",
+    "Auto-detailing businesses": "automotive",
+    "Collision repair": "automotive",
+    "Auto glass": "automotive",
+    "Motorcycle repair": "powersports_repair",
+    "Boat repair": "marine_repair",
+    "Trailer repair": "trailer_repair",
+    "Classic-car restoration": "classic_car_restoration",
+    "Custom exhaust shops": "exhaust_performance",
+    "Horse stables": "equestrian",
+    "Riding schools": "equestrian",
+    "Boarding stables": "equestrian",
+    "Livestock services": "livestock_services",
+    "Feed mills": "feed_retail",
+    "Farm equipment dealers": "farm_equipment_retail",
+    "Local farm markets": "specialty_food_retail",
+    "Wedding/event farms": "events_venues",
+    "Barbershops": "personal_services",
+    "Hair salons": "personal_services",
+    "Nail salons": "personal_services",
+    "Day spas": "wellness_spa",
+    "Tailors": "garment_care",
+    "Alterations shops": "garment_care",
+    "Dry cleaners": "garment_care",
+    "Upholstery shops": "upholstery",
+    "Watch repair": "watch_repair",
+    "Photography studios": "photography_studios",
+    "Pet groomers": "pet_services",
+    "Dog boarding": "pet_services",
+    "Dog daycare": "pet_services",
+    "Dog trainers": "pet_services",
+    "Pet sitters": "pet_services",
+    "Mobile pet grooming": "pet_services",
+    "Kennels": "pet_services",
+    "Horse boarding": "equestrian",
+    "Bowling alleys": "indoor_attractions",
+    "Escape rooms": "indoor_attractions",
+    "Music schools": "music_education",
+    "Art studios": "creative_studios",
+    "Pottery studios": "creative_studios",
+    "Woodworking studios": "creative_studios",
+    "Makerspaces": "creative_studios",
+    "Local gyms": "recreation",
+    "Wedding venues": "events_venues",
+    "Event halls": "events_venues",
+    "Party rental companies": "event_rentals",
+    "Wedding planners": "event_planning",
+    "Wedding photographers": "photography_studios",
+    "Bridal shops": "formalwear_retail",
+    "Tuxedo shops": "formalwear_retail",
+    "Used furniture stores": "home_showrooms",
+    "Salvage/reclamation stores": "specialty_inventory",
+    "Used bookstores": "books_records",
+    "Used musical instrument stores": "musical_instrument_retail",
+    "Used auto parts": "auto_parts",
+    "Architectural salvage": "specialty_inventory",
+    "Estate-sale companies": "specialty_inventory"
+  }
+}
