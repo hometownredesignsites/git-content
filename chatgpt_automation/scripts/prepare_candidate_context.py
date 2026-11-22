@@ -522,6 +522,7 @@ def compact_facts(facts: dict) -> tuple[dict, list[str]]:
                 "source": "verified_source",
                 "source_type": "verified_source",
                 "source_page": image.get("source_page", ""),
+                "source_provenance": image.get("source_provenance", "embedded_on_requested_site"),
                 "discovery_method": str(image.get("discovery_method", "img_src")).lower(),
             })
     logo_asset = None
@@ -571,6 +572,7 @@ def compact_facts(facts: dict) -> tuple[dict, list[str]]:
             "source": "verified_source",
             "source_type": "verified_source",
             "source_page": candidate_source_pages.get(key, facts.get("requested_url", "")),
+            "source_provenance": "embedded_on_requested_site",
             "discovery_method": discovery_method,
             "validation": validation,
         })
