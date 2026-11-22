@@ -459,9 +459,7 @@ CATEGORY_FALLBACK_POOLS = {
     # Aquarium maintenance intentionally has no fixed fallback until service-specific assets are curated.
     "Horse boarding": "equestrian",
     "Bowling alleys": "indoor_attractions",
-    "Go-kart tracks": "family_attractions",
     "Escape rooms": "indoor_attractions",
-    "Indoor playgrounds": "family_attractions",
 
 
     "Music schools": "music_education",
@@ -526,6 +524,8 @@ def _fallback_pool(category: str) -> tuple[tuple[str, str], ...]:
         "tent rental",
         "photo booths",
         "mini golf",
+        "go kart tracks",
+        "indoor playgrounds",
         "hvac companies",
         "plumbers",
         "electricians",
@@ -555,7 +555,7 @@ def _fallback_pool(category: str) -> tuple[tuple[str, str], ...]:
         r"tractor repair|agricultural equipment repair|hunting preserves?",
         r"pool spa stores?|pool and spa stores?|pool supply stores?|hot tub stores?|spa supply stores?|"
         r"mattress stores?|fireplace(?:/stove| and stove)? shops?|hobby(?:/model| and model)? shops?|"
-        r"tent rental|photo booths?|mini golf|"
+        r"tent rental|photo booths?|mini golf|go kart tracks?|indoor playgrounds?|"
         r"hvac companies|plumbers?|electricians?|roofers?|pest control|septic services?|well services?|"
         r"garage door companies|locksmiths?|tree services?|lawn care companies|irrigation companies?|"
         r"performance shops?|car audio installers?|towing companies|mobile mechanics|"
