@@ -189,7 +189,7 @@ def _fallback_pool(category: str) -> tuple[tuple[str, str], ...]:
     rules = (
         (r"used auto parts|auto parts|automotive parts", "auto_parts"),
         (r"performance shop|performance tuning|automotive performance", "automotive"),
-        (r"pet store|pet supply|pet food store|independent pet store", "retail"),
+        (r"pet store|pet supply|pet food store|independent pet store", "pet_services"),
         (r"aquarium fish store|aquarium store|fish store", "specialty_inventory"),
         (r"used book|bookstore|book shop|record store|vinyl", "books_records"),
         (r"musical instrument|instrument store|antique|salvage|reclamation|estate sale|pawn|used furniture", "specialty_inventory"),
