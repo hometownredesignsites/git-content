@@ -140,7 +140,7 @@ FALLBACK_IMAGES = {
     ),
     "auto_parts": (
         ("https://images.unsplash.com/photo-1777213003360-0419fd2fbfdf?auto=format&fit=crop&w=1800&q=85", "assorted automotive spare parts and vehicle lights in retail bins"),
-        ("https://images.unsplash.com/photo-1584048603508-4b31894439a9?auto=format&fit=crop&w=1800&q=85", "raw meat displayed at a butcher and deli counter"),
+        ("https://images.unsplash.com/photo-1486006920555-c77dcf18193c?auto=format&fit=crop&w=1800&q=85", "automotive garage and repair workspace"),
         ("https://images.unsplash.com/photo-1487754180451-c456f719a1fc?auto=format&fit=crop&w=1800&q=85", "vehicle engine and automotive parts detail"),
     ),
     "books_records": (
@@ -251,7 +251,7 @@ FALLBACK_IMAGES = {
         ("https://images.unsplash.com/photo-1587174486073-ae5e5cff23aa?auto=format&fit=crop&w=1800&q=85", "golf bag and course equipment"),
     ),
     "butcher_deli_retail": (
-        ("https://images.unsplash.com/photo-1607623814075-e51df1bdc82f?auto=format&fit=crop&w=1800&q=85", "fresh cuts of meat prepared for retail"),
+        ("https://images.unsplash.com/photo-1584048603508-4b31894439a9?auto=format&fit=crop&w=1800&q=85", "raw meat displayed at a butcher and deli counter"),
         ("https://images.unsplash.com/photo-1603048297172-c92544798d5a?auto=format&fit=crop&w=1800&q=85", "butcher counter and fresh meat selection"),
         ("https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=1800&q=85", "fresh deli ingredients and prepared food display"),
     ),
