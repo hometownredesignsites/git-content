@@ -139,8 +139,8 @@ FALLBACK_IMAGES = {
         ("https://images.unsplash.com/photo-1536032641136-b9b7cb255c8a?auto=format&fit=crop&fm=jpg&ixid=NHwxMjA3fDA%3D&ixlib=rb-4.1.0&q=60&w=3000", "horse inside a stable"),
     ),
     "auto_parts": (
-        ("https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?auto=format&fit=crop&w=1800&q=85", "automotive engine components and replacement parts"),
-        ("https://images.unsplash.com/photo-1486006920555-c77dcf18193c?auto=format&fit=crop&w=1800&q=85", "automotive mechanical components and service parts"),
+        ("https://images.unsplash.com/photo-1777213003360-0419fd2fbfdf?auto=format&fit=crop&w=1800&q=85", "assorted automotive spare parts and vehicle lights in retail bins"),
+        ("https://images.unsplash.com/photo-1584048603508-4b31894439a9?auto=format&fit=crop&w=1800&q=85", "raw meat displayed at a butcher and deli counter"),
         ("https://images.unsplash.com/photo-1487754180451-c456f719a1fc?auto=format&fit=crop&w=1800&q=85", "vehicle engine and automotive parts detail"),
     ),
     "books_records": (
