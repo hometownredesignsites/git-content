@@ -178,7 +178,7 @@ def _fallback_pool(category: str) -> tuple[tuple[str, str], ...]:
         (r"aquarium fish store|aquarium store|fish store", "specialty_inventory"),
         (r"used book|bookstore|book shop|record store|vinyl", "books_records"),
         (r"musical instrument|instrument store|antique|salvage|reclamation|estate sale|pawn|used furniture", "specialty_inventory"),
-        (r"horse boarding|horse stable|riding school|farrier|equestrian|tack shop", "equestrian"),
+        (r"horse boarding|boarding stable|horse stable|riding school|farrier|equestrian|tack shop", "equestrian"),
         (r"livestock|feed mill|feed store|farm equipment|tractor repair|agricultural equipment|custom farming|hunting preserve", "agriculture_rural"),
         (r"wedding.*farm|event.*farm|agritourism|orchard|christmas tree farm|pumpkin farm|farm market|local farm", "agriculture_rural"),
         (r"aquarium maintenance|aquarium service|fish tank maintenance", "pet_services"),
@@ -200,7 +200,7 @@ def _fallback_pool(category: str) -> tuple[tuple[str, str], ...]:
         (r"kitchen", "kitchen"),
         (r"bath", "bathroom"),
         (r"carpent|woodwork", "carpentry"),
-        (r"hvac|plumb|electric|roof|siding|general contractor|remodel|renovat|masonry|concrete|excavation|pressure wash|window cleaning|gutter|chimney|pest control|septic|well service|garage door|locksmith|home inspector|home service|construction|pool installer", "home"),
+        (r"hvac|plumb|electric|roof|siding|general contractor|flooring contractor|remodel|renovat|masonry|concrete|excavation|pressure wash|window cleaning|gutter|chimney|pest control|septic|well service|garage door|locksmith|home inspector|home service|construction|pool installer", "home"),
     )
     for pattern, pool_name in rules:
         if re.search(pattern, lowered):
