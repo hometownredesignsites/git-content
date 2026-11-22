@@ -1185,27 +1185,27 @@
         },
         "initial_attempt_limit": {
           "type": "integer",
-          "const": 12
+          "const": 3
         },
         "continuation_attempt_limit": {
           "type": "integer",
-          "const": 12
+          "const": 3
         },
         "max_total_attempts": {
           "type": "integer",
-          "const": 24
+          "const": 6
         },
         "attempts_used": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 24
+          "maximum": 6
         },
         "batch_attempts": {
           "type": "array",
           "items": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 12
+            "maximum": 3
           },
           "minItems": 1,
           "maxItems": 2
@@ -1302,7 +1302,7 @@
               "attempt_number": {
                 "type": "integer",
                 "minimum": 1,
-                "maximum": 24
+                "maximum": 6
               },
               "batch_number": {
                 "type": "integer",
@@ -1314,7 +1314,7 @@
               "batch_attempt_number": {
                 "type": "integer",
                 "minimum": 1,
-                "maximum": 12
+                "maximum": 3
               },
               "candidate_id": {
                 "type": "string"
