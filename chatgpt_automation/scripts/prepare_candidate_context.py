@@ -403,7 +403,7 @@ CATEGORY_FALLBACK_POOLS = {
     "Used furniture stores": "home_showrooms",
     "Salvage/reclamation stores": "specialty_inventory",
     "Used bookstores": "books_records",
-    "Used musical instrument stores": "specialty_inventory",
+    "Used musical instrument stores": "music_education",
     "Used auto parts": "auto_parts",
     "Architectural salvage": "specialty_inventory",
     "Estate-sale companies": "specialty_inventory",
