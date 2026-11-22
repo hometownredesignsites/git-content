@@ -24,17 +24,16 @@ import hashlib
 import html
 import json
 import re
-import sys
 import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 try:
-    from PIL import Image, ImageDraw, ImageFont
+    from PIL import Image, ImageDraw
 except ImportError:
     raise SystemExit("Pillow is required. Install it with: python -m pip install Pillow")
 
@@ -66,7 +65,7 @@ def photo_id_from_url(url: str) -> str:
 
 
 def download_one(item: dict, output: Path) -> dict:
-    request = Request(item["url"], headers={"User-Agent": USER_AGENT, "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8"})
+    request = Request(item["url"], headers={"User-Agent": USER_AGENT, "Accept": "image/webp,image/jpeg,image/png,*/*;q=0.8"})
     result = {**item, "status": "error", "http_status": None, "content_type": None,
               "bytes": None, "width": None, "height": None, "sha256": None,
               "file": None, "error": None}
@@ -88,7 +87,7 @@ def download_one(item: dict, output: Path) -> dict:
         with Image.open(BytesIO(data)) as decoded:
             decoded.load()
             result["width"], result["height"] = decoded.size
-        if image_format not in {"JPEG", "PNG", "WEBP", "GIF", "AVIF"}:
+        if image_format not in {"JPEG", "PNG", "WEBP", "GIF"}:
             raise ValueError(f"unsupported decoded image format: {image_format}")
         result["format"] = image_format
         result["sha256"] = hashlib.sha256(data).hexdigest()
