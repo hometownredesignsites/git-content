@@ -516,8 +516,20 @@ def compact_facts(facts: dict) -> tuple[dict, list[str]]:
         image_url = _canonical_source_image_url(str(image.get("url", "")).strip())
         hint = " ".join((str(image.get("alt", "")), str(image.get("title", "")), urlsplit(image_url).path))
         if image_url and _is_source_image_host_allowed(image_url, domain) and re.search(r"logo", hint, re.IGNORECASE):
-            logo_candidates.append({"url": image_url, "alt": " ".join(str(image.get("alt", "")).split())[:100], "source_page": image.get("source_page", "")})
-    logo_asset = next((item for item, valid in zip(logo_candidates[:3], [_image_loads_ok(item["url"]) for item in logo_candidates[:3]]) if valid), None)
+            logo_candidates.append({
+                "url": image_url,
+                "alt": " ".join(str(image.get("alt", "")).split())[:100],
+                "source": "verified_source",
+                "source_type": "verified_source",
+                "source_page": image.get("source_page", ""),
+                "discovery_method": str(image.get("discovery_method", "img_src")).lower(),
+            })
+    logo_asset = None
+    for logo in logo_candidates[:3]:
+        evidence = _image_validation_evidence(logo["url"])
+        if evidence["validated"]:
+            logo_asset = {**logo, "validation": evidence}
+            break
 
     for image in facts.get("source_assets", []):
         image_url = _canonical_source_image_url(str(image.get("url", "")).strip())
