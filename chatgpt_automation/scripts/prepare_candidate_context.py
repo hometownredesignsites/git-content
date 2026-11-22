@@ -9,6 +9,8 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+import urllib.error
+import urllib.request
 
 
 MAX_SOURCE_IMAGES = 3
@@ -38,7 +40,7 @@ SOURCE_IMAGE_CDN_SUFFIXES = (
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
-from site_quality import _image_loads_ok, _url_key  # noqa: E402
+from site_quality import _image_loads_ok, _looks_like_image, _url_key  # noqa: E402
 from repair_contact_form import source_contact_form, source_contact_channels  # noqa: E402
 
 # These Unsplash assets are used only after a live image-byte check succeeds.
@@ -110,6 +112,48 @@ def _is_source_image_host_allowed(image_url: str, source_domain: str) -> bool:
     if host == source_domain or host.endswith("." + source_domain):
         return True
     return any(host == suffix or host.endswith("." + suffix) for suffix in SOURCE_IMAGE_CDN_SUFFIXES)
+
+
+def _image_validation_evidence(url: str, timeout: int = 8) -> dict:
+    """Return bounded HTTP/image-byte evidence for a source image candidate."""
+    evidence = {
+        "method": "http_get",
+        "timeout_seconds": timeout,
+        "bytes_inspected_limit": 65536,
+        "requested_url": url,
+        "final_url": "",
+        "http_status": None,
+        "content_type": "",
+        "bytes_inspected": 0,
+        "result": "unverified",
+    }
+    try:
+        request = urllib.request.Request(
+            url,
+            headers={"User-Agent": "Mozilla/5.0", "Accept": "image/avif,image/webp,image/*,*/*;q=0.8"},
+        )
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            evidence["final_url"] = response.geturl()
+            evidence["http_status"] = response.getcode()
+            evidence["content_type"] = response.headers.get("Content-Type", "")
+            data = response.read(65536)
+            evidence["bytes_inspected"] = len(data)
+            if not 200 <= int(response.getcode() or 0) < 300:
+                evidence["result"] = "http_status_not_success"
+            elif _looks_like_image(data, evidence["content_type"]):
+                evidence["result"] = "recognized_image_bytes"
+            else:
+                evidence["result"] = "response_not_recognized_as_image"
+    except urllib.error.HTTPError as error:
+        evidence["http_status"] = error.code
+        evidence["final_url"] = error.geturl()
+        evidence["content_type"] = error.headers.get("Content-Type", "") if error.headers else ""
+        evidence["result"] = "http_error"
+    except (urllib.error.URLError, OSError, ValueError) as error:
+        evidence["result"] = "request_error"
+        evidence["error"] = str(error)[:240]
+    evidence["validated"] = evidence["result"] == "recognized_image_bytes"
+    return evidence
 
 
 def _read_json(path: Path) -> dict:
@@ -493,7 +537,7 @@ def compact_facts(facts: dict) -> tuple[dict, list[str]]:
                 if not description or re.fullmatch(r"[\w.-]+\.(?:jpe?g|png|webp|gif|avif)", description, re.IGNORECASE):
                     description = "Source-site photo"
                 priority = discovery_priority.get(str(image.get("discovery_method", "img_src")).lower(), 5)
-                item = (priority, key, image_url, description)
+                item = (priority, key, image_url, description, str(image.get("discovery_method", "img_src")).lower())
                 if key not in candidate_by_key or priority < candidate_by_key[key][0]:
                     candidate_by_key[key] = item
                     candidate_source_pages[key] = str(image.get("source_page", ""))
@@ -502,18 +546,21 @@ def compact_facts(facts: dict) -> tuple[dict, list[str]]:
     # generator to reproduce empty CMS paths or dead images from scraped markup.
     validation_candidates = sorted(candidate_by_key.values(), key=lambda item: item[0])[:24]
     with ThreadPoolExecutor(max_workers=min(6, max(1, len(validation_candidates)))) as pool:
-        valid_flags = list(pool.map(lambda item: _image_loads_ok(item[2]), validation_candidates))
+        validation_results = list(pool.map(lambda item: _image_validation_evidence(item[2]), validation_candidates))
     images = []
     source_image_urls = []
     seen_images = set()
-    for (_, key, image_url, alt), is_valid in zip(validation_candidates, valid_flags):
-        if not is_valid or key in seen_images:
+    for (_, key, image_url, alt, discovery_method), validation in zip(validation_candidates, validation_results):
+        if not validation["validated"] or key in seen_images:
             continue
         images.append({
             "url": image_url,
             "alt": alt[:100] or "Source-site photo",
             "source": "verified_source",
+            "source_type": "verified_source",
             "source_page": candidate_source_pages.get(key, facts.get("requested_url", "")),
+            "discovery_method": discovery_method,
+            "validation": validation,
         })
         source_image_urls.append(image_url)
         seen_images.add(key)
