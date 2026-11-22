@@ -336,6 +336,23 @@ def _contact_container(parser: _DocumentParser) -> _Node | None:
     return max(candidates, key=lambda item: (item[0], item[1]))[2] if candidates else None
 
 
+def mark_source_contact_region(html_path: Path) -> dict:
+    """Mark the safest existing source-backed contact container for structural QA."""
+    if not html_path.is_file():
+        return {"status": "unavailable", "changed": False, "reason": "Generated HTML is missing."}
+    source = html_path.read_text(encoding="utf-8", errors="replace")
+    parser, _ = _inventory(source)
+    target = _contact_container(parser)
+    if target is None or target.close_start is None:
+        return {"status": "no_safe_contact_region", "changed": False, "reason": "No source-backed contact container could be identified."}
+    opening = source[target.start:target.start_end]
+    if re.search(r"\bdata-source-contact-region(?:\s*=|\s|/?>)", opening, re.I):
+        return {"status": "already_marked", "changed": False, "tag": target.tag, "id": target.attrs.get("id", "")}
+    updated = source[:target.start_end - 1] + ' data-source-contact-region="true"' + source[target.start_end - 1:]
+    html_path.write_text(updated, encoding="utf-8")
+    return {"status": "repaired", "changed": True, "tag": target.tag, "id": target.attrs.get("id", "")}
+
+
 def _slug(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-") or "contact-field"
 
@@ -568,8 +585,29 @@ def _align_contact_channel_ctas(html_path: Path) -> dict:
         is_button = bool(classes & {"button", "btn", "cta", "call-to-action"})
         if is_button or re.search(r"\b(call now|call us|email us|contact us)\b", label, re.I):
             ctas.append(node)
-    if len(ctas) < 2:
+    if not ctas:
         return {"status": "not_needed", "aligned": True, "buttons": [" ".join(node.text) for node in ctas]}
+
+    if len(ctas) == 1:
+        cta = ctas[0]
+        button_labels = [" ".join(cta.text)]
+        if any(
+            "source-contact-channel-actions" in ancestor.attrs.get("class", "").split()
+            for ancestor in _ancestors_until(cta, target)
+        ):
+            return {"status": "already_aligned", "aligned": True, "buttons": button_labels,
+                    "placement": "single_channel_action"}
+        anchor = source[cta.start:cta.close_end]
+        wrapper = (
+            '\n<div class="source-contact-channels contact-actions source-contact-channel-actions" '
+            'data-contact-channel-placement="full-row" '
+            'style="display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:14px;width:100%;margin:18px auto 0;grid-column:1/-1">'
+            + anchor + "</div>\n"
+        )
+        updated = source[:cta.start] + wrapper + source[cta.close_end:]
+        html_path.write_text(updated, encoding="utf-8")
+        return {"status": "repaired", "aligned": True, "buttons": button_labels,
+                "placement": "single_channel_action"}
 
     shared_groups = []
     for group in target.descendants():

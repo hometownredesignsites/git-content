@@ -877,9 +877,16 @@ class _SectionInventory(HTMLParser):
         if tag in {"head", "script", "style", "template"}:
             self.hidden_depth += 1
         if tag in self.CONTAINERS or (values.get("role") or "").lower() == "region":
+            tokens = " ".join((values.get("id") or "", values.get("class") or "", values.get("aria-label") or ""))
+            # Source form repair marks the selected contact region explicitly.
+            # Honor that semantic evidence even when the HTML5 UP section id is
+            # a positional value such as "five" rather than "contact".
+            source_contact_region = values.get("data-source-contact-region")
+            if source_contact_region is not None and str(source_contact_region).strip().lower() not in {"", "false", "0", "no"}:
+                tokens += " contact"
             self.stack.append({
                 "tag": tag,
-                "tokens": re.sub(r"\s+", "-", " ".join((values.get("id") or "", values.get("class") or "", values.get("aria-label") or "")).lower()),
+                "tokens": re.sub(r"\s+", "-", tokens.lower()),
                 "text": [],
                 "heading": [],
                 "child_count": 0,

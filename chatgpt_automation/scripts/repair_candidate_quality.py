@@ -16,6 +16,7 @@ from site_quality import (
     _source_image_urls_from_prompt,
     _url_key,
 )
+from repair_contact_form import _align_contact_channel_ctas, mark_source_contact_region
 
 
 REPAIR_MARKER = "/* QA repair pass: measured primary CTA contrast. */"
@@ -29,6 +30,12 @@ CTA_CHECK = "browser_primary_ctas_readable_desktop_and_mobile"
 CTA_VISIBILITY_CHECK = "browser_cta_visible_first_screen_desktop_and_mobile"
 CSS_LINK_CHECK = "styles_css_linked"
 LAYOUT_CHECK = "browser_template_layout_signature_matches"
+CONTACT_SECTION_CHECKS = {
+    "section_contact",
+    "section_contact_complete",
+    "required_sections_complete",
+}
+CONTACT_EMAIL_GROUP_CHECK = "browser_contact_email_ctas_grouped"
 SAFE_SELECTOR = re.compile(r"^[A-Za-z0-9_#.:,>+~*\\()\s-]+$")
 
 
@@ -555,6 +562,16 @@ def repair(candidate: Path) -> dict:
     stylesheet_link_repaired = _repair_stylesheet_link(candidate) if CSS_LINK_CHECK in failures else False
     first_screen_cta = _repair_first_screen_cta(candidate, browser) if CTA_VISIBILITY_CHECK in failures else None
     mobile_navigation_repairs = _repair_mobile_navigation(candidate, browser, failures)
+    contact_region_repair = (
+        mark_source_contact_region(candidate / "files" / "index.html")
+        if failures & CONTACT_SECTION_CHECKS
+        else {"status": "not_triggered", "changed": False}
+    )
+    contact_email_group_repair = (
+        _align_contact_channel_ctas(candidate / "files" / "index.html")
+        if CONTACT_EMAIL_GROUP_CHECK in failures
+        else {"status": "not_triggered", "changed": False}
+    )
 
     layout = browser.get("template_layout", {})
     layout_repairs = _repair_template_layout(candidate, layout) if LAYOUT_CHECK in failures and isinstance(layout, dict) else []
@@ -576,6 +593,8 @@ def repair(candidate: Path) -> dict:
     repaired = bool(
         image_replacements or cta_selectors or layout_repairs or stylesheet_link_repaired
         or first_screen_cta or mobile_navigation_repairs
+        or contact_region_repair.get("changed")
+        or contact_email_group_repair.get("status") == "repaired"
     )
     result = {
         "status": "repaired" if repaired else "no_safe_repair_available",
@@ -588,12 +607,14 @@ def repair(candidate: Path) -> dict:
             "browser_mobile_menu_control_visible",
             "browser_mobile_menu_focus_indicator_visible",
             "browser_mobile_menu_keyboard_works",
-        })),
+        } | CONTACT_SECTION_CHECKS | {CONTACT_EMAIL_GROUP_CHECK})),
         "image_replacements": image_replacements,
         "cta_selectors": cta_selectors,
         "first_screen_cta": first_screen_cta,
         "stylesheet_link_repaired": stylesheet_link_repaired,
         "mobile_navigation_repairs": mobile_navigation_repairs,
+        "contact_region_repair": contact_region_repair,
+        "contact_email_group_repair": contact_email_group_repair,
         "layout_repairs": layout_repairs,
         "template_layout": layout_diagnostic,
     }
