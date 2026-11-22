@@ -163,6 +163,21 @@ FALLBACK_IMAGES = {
         ("https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=1800&q=85", "bar and beverage service setting"),
         ("https://images.unsplash.com/photo-1513558161293-cdaf765edfd7?auto=format&fit=crop&w=1800&q=85", "craft beverage and tasting setting"),
     ),
+    "home_showrooms": (
+        ("https://images.unsplash.com/photo-1791388490412-621c2b5e6a13?auto=format&fit=crop&fm=jpg&ixid=NHwxMjA3fDA%3D&ixlib=rb-4.1.0&q=60&w=3000", "sofas displayed in a furniture store"),
+        ("https://images.unsplash.com/photo-1567538096630-e0c55bd6374c?auto=format&fit=crop&w=1800&q=85", "furniture and upholstery detail"),
+        ("https://images.unsplash.com/photo-1493663284031-b7e3aefcae8e?auto=format&fit=crop&w=1800&q=85", "furniture and interior furnishings"),
+    ),
+    "creative_studios": (
+        ("https://images.unsplash.com/photo-1771523350488-32af5ba560e6?auto=format&fit=crop&fm=jpg&ixid=NHwxMjA3fDA%3D&ixlib=rb-4.1.0&q=60&w=3000", "hands shaping clay on a pottery wheel"),
+        ("https://images.unsplash.com/photo-1771440047988-766001f543a6?auto=format&fit=crop&fm=jpg&ixid=NHwxMjA3fDA%3D&ixlib=rb-4.1.0&q=60&w=3000", "art studio with supplies and lighting equipment"),
+        ("https://images.unsplash.com/photo-1769353086138-19ee65291a04?auto=format&fit=crop&w=1800&q=85", "carpenter working with wood in a workshop"),
+    ),
+    "indoor_attractions": (
+        ("https://images.unsplash.com/photo-1650313525165-40c8132c0ae0?auto=format&fit=crop&fm=jpg&ixid=NHwxMjA3fDA%3D&ixlib=rb-4.1.0&q=60&w=3000", "neon-lit bowling alley"),
+        ("https://images.unsplash.com/photo-1679205700241-bd122d6beaa3?auto=format&fit=crop&fm=jpg&ixid=NHwxMjA3fDA%3D&ixlib=rb-4.1.0&q=60&w=3000", "arcade game room with machines and lights"),
+        ("https://images.unsplash.com/photo-1761207850889-75d5765d33c0?auto=format&fit=crop&fm=jpg&ixid=NHwxMjA3fDA%3D&ixlib=rb-4.1.0&q=60&w=3000", "escape room entrance with illuminated signage"),
+    ),
 }
 
 
@@ -183,6 +198,9 @@ def _fallback_pool(category: str) -> tuple[tuple[str, str], ...]:
         (r"wedding.*farm|event.*farm|agritourism|orchard|christmas tree farm|pumpkin farm|farm market|local farm", "agriculture_rural"),
         (r"aquarium maintenance|aquarium service|fish tank maintenance", "pet_services"),
         (r"upholstery|furniture restoration|furniture repair", "upholstery"),
+        (r"furniture store|mattress store|flooring showroom|cabinet showroom|fireplace|appliance store|lighting store|kitchen bath showroom", "home_showrooms"),
+        (r"art studio|pottery studio|woodworking studio|makerspace|music school", "creative_studios"),
+        (r"bowling|mini golf|go kart|escape room|indoor playground", "indoor_attractions"),
         (r"auto|automotive|mechanic|collision|tire|transmission|vehicle|motorcycle|rv repair|boat repair|trailer repair|towing|exhaust|car audio|classic car|small engine", "automotive"),
         (r"pet|dog|\bcat\b|groom|kennel|dog boarding|pet boarding|animal|pet sitter|daycare", "pet_services"),
         (r"event|venue|wedding|party|banquet|tent rental|dj|bounce house|photo booth|planner|limousine|bridal|tuxedo", "events_venues"),
