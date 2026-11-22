@@ -592,7 +592,23 @@ def compact_facts(facts: dict) -> tuple[dict, list[str]]:
     for (image_url, alt), is_valid in zip(pool, valid_fallbacks):
         if not is_valid:
             continue
-        item = {"url": image_url, "alt": alt, "source": "validated_fallback"}
+        item = {
+            "url": image_url,
+            "alt": alt,
+            "source": "validated_fallback",
+            "source_type": "fixed_category_pool",
+            "source_page": "",
+            "source_name": "Unsplash (creator not resolved by this workflow)",
+            "license_or_terms": "Not checked by this workflow",
+            "terms_checked": False,
+            "subject_observed": "",
+            "subject_description": alt,
+            "intended_business_or_section_fit": (
+                "Category-pool match only; generator must assess actual visual fit. "
+                "This record does not assert that the subject was visually inspected."
+            ),
+            "validation_status": "image_bytes_validated" if is_valid else "unverified",
+        }
         images.append(item)
         fallback_images.append(item)
         seen_images.add(_url_key(image_url))
@@ -657,6 +673,9 @@ def compact_facts(facts: dict) -> tuple[dict, list[str]]:
         "contact_actions": links,
         "brand_logo": logo_asset,
         "project_images": images,
+        "fallback_search_status": "not_performed_fixed_pool_only",
+        "fallback_search_queries": [],
+        "fallback_search_reason": "No dynamic stock-image search is implemented; only category-pool URLs are checked.",
         "category_fallback_hero": fallback_images[0]["url"] if fallback_images else "",
     }
     return compact, source_image_urls
