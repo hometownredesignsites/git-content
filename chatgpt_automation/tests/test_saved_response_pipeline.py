@@ -426,6 +426,7 @@ class SavedResponsePipelineTest(unittest.TestCase):
                 "hero_spans_viewport_desktop_and_mobile": True,
                 "hero_media_covers_hero_desktop_and_mobile": True,
                 "hero_image_loads_desktop_and_mobile": True,
+                "image_tile_overlays_do_not_hide_photos": True,
                 "visible_content_images_load_in_browser": True,
                 "cta_arrows_absent_desktop_and_mobile": True,
                 "cta_visible_first_screen_desktop_and_mobile": True,
