@@ -270,6 +270,11 @@ FALLBACK_IMAGES = {
         ("https://images.unsplash.com/photo-1567899378494-47b22a2ae96a?auto=format&fit=crop&w=1800&q=85", "boat maintenance and marine workshop"),
         ("https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=1800&q=85", "boat and marine service setting"),
     ),
+    "rv_repair": (
+        ("https://images.unsplash.com/photo-1511533910568-be3ffdc229bb?auto=format&fit=crop&w=1800&q=85", "motorhome and recreational vehicle"),
+        ("https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1800&q=85", "recreational vehicle travel and campsite"),
+        ("https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=1800&q=85", "camper travel in a scenic outdoor setting"),
+    ),
     "powersports_repair": (
         ("https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&w=1800&q=85", "motorcycle in a service workshop"),
         ("https://images.unsplash.com/photo-1558981403-c5f9899a28bc?auto=format&fit=crop&w=1800&q=85", "motorcycle engine and mechanical detail"),
@@ -373,7 +378,7 @@ CATEGORY_FALLBACK_POOLS = {
     "Motorcycle repair": "powersports_repair",
     "Small engine repair": "powersports_repair",
     "Boat repair": "marine_repair",
-    "RV repair": "automotive",
+    "RV repair": "rv_repair",
     "Trailer repair": "automotive",
     "Classic-car restoration": "automotive",
     "Automotive upholstery": "upholstery",
