@@ -320,6 +320,11 @@ FALLBACK_IMAGES = {
         ("https://images.unsplash.com/photo-1513506003901-1e6a229e2d15?auto=format&fit=crop&w=1800&q=85", "table lamps and decorative lighting"),
         ("https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?auto=format&fit=crop&w=1800&q=85", "architectural lighting fixtures and illuminated space"),
     ),
+    "livestock_services": (
+        ("https://images.unsplash.com/photo-1690458401581-b98997f622b7?auto=format&fit=crop&w=1800&q=85", "cattle herd in an open pasture"),
+        ("https://images.unsplash.com/photo-1588152850700-c82ecb8ba9b1?auto=format&fit=crop&w=1800&q=85", "livestock cattle housed in a farm barn"),
+        ("https://images.unsplash.com/photo-1500595046743-cd271d694d30?auto=format&fit=crop&w=1800&q=85", "farm livestock and agricultural setting"),
+    ),
     "comic_retail": (
         ("https://images.unsplash.com/photo-1785913957077-6d594a2a841e?auto=format&fit=crop&w=1800&q=85", "comic books and graphic novels displayed in a shop window"),
         ("https://images.unsplash.com/photo-1689277037704-49a09b66f27f?auto=format&fit=crop&w=1800&q=85", "comic books and collectibles displayed in a store"),
@@ -456,11 +461,10 @@ CATEGORY_FALLBACK_POOLS = {
     "Riding schools": "equestrian",
     "Boarding stables": "equestrian",
     "Farriers": "equestrian",
-    "Livestock services": "agriculture_rural",
+    "Livestock services": "livestock_services",
     "Feed mills": "feed_retail",
     "Farm equipment dealers": "farm_equipment_retail",
-    "Tractor repair": "agriculture_rural",
-    "Agricultural equipment repair": "agriculture_rural",
+    # Tractor/agricultural equipment repair intentionally has no fixed fallback until repair-specific assets are curated.
     "Custom farming": "agriculture_rural",
     "Local farm markets": "specialty_food_retail",
     "Orchards": "agriculture_rural",
@@ -468,7 +472,7 @@ CATEGORY_FALLBACK_POOLS = {
     "Pumpkin farms": "agriculture_rural",
     "Agritourism businesses": "agriculture_rural",
     "Wedding/event farms": "events_venues",
-    "Hunting preserves": "agriculture_rural",
+    # Hunting preserves intentionally have no fixed fallback until preserve-specific assets are curated.
     "Barbershops": "personal_services",
     "Hair salons": "personal_services",
     "Nail salons": "personal_services",
@@ -531,8 +535,8 @@ def _fallback_pool(category: str) -> tuple[tuple[str, str], ...]:
     exact_pool = CATEGORY_FALLBACK_POOLS.get(category.strip())
     if exact_pool:
         return FALLBACK_IMAGES[exact_pool]
-    # Avoid misleading category imagery when no suitable fixed service pool exists.
-    if re.search(r"aquarium maintenance|aquarium service|fish tank maintenance|limousine", lowered):
+    # Avoid misleading imagery when no suitable fixed specialist pool exists.
+    if re.search(r"aquarium maintenance|aquarium service|fish tank maintenance|limousine|tractor repair|agricultural equipment repair|hunting preserves?", lowered):
         return ()
     # Specific inventory and specialist services must precede generic store/shop,
     # pet, event, and home-service matches.
@@ -546,6 +550,7 @@ def _fallback_pool(category: str) -> tuple[tuple[str, str], ...]:
         (r"appliance stores?|appliance retailers?", "appliance_retail"),
         (r"lighting stores?|lighting showrooms?|lighting retailers?", "lighting_retail"),
         (r"wedding photographers?|photo booths?", "photography_studios"),
+        (r"livestock services?|cattle services?|farm animal services?", "livestock_services"),
         (r"comic book shops?|comic book stores?|comic shops?|graphic novel stores?", "comic_retail"),
         (r"quilt shops?|fabric shops?|textile stores?|sewing supply stores?", "fabric_quilting_retail"),
         (r"classic car restoration|vintage car restoration|automotive restoration", "classic_car_restoration"),
