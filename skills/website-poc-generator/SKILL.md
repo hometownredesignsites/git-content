@@ -306,6 +306,35 @@ For every candidate, record each attempted repair in `evidence/<candidate>/repai
 
 **Mandatory retest rule:** After every repair pass, rerun all static/document checks that could be affected and the full browser QA suite at both 1440×900 desktop and 390×844 mobile against the changed final candidate. For changes to HTML, CSS, images, navigation, forms, layout, or CTA behavior, this means the complete static and browser suites—not only the originally failing assertion. Capture new screenshots and reports, recompute SHA-256, and invalidate prior QA, image-review, and visual-review statuses until they are re-established for the new bytes. If no repair changed the file, record `NOT_NEEDED`; do not claim a retest was performed unless it actually ran.
 
+### 6.4.2 Bounded candidate retries and slot selection
+
+Generation is a slot-filling loop, not a one-shot request for three pages. Keep a candidate ledger at `evidence/candidate-ledger.json` and update it after every attempt, repair, retest, and continuation. Preserve all passing candidates and their evidence; retry only to fill a missing slot or replace a candidate that no longer qualifies.
+
+**Attempt and continuation limits**
+
+- Initial batch: allow up to 12 candidate attempts to obtain three passing candidates, one per distinct template slot.
+- If the initial batch ends with fewer than three passing slots, a second bounded batch may continue from the saved ledger and retained passing candidates. Allow at most 12 additional attempts, for a hard cap of 24 attempts across the run and its continuation.
+- Continue only when the environment supports persistent evidence and prior-candidate carry-forward, the initial batch actually used all 12 attempts, fewer than three slots pass, and no access/service gate makes generation non-retryable. If continuation is unavailable or ineligible, stop and report the partial result; do not silently reset the counter or start an unbounded new batch.
+- Stop immediately once all three distinct slots have a qualified passing candidate. Do not spend remaining attempts on cosmetic alternatives.
+- Count a candidate attempt when a new candidate generation is initiated for a slot. Repairs and retests belong to that attempt; they do not create a new candidate attempt. Record generation/setup failures too, with a failure status and summary.
+
+**Ledger and pass-count rules**
+
+Each ledger entry must include global attempt number, batch number and within-batch attempt, candidate ID/path, assigned slot/template/signature, status, whether it qualifies as a pass, failed check IDs, concise failure summary, repair/retest state, HTML digest, evidence paths, and whether it was retained or superseded. The ledger summary must include target count (3), initial/continuation limits, total attempts and attempts per batch, passing count, passing slot IDs, missing slots, continuation eligibility/reason, and terminal status.
+
+A candidate counts as passing only when its latest final QA/status record is PASS for its current HTML digest and its rendered template signature matches its assigned slot. Count distinct slots—not number of passing folders. Multiple passing attempts for one slot count as one slot filled; retain the best/latest qualifying candidate for that slot and mark other passing attempts as surplus, not as extra completion credit. Never infer a pass from a prior digest or from a partial QA run.
+
+**Slot assignment and retaining successes**
+
+- Slots are fixed: 1 = Forty, 2 = Landed, 3 = Story. Assign each new attempt to a currently missing slot. Among missing slots, prefer the least-attempted slot; break ties in stable slot order, rotating the tie-break start by global attempt number. Do not retry a slot already filled by a retained passing candidate unless that candidate is later invalidated or its evidence is found inconsistent.
+- Retain every passing candidate and its complete evidence package across continuation. Do not regenerate or overwrite a passing candidate just to keep attempt numbering sequential. The final set must contain exactly one retained passing candidate from each slot.
+- Feed the next attempt the previous attempt's concrete failure summary and relevant evidence: failed check IDs, measured defect/viewport, attempted repair and result, and unresolved issue. Preserve source facts, assigned template slot, and approved asset/contact constraints. Change the candidate only to address those findings; do not switch slots or weaken QA criteria to manufacture a pass.
+- After any repair, apply the automated-repair retest rules in §6.4.1. A failed retest keeps the attempt nonpassing and informs the next generation attempt.
+
+**Failure and stopping behavior**
+
+For every unsuccessful attempt, record a concise actionable failure summary and preserve the original QA/repair evidence. Separate generation/tool/access failures from candidate-quality failures. Do not retry an access gate, rate limit, sign-in requirement, or service error as though it were an HTML defect; mark continuation blocked unless the workflow's continuation eligibility rules permit it. At the cap, return the retained passing candidates plus a clear list of missing slots and unresolved failure summaries. If fewer than three slots pass, report the run as incomplete/failed—not as a completed three-candidate deliverable set—and do not substitute a different template.
+
 ### 6.5 Assemble and verify the three final standalone deliverables
 
 The skill intentionally skips the workflow's intermediate HTML/CSS chunk files, chunk manifests, ordering checks, and separate CSS assembly. Do not recreate those intermediate artifacts. Their final-output guarantees still apply. Treat the three named HTML files—not prompts, drafts, snippets, or earlier QA copies—as the deliverables.
