@@ -31,9 +31,15 @@ CTA_MARKER = "/* QA repair pass: measured primary CTA contrast. */"
 LAYOUT_MARKER = "/* QA repair pass: measured template layout. */"
 HERO_IMAGE_MARKER = "/* QA repair pass: verified hero fallback. */"
 FORM_CHECK = "requested_form_present"
+FORM_FIELDS_CHECK = "source_contact_form_fields_preserved"
+FORM_REQUIRED_CHECK = "source_contact_form_required_states_preserved"
+FORM_TYPES_CHECK = "source_contact_form_types_preserved"
 SECTION_VISIBILITY_CHECK = "rendered_sections_visible_desktop_and_mobile"
 SERVICES_CHECK = "section_services"
 FIRST_SCREEN_CTA_CHECK = "cta_visible_first_screen_desktop_and_mobile"
+CSS_LINK_CHECK = "styles_css_linked"
+FILE_UPLOAD_CHECK = "public_file_uploads_omitted"
+CTA_VISIBILITY_CHECK = "cta_visible_first_screen_desktop_and_mobile"
 
 
 class _Nodes(HTMLParser):
@@ -216,6 +222,174 @@ def _repair_cta(candidate: Path, browser: dict) -> list[str]:
     return selectors
 
 
+def _repair_stylesheet_link(candidate: Path) -> bool:
+    """Link the existing generated stylesheet when HTML omitted the link."""
+    html_path = candidate / "files" / "index.html"
+    css_path = candidate / "files" / "styles.css"
+    if not html_path.is_file() or not css_path.is_file():
+        return False
+    source = html_path.read_text(encoding="utf-8", errors="replace")
+    if re.search(
+        r"<link\b(?=[^>]*\brel\s*=\s*(['\"])stylesheet\1)(?=[^>]*\bhref\s*=\s*(['\"])(?:\./)?styles\.css\2)[^>]*>",
+        source,
+        re.IGNORECASE,
+    ):
+        return False
+    link = '<link rel="stylesheet" href="styles.css">'
+    head_close = re.search(r"</head\s*>", source, re.IGNORECASE)
+    if head_close:
+        source = source[:head_close.start()] + link + "\n" + source[head_close.start():]
+    else:
+        head_open = re.search(r"<head\b[^>]*>", source, re.IGNORECASE)
+        if head_open:
+            source = source[:head_open.end()] + "\n" + link + source[head_open.end():]
+        else:
+            html_open = re.search(r"<html\b[^>]*>", source, re.IGNORECASE)
+            if not html_open:
+                return False
+            source = source[:html_open.end()] + "\n<head>" + link + "</head>" + source[html_open.end():]
+    html_path.write_text(source, encoding="utf-8")
+    return True
+
+
+def _remove_public_file_uploads(candidate: Path) -> int:
+    """Remove public file inputs from the demo markup, as required by policy."""
+    html_path = candidate / "files" / "index.html"
+    if not html_path.is_file():
+        return 0
+    source = html_path.read_text(encoding="utf-8", errors="replace")
+    pattern = re.compile(
+        r"<input\b(?=[^>]*\btype\s*=\s*(?:['\"]file['\"]|file\b))[^>]*?/?>",
+        re.IGNORECASE | re.DOTALL,
+    )
+    updated, count = pattern.subn("", source)
+    if count:
+        html_path.write_text(updated, encoding="utf-8")
+    return count
+
+
+def _repair_mobile_navigation(candidate: Path, browser: dict, failures: set[str]) -> list[str]:
+    checks = {
+        "browser_mobile_menu_clicks_work", "browser_mobile_menu_keyboard_works",
+        "browser_mobile_navigation_hidden_until_opened", "browser_mobile_menu_focus_indicator_visible",
+    }
+    if not failures & checks:
+        return []
+    html_path = candidate / "files" / "index.html"
+    css_path = candidate / "files" / "styles.css"
+    if not html_path.is_file() or not css_path.is_file():
+        return []
+    menu = browser.get("mobile_menu", {}) if isinstance(browser, dict) else {}
+    nav_id = str(menu.get("controlled_nav_id", "")) if isinstance(menu, dict) else ""
+    if (not re.fullmatch(r"[A-Za-z0-9_-]+", nav_id)
+            or menu.get("button_inside_navigation") is not False):
+        return []
+    source = html_path.read_text(encoding="utf-8", errors="replace")
+    css = css_path.read_text(encoding="utf-8", errors="replace")
+    marker = "/* QA repair pass: measured mobile navigation behavior. */"
+    if marker in source or marker in css:
+        return []
+    escaped_id = re.escape(nav_id)
+    if not re.search(rf"<nav\b(?=[^>]*\bid\s*=\s*(['\"]){escaped_id}\1)[^>]*>", source, re.IGNORECASE):
+        return []
+    button = re.search(rf"<button\b(?=[^>]*\baria-controls\s*=\s*(['\"]){escaped_id}\1)[^>]*>", source, re.IGNORECASE)
+    if not button:
+        return []
+    body_close = re.search(r"</body\s*>", source, re.IGNORECASE)
+    if not body_close:
+        return []
+    script = f'''\n<script>
+  {marker}
+  (() => {{
+    const id = {json.dumps(nav_id)};
+    const button = document.querySelector(`button[aria-controls="${{id}}"]`);
+    const menu = document.getElementById(id);
+    if (!button || !menu || menu.contains(button)) return;
+    const setOpen = open => {{
+      button.setAttribute("aria-expanded", String(open));
+      menu.hidden = !open;
+      menu.setAttribute("aria-hidden", String(!open));
+      menu.classList.toggle("is-open", open);
+    }};
+    setOpen(false);
+    document.addEventListener("click", event => {{
+      const target = event.target instanceof Element ? event.target : null;
+      if (target && target.closest(`button[aria-controls="${{id}}"]`) === button) {{
+        event.preventDefault(); event.stopImmediatePropagation();
+        setOpen(button.getAttribute("aria-expanded") !== "true");
+      }} else if (button.getAttribute("aria-expanded") === "true" && target && target.closest("a") && menu.contains(target)) {{
+        setOpen(false);
+      }}
+    }}, true);
+    document.addEventListener("keydown", event => {{
+      if (event.key === "Escape" && button.getAttribute("aria-expanded") === "true") {{
+        event.preventDefault(); event.stopImmediatePropagation(); setOpen(false); button.focus();
+      }}
+    }}, true);
+  }})();
+</script>\n'''
+    css += (
+        f"\n\n{marker}\n"
+        f'@media (max-width: 700px) {{ nav[id="{nav_id}"][hidden] {{ display:none !important; }} '
+        f'nav[id="{nav_id}"]:not([hidden]) {{ display:flex !important; flex-direction:column !important; }} '
+        f'button[aria-controls="{nav_id}"]:focus-visible {{ outline:3px solid var(--accent-warm,#f5c36a) !important; outline-offset:3px !important; }} }}\n'
+    )
+    html_path.write_text(source[:body_close.start()] + script + source[body_close.start():], encoding="utf-8")
+    css_path.write_text(css, encoding="utf-8")
+    return ["restored click, keyboard activation, Escape, and visibility behavior for the measured mobile menu"]
+
+
+def _repair_first_screen_cta(candidate: Path, browser: dict) -> dict | None:
+    html_path = candidate / "files" / "index.html"
+    css_path = candidate / "files" / "styles.css"
+    if not html_path.is_file() or not css_path.is_file():
+        return None
+    source = html_path.read_text(encoding="utf-8", errors="replace")
+    if 'id="qa-first-screen-cta"' in source:
+        return None
+    viewports = browser.get("viewports", {}) if isinstance(browser, dict) else {}
+    cta = None
+    if isinstance(viewports, dict):
+        for name in ("desktop", "mobile"):
+            viewport = viewports.get(name, {})
+            candidate_cta = viewport.get("cta", {}) if isinstance(viewport, dict) else {}
+            if isinstance(candidate_cta, dict) and candidate_cta.get("href") and candidate_cta.get("text"):
+                cta = candidate_cta
+                break
+    if not isinstance(cta, dict):
+        return None
+    href = html.unescape(str(cta.get("href", "")).strip())
+    parsed = urlsplit(href)
+    if not href or parsed.scheme.casefold() not in {"", "http", "https", "mailto", "tel"}:
+        return None
+    if parsed.scheme.casefold() in {"http", "https"} or parsed.netloc:
+        source_url = str(_read(candidate / "run_notes.json").get("source_url", ""))
+        if not source_url or (urlsplit(parsed.geturl()).hostname or "").casefold() != (urlsplit(source_url).hostname or "").casefold():
+            return None
+    label = " ".join(str(cta.get("text", "")).split())
+    if not label or re.search(r"[<>\r\n]", label):
+        return None
+    heading = re.search(r"</h1\s*>", source, re.IGNORECASE)
+    if not heading:
+        return None
+    anchor = (
+        f'\n<a id="qa-first-screen-cta" class="button primary" href="{html.escape(href, quote=True)}">'
+        f'{html.escape(label)}</a>\n'
+    )
+    source = source[:heading.end()] + anchor + source[heading.end():]
+    css = css_path.read_text(encoding="utf-8", errors="replace")
+    css += (
+        "\n\n/* QA repair pass: place measured primary action in the first screen. */\n"
+        "#qa-first-screen-cta{display:inline-flex!important;visibility:visible!important;opacity:1!important;"
+        "position:relative;z-index:2;margin-top:1rem;color:#fff!important;background-color:var(--accent-dark,#24352b)!important;"
+        "border:2px solid var(--accent-dark,#24352b)!important;text-shadow:none!important}\n"
+        "#qa-first-screen-cta::before,#qa-first-screen-cta::after{content:none!important}\n"
+    )
+    html_path.write_text(source, encoding="utf-8")
+    css_path.write_text(css, encoding="utf-8")
+    return {"label": label, "href": href, "inserted_after": "h1"}
+
+
 def _repair_layout(candidate: Path, layout: dict) -> list[str]:
     profile = layout.get("profile")
     if profile not in {"forty", "landed", "story"}:
@@ -286,33 +460,42 @@ def _repair_verified_form(candidate: Path) -> dict | None:
         if isinstance(page, dict)
     }
     verified = []
-    for field in fields[:16]:
+    for field in fields:
+        if len(verified) >= 16:
+            break
         if not isinstance(field, dict):
+            continue
+        field_type = str(field.get("type") or field.get("input_type") or "").strip().casefold()
+        if field_type == "file":
             continue
         citations = field.get("source_urls", [])
         if not isinstance(citations, list) or not any(url in reviewed for url in citations):
             continue
         if not any((urlsplit(str(url)).hostname or "").casefold().removeprefix("www.") == source_host for url in citations):
             continue
-        label = str(field.get("label", "")).strip()
+        label = str(field.get("label") or field.get("field") or "").strip()
         if label:
             verified.append(field)
     if not verified:
         return None
 
     source = html_path.read_text(encoding="utf-8", errors="replace")
-    if re.search(r"<form\b", source, re.IGNORECASE):
-        return None
+    form_exists = bool(re.search(r"<form\b", source, re.IGNORECASE))
+    present_labels = {
+        " ".join(html.unescape(value).split()).casefold()
+        for value in re.findall(r"<label\b[^>]*>([\s\S]*?)</label\s*>", source, re.IGNORECASE)
+    }
+    verified = [field for field in verified if " ".join(str(field.get("label") or field.get("field") or "").split()).casefold() not in present_labels]
     controls = []
     allowed_types = {
         "text", "email", "tel", "url", "number", "date", "datetime-local", "month", "time", "week",
-        "search", "password", "checkbox", "radio", "file", "color", "range",
+        "search", "password", "checkbox", "radio", "color", "range",
     }
     for index, field in enumerate(verified, start=1):
-        label = html.escape(str(field["label"]).strip())
+        label = html.escape(str(field.get("label") or field.get("field") or "").strip())
         name = re.sub(r"[^A-Za-z0-9_-]+", "-", str(field.get("name") or f"inquiry-field-{index}")).strip("-")
         control_id = f"verified-inquiry-{index}"
-        field_type = str(field.get("type", "text")).casefold()
+        field_type = str(field.get("type") or field.get("input_type") or "text").casefold()
         required = " required" if field.get("required") is True else ""
         placeholder = field.get("placeholder")
         placeholder_attr = f' placeholder="{html.escape(str(placeholder), quote=True)}"' if isinstance(placeholder, str) and placeholder else ""
@@ -330,6 +513,13 @@ def _repair_verified_form(candidate: Path) -> dict | None:
         controls.append(f'<div class="field"><label for="{control_id}">{label}</label>{control}</div>')
     if not controls:
         return None
+    if form_exists:
+        form_close = re.search(r"</form\s*>", source, re.IGNORECASE)
+        if not form_close:
+            return None
+        updated = source[:form_close.start()] + "\n" + "".join(controls) + source[form_close.start():]
+        html_path.write_text(updated, encoding="utf-8")
+        return {"fields_added": len(controls), "reason": "added verified source fields missing from the candidate form"}
     section = (
         '<section id="verified-inquiry"><h2>Project inquiry</h2>'
         '<p>This form preview does not submit messages.</p><form aria-label="Project inquiry preview">'
@@ -430,15 +620,19 @@ def repair(candidate: Path, only_check: str | None = None) -> dict:
     targeted_failures = failures if only_check is None else ({only_check} & failures)
     image_replacements = _repair_images(candidate, checker, context) if targeted_failures & IMAGE_CHECKS else []
     cta_selectors = _repair_cta(candidate, browser) if CTA_CHECK in targeted_failures else []
-    form_repair = _repair_verified_form(candidate) if FORM_CHECK in targeted_failures else None
+    stylesheet_link_repaired = _repair_stylesheet_link(candidate) if CSS_LINK_CHECK in targeted_failures else False
+    removed_file_uploads = _remove_public_file_uploads(candidate) if FILE_UPLOAD_CHECK in targeted_failures else 0
+    mobile_navigation_repairs = _repair_mobile_navigation(candidate, browser, targeted_failures)
+    first_screen_cta = _repair_first_screen_cta(candidate, browser) if CTA_VISIBILITY_CHECK in targeted_failures else None
+    form_repair = _repair_verified_form(candidate) if targeted_failures & {FORM_CHECK, FORM_FIELDS_CHECK, FORM_REQUIRED_CHECK, FORM_TYPES_CHECK} else None
     services_repair = _repair_verified_services(candidate) if SERVICES_CHECK in targeted_failures else None
     visibility_selectors = _repair_section_visibility(candidate, browser) if SECTION_VISIBILITY_CHECK in targeted_failures else []
     layout = browser.get("template_layout", {})
     layout_repairs = _repair_layout(candidate, layout) if LAYOUT_CHECK in targeted_failures and isinstance(layout, dict) else []
     result = {
-        "status": "repaired" if image_replacements or cta_selectors or layout_repairs or form_repair or services_repair or visibility_selectors else "no_safe_repair_available",
-        "changed": bool(image_replacements or cta_selectors or layout_repairs or form_repair or services_repair or visibility_selectors),
-        "triggered_failures": sorted(targeted_failures & (IMAGE_CHECKS | {CTA_CHECK, LAYOUT_CHECK, FORM_CHECK, SERVICES_CHECK, SECTION_VISIBILITY_CHECK, FIRST_SCREEN_CTA_CHECK})),
+        "status": "repaired" if image_replacements or cta_selectors or layout_repairs or form_repair or services_repair or visibility_selectors or stylesheet_link_repaired or removed_file_uploads or mobile_navigation_repairs or first_screen_cta else "no_safe_repair_available",
+        "changed": bool(image_replacements or cta_selectors or layout_repairs or form_repair or services_repair or visibility_selectors or stylesheet_link_repaired or removed_file_uploads or mobile_navigation_repairs or first_screen_cta),
+        "triggered_failures": sorted(targeted_failures & (IMAGE_CHECKS | {CTA_CHECK, LAYOUT_CHECK, FORM_CHECK, FORM_FIELDS_CHECK, FORM_REQUIRED_CHECK, FORM_TYPES_CHECK, SERVICES_CHECK, SECTION_VISIBILITY_CHECK, FIRST_SCREEN_CTA_CHECK, CSS_LINK_CHECK, FILE_UPLOAD_CHECK, "browser_mobile_menu_clicks_work", "browser_mobile_menu_keyboard_works", "browser_mobile_navigation_hidden_until_opened", "browser_mobile_menu_focus_indicator_visible"})),
         "image_replacements": image_replacements,
         "image_evidence": {
             "failed_urls": checker.get("failed_image_urls", []),
@@ -458,6 +652,10 @@ def repair(candidate: Path, only_check: str | None = None) -> dict:
             "minimum_text_contrast_ratio": 4.5,
         } if CTA_CHECK in targeted_failures else None,
         "cta_selectors": cta_selectors,
+        "stylesheet_link_repaired": stylesheet_link_repaired,
+        "public_file_uploads_removed": removed_file_uploads,
+        "mobile_navigation_repairs": mobile_navigation_repairs,
+        "first_screen_cta": first_screen_cta,
         "layout_repairs": layout_repairs,
         "verified_form_repair": form_repair,
         "verified_services_repair": services_repair,

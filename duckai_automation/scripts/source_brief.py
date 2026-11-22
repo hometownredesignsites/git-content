@@ -112,8 +112,14 @@ def _render_contact_form(values: object, valid_sources: set[str]) -> list[str]:
     if not isinstance(values, list):
         return []
     fields = []
-    for item in values[:MAX_CONTACT_FIELDS]:
+    for item in values:
+        if len(fields) >= MAX_CONTACT_FIELDS:
+            break
         if not isinstance(item, dict):
+            continue
+        field_type = _text(item.get("type") or item.get("input_type"), 40).casefold()
+        # Public uploads are excluded from generated demos even when the source has them.
+        if field_type == "file":
             continue
         raw_label = item.get("label") or item.get("field")
         label = " ".join(raw_label.split()) if isinstance(raw_label, str) else ""
@@ -121,7 +127,6 @@ def _render_contact_form(values: object, valid_sources: set[str]) -> list[str]:
         if not label or not sources:
             continue
         details = []
-        field_type = _text(item.get("type") or item.get("input_type"), 40)
         if field_type:
             details.append(f"type={field_type}")
         required = item.get("required")
@@ -293,6 +298,17 @@ def format_retry_guidance(checker: dict, browser: dict, approved_images: list[st
     lines = []
     if failed:
         lines.append("Measured failures from the previous candidate: " + ", ".join(failed[:8]) + ".")
+    if checker.get("checks", {}).get("public_file_uploads_omitted") is False:
+        lines.append("Remove every public file-upload control. The demo must omit uploads even when the source has them.")
+    missing_fields = checker.get("source_contact_form_fields_missing", [])
+    if missing_fields:
+        lines.append("The verified inquiry form is missing these exact source fields: " + "; ".join(str(item) for item in missing_fields[:8]) + ". Add them with their cited labels and required states.")
+    required_mismatches = checker.get("source_contact_form_required_state_mismatches", [])
+    if required_mismatches:
+        lines.append("Correct the required status for these verified inquiry fields: " + "; ".join(str(item) for item in required_mismatches[:8]) + ".")
+    type_mismatches = checker.get("source_contact_form_type_mismatches", [])
+    if type_mismatches:
+        lines.append("Correct the control type for these verified inquiry fields: " + "; ".join(str(item) for item in type_mismatches[:8]) + ".")
     image_checks = {
         "hero_has_image", "hero_images_load_ok", "all_images_load_ok", "image_coverage",
         "image_alt_text_present", "source_site_hero_photo_used", "source_site_photos_used",

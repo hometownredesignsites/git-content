@@ -278,7 +278,7 @@ VIEWPORT_CHECKS_JS = r"""() => {
   const documentWidth = Math.max(root.scrollWidth, body ? body.scrollWidth : 0);
   return {
     hero: heroData,
-    cta: {visible_first_screen: Boolean(cta), text: cta ? (cta.innerText || cta.getAttribute('aria-label') || '') : '', bottom: ctaRect ? Math.round(ctaRect.bottom) : null},
+    cta: {visible_first_screen: Boolean(cta), text: cta ? (cta.innerText || cta.getAttribute('aria-label') || '') : '', href: cta && cta.tagName.toLowerCase() === 'a' ? cta.getAttribute('href') : '', bottom: ctaRect ? Math.round(ctaRect.bottom) : null},
     primary_cta_contrast: {count: ctaCandidates.length, pass: ctaCandidates.length > 0 && contrastIssues.length === 0, issues: ctaCandidates.length ? contrastIssues : [{selector: '', reason: 'no visible primary CTA found', contrast_ratio: null, threshold: 4.5}]},
     horizontal_overflow: {scroll_width: documentWidth, viewport_width: root.clientWidth, overflow: documentWidth > root.clientWidth + 1},
     images: {count: images.length, loaded_count: imageResults.filter(item => item.loaded).length, failures: imageResults.filter(item => !item.loaded)},
@@ -402,7 +402,15 @@ def _exercise_mobile_menu(page) -> dict:
         return {"found": False, "click_opens": False, "click_closes": False, "tab_reachable": False, "enter_opens": False, "space_toggles": False, "escape_closes": False}
 
     nav_id = button.get_attribute("aria-controls")
-    result = {"found": True}
+    result = {
+        "found": True,
+        "controlled_nav_id": nav_id or "",
+        "button_inside_navigation": bool(nav_id and button.evaluate(
+            "(element, id) => { const nav = document.getElementById(id); return Boolean(nav && nav.contains(element)); }",
+            nav_id,
+        )),
+    }
+    result["initially_hidden"] = bool(nav_id and not _nav_visible(page, nav_id))
     try:
         if button.get_attribute("aria-expanded") == "true":
             button.click()
@@ -421,6 +429,12 @@ def _exercise_mobile_menu(page) -> dict:
                 result["tab_reachable"] = True
                 break
         if result["tab_reachable"]:
+            result["focus_indicator_visible"] = button.evaluate("""element => {
+              const style = getComputedStyle(element);
+              const outline = style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0;
+              const shadow = style.boxShadow && style.boxShadow !== 'none';
+              return Boolean(outline || shadow);
+            }""")
             page.keyboard.press("Enter")
             page.wait_for_timeout(150)
             result["enter_opens"] = button.get_attribute("aria-expanded") == "true" and _nav_visible(page, nav_id)
@@ -434,6 +448,7 @@ def _exercise_mobile_menu(page) -> dict:
             page.wait_for_timeout(150)
             result["escape_closes"] = button.get_attribute("aria-expanded") == "false" and not _nav_visible(page, nav_id)
         else:
+            result["focus_indicator_visible"] = False
             result["enter_opens"] = False
             result["space_toggles"] = False
             result["escape_closes"] = False
@@ -445,7 +460,7 @@ def _exercise_mobile_menu(page) -> dict:
         result.setdefault("enter_opens", False)
         result.setdefault("space_toggles", False)
         result.setdefault("escape_closes", False)
-    result["pass"] = all(result.get(key, False) for key in ("click_opens", "click_closes", "tab_reachable", "enter_opens", "space_toggles"))
+    result["pass"] = all(result.get(key, False) for key in ("initially_hidden", "click_opens", "click_closes", "tab_reachable", "focus_indicator_visible", "enter_opens", "space_toggles"))
     return result
 
 
@@ -590,6 +605,8 @@ def main() -> int:
             "template_layout_signature_matches": bool(report["template_layout"].get("pass")),
             "mobile_menu_clicks_work": bool(mobile_menu.get("click_opens") and mobile_menu.get("click_closes")),
             "mobile_menu_keyboard_works": bool(mobile_menu.get("tab_reachable") and mobile_menu.get("enter_opens") and mobile_menu.get("space_toggles")),
+            "mobile_navigation_hidden_until_opened": bool(mobile_menu.get("initially_hidden")),
+            "mobile_menu_focus_indicator_visible": bool(mobile_menu.get("focus_indicator_visible")),
             "mobile_has_no_horizontal_overflow": bool(mobile.get("no_horizontal_overflow")),
             "fonts_load_in_browser": bool(desktop.get("fonts_loaded") and mobile.get("fonts_loaded")),
             "images_load_in_browser": bool(desktop.get("images_loaded") and mobile.get("images_loaded")),

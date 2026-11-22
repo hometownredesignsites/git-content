@@ -50,11 +50,11 @@ INLINE_SCRIPT = ROOT / "scripts" / "inline_css.py"
 BROWSER_QA_SCRIPT = ROOT / "scripts" / "browser_qa.py"
 CHECK_SCRIPT = ROOT / "scripts" / "check_website.py"
 
-BASE_CONTRACT = """Keep every verified phone number complete in visible text and its matching `tel:` link. Use only facts and assets from the cited brief.
+BASE_CONTRACT = """Use only cited brief facts and supplied image URLs. Keep each verified phone complete in visible text and its matching `tel:` link. Omit public file-upload controls even when present in the source. Use an inquiry form only when other verified fields were captured; preserve their exact labels, types, required states, and placeholders; never imply a static form submits.
 
-Return CSS PARTS 1–3, then HTML PARTS 1–3. Each turn has one complete fenced block (`css` or raw-HTML `text`), its exact visible part label outside, and the required first-line marker. Keep parts compatible and link `styles.css` once. HTML 1 starts the document, head, header/nav, full hero, and CTA; HTML 2 adds new sections; HTML 3 adds remaining content and the semantic footer, then closes the document. Never repeat prior parts.
+Return CSS parts 1–3, then HTML parts 1–3, each in one complete fenced block with its exact label and required marker. Keep parts compatible; link `styles.css` once. HTML 1: document/head, header/nav, full-width image-led hero and visible primary CTA. HTML 2: new, nonduplicated sections. HTML 3: remaining sections, useful verified footer, then close the document. Never repeat prior parts.
 
-Let cited brand colors, logo, photography, language, and motifs lead; category is secondary. Avoid assumed audiences or preset styles; build a coherent palette, type, spacing, and motif from source cues. Use CSS variables and at least three distinct, relevant photo URLs from the supplied source/fallback lists (logo only as branding), with accurate alt text. Keep the hero full-width, readable, and CTA-visible on desktop/mobile. The mobile menu is a named button with matching `aria-controls`/`aria-expanded` and exactly three child spans; no visible Menu label. The styled semantic footer includes brand, two useful links, verified contact/location, and copyright. Put selected template attribution in an HTML comment, never visible copy. Return only the requested part."""
+Let cited brand colors, logo, photos, language, and motifs lead; category is secondary. Avoid generic preset styles and unsupported audience assumptions. Use a coherent palette, type, spacing, and motif; CSS variables; three distinct relevant approved photos with accurate alt text; readable full-bleed hero; and first-screen CTA. The mobile menu is a keyboard-operable named button with matching `aria-controls`/`aria-expanded`, exactly three child spans, and no visible Menu label. Include visible focus, reduced motion, semantic page, and arrows-free CTA labels/icons. Preserve the selected HTML5 UP scaffold's required DOM, distinctive section order, components, and geometry. Put attribution in an HTML comment, never visible copy. Return only the requested part."""
 MAX_INITIAL_PROMPT_CHARS = 11000
 MAX_DESIGN_BRIEF_CHARS = 700
 REPAIRABLE_QUALITY_CHECKS = {
@@ -62,8 +62,10 @@ REPAIRABLE_QUALITY_CHECKS = {
     "source_site_hero_photo_used", "source_site_photos_used", "source_site_photos_load_ok",
     "images_use_source_or_category_assets", "hero_uses_source_or_category_asset",
     "browser_primary_ctas_readable_desktop_and_mobile", "browser_template_layout_signature_matches",
-    "requested_form_present", "section_services", "rendered_sections_visible_desktop_and_mobile",
-    "cta_visible_first_screen_desktop_and_mobile",
+    "requested_form_present", "source_contact_form_fields_preserved", "source_contact_form_required_states_preserved", "source_contact_form_types_preserved",
+    "styles_css_linked", "public_file_uploads_omitted", "section_services", "rendered_sections_visible_desktop_and_mobile",
+    "cta_visible_first_screen_desktop_and_mobile", "browser_mobile_menu_clicks_work", "browser_mobile_menu_keyboard_works",
+    "browser_mobile_navigation_hidden_until_opened", "browser_mobile_menu_focus_indicator_visible",
 }
 CURRENT_STAGE = "initialization"
 
@@ -406,7 +408,7 @@ def send_source_assessment(
 pages_reviewed:[{url,page_title,content}]; sources:[exact reviewed page URLs];
 organization_facts: up to 8 [{fact,kind (identity|service|location),source_urls}] for identity, services, locations;
 selling_points: up to 3 [{fact,source_urls}]; contact_details: verified phone/email/address/conversion path as [{fact,source_urls}];
-contact_form_fields: up to 16 [{name,type,label,required:true|false|unknown,placeholder,options,source_urls}] from a verified inquiry/contact form only; return [] if none is present. Exclude newsletter/updates, login, and account fields;
+contact_form_fields: up to 16 [{name,type,label,required:true|false|unknown,placeholder,options,source_urls}] from a verified inquiry/contact form only; return [] if none is present. Exclude file inputs, newsletter/updates, login, and account fields;
 navigation_links: up to 3 [{label,url,source_urls}] for useful internal destinations only; faq_answers: up to 3 [{question,answer,source_urls}];
 audience_and_goals:{primary_conversion_path,source_urls,audience_inference}; brand_and_visual_observations:[{observation,source_urls}] (brief, separate observation from opinion);
 source_assets: up to 5 [{url,type,page_url,context}] for exact public logo/photo/image URLs actually seen;
@@ -643,16 +645,9 @@ def build_initial_prompt(
             "--accent-soft, --accent-warm, and --line. Keep text contrast at least 4.5:1.\n\n"
         )
     hard_requirements = (
-        "HARD OUTPUT CHECKLIST — satisfy every item before returning the final HTML: "
-        "(1) Keep the assigned template's required DOM structure and include its required <main> element. "
-        "(2) Render at least three distinct approved photos as actual <img src=...> elements with useful alt text; "
-        "CSS background images do not count as image coverage. Use only the verified source or fallback URLs below. "
-        "(3) If inquiry fields were captured, include a semantic <form> with each exact label and required state; "
-        "do not invent fields, a backend, or claim the form submits. "
-        "(4) Implement the mobile menu with a native button, matching aria-controls/aria-expanded, and a real panel; "
-        "pointer click, Enter, and Space must open and close it. Do not replace the button with a clickable span. "
-        "(5) Keep the primary CTA visible in the first screen at desktop and mobile widths. "
-        "Before returning, verify these five items against the actual markup and interactions.\n\n"
+        "Before finishing HTML, check the selected template structure and <main>; three distinct approved image URLs "
+        "as actual <img> elements with accurate alt; captured eligible inquiry fields only; a native, keyboard-operable "
+        "mobile menu; and a first-screen CTA on desktop and mobile. Never add a public file input.\n\n"
     )
     identity = (
         f"BUSINESS: {json.dumps(business_name, ensure_ascii=False)}; "
@@ -730,16 +725,22 @@ def _previous_retry_guidance(candidate_index: int) -> str:
 def build_next_prompt(kind: str, part: int) -> str:
     label = f"{kind.upper()} PART {part} OF 3"
     part_guidance = ""
-    if kind == "html" and part == 1:
+    if kind == "css" and part == 1:
+        part_guidance = " Set source-led color/type/spacing variables and the document, header, and hero foundations."
+    elif kind == "css" and part == 2:
+        part_guidance = " Style the selected template's distinctive post-hero modules and content sections; preserve its geometry and visual rhythm."
+    elif kind == "css" and part == 3:
+        part_guidance = " Finish responsive/mobile layout, menu states, visible keyboard focus, reduced motion, and CTA states; avoid duplicate rules."
+    elif kind == "html" and part == 1:
         part_guidance = (
             " This is the start of the complete document: after the required marker, include the doctype, html element, "
             "complete head with charset, viewport, title, and exactly one link to styles.css, then body, site header/navigation, "
-            "and the complete image-led hero with its primary CTA. Do not start with a middle-page section."
+            "and the full-width, source-grounded hero with primary CTA. Use the selected template scaffold. Do not start with a middle-page section."
         )
     elif kind == "html" and part == 2:
-        part_guidance = " Continue inside the existing body with new, non-duplicated content sections; do not repeat the head, header, or hero."
+        part_guidance = " Continue inside the existing body with verified business content, using the selected template's original section order and modules. Do not repeat the head, header, hero, or existing content."
     elif kind == "html" and part == 3:
-        part_guidance = " Continue inside the existing body with remaining sections and footer, then close with </body></html>; do not repeat prior sections."
+        part_guidance = " Add remaining source-supported FAQs/contact details and eligible inquiry fields if not already included, then a useful verified footer; close with </body></html>. Never add public file uploads or repeat prior sections."
     return (
         f"Continue the same website and conversation. Return {label} only, with exactly one complete "
         f"{'css' if kind == 'css' else 'text'} fenced code block and the required in-code marker. "
@@ -786,8 +787,7 @@ def build_quality_prompt(website_request: str, generation_prompt: str = "") -> s
                 if not field_definitions:
                     continue
                 context_blocks.append(
-                    "Verified inquiry field definitions follow. A contact form is required; "
-                    "include these exact fields and preserve their supplied attributes."
+                    "Verified non-upload inquiry field definitions follow. Include these exact fields and preserve their supplied attributes."
                 )
             context_blocks.append(f"{output_label}:\n{field_definitions}")
     return "\n\n".join([website_request.strip(), *context_blocks]).strip()

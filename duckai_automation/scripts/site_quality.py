@@ -395,6 +395,8 @@ def _browser_qa_result(session_dir):
         "cta_visible_first_screen_desktop_and_mobile",
         "mobile_menu_clicks_work",
         "mobile_menu_keyboard_works",
+        "mobile_navigation_hidden_until_opened",
+        "mobile_menu_focus_indicator_visible",
         "mobile_has_no_horizontal_overflow",
         "fonts_load_in_browser",
         "images_load_in_browser",
@@ -467,6 +469,9 @@ class _PageInventory(HTMLParser):
         self.cta_arrow_issues = []
         self._cta_stack = []
         self.forms = 0
+        self._form_depth = 0
+        self.form_fields = []
+        self._active_labels = []
         self.hero_image_present = False
         self.hero_image_urls = []
         self.all_image_urls = []
@@ -555,6 +560,21 @@ class _PageInventory(HTMLParser):
             self.classes.extend(values["class"].split())
         if tag == "form":
             self.forms += 1
+            self._form_depth += 1
+        if tag == "label":
+            self._active_labels.append({"for": (values.get("for") or "").strip(), "text": [], "control_index": None})
+        if tag in {"input", "textarea", "select"} and self._form_depth:
+            field = {
+                "id": (values.get("id") or "").strip(),
+                "name": (values.get("name") or "").strip(),
+                "type": (values.get("type") or ("textarea" if tag == "textarea" else "select" if tag == "select" else "text")).strip().lower(),
+                "required": "required" in values,
+                "placeholder": (values.get("placeholder") or "").strip(),
+                "label": "",
+            }
+            self.form_fields.append(field)
+            for label in self._active_labels:
+                label["control_index"] = len(self.form_fields) - 1
         if re.fullmatch(r"h[1-6]", tag):
             self._heading = [""]
 
@@ -633,6 +653,18 @@ class _PageInventory(HTMLParser):
 
     def handle_endtag(self, tag):
         tag = tag.lower()
+        if tag == "form" and self._form_depth:
+            self._form_depth -= 1
+        if tag == "label" and self._active_labels:
+            label = self._active_labels.pop()
+            text = " ".join(" ".join(label["text"]).split())
+            if text:
+                if label["for"]:
+                    field = next((item for item in self.form_fields if item["id"] == label["for"]), None)
+                    if field:
+                        field["label"] = text
+                elif label["control_index"] is not None:
+                    self.form_fields[label["control_index"]]["label"] = text
         if tag == "button" and self._button_stack:
             self._buttons.append(self._button_stack.pop())
         for index in range(len(self._cta_stack) - 1, -1, -1):
@@ -662,6 +694,8 @@ class _PageInventory(HTMLParser):
             clean = data.strip()
             self.text.append(clean)
             self.visible_text.append(clean)
+            for label in self._active_labels:
+                label["text"].append(clean)
             for control in self._button_stack:
                 control["text"].append(clean)
             for cta in self._cta_stack:
@@ -954,13 +988,64 @@ def assess_website(prompt, session_dir):
         checks["hero_uses_source_or_category_asset"] = bool(external_hero_keys) and external_hero_keys.issubset(approved_keys)
 
     explicit_form_request = re.sub(
-        r"[^.!?\n]*\b(?:if|when)\b[^.!?\n]*[.!?]?",
+        r"[^.!?\n]*\b(?:if|when|only when|only if)\b[^.!?\n]*[.!?]?",
         " ",
         request_text,
         flags=re.IGNORECASE,
     )
-    if re.search(r"\b(?:form|booking form|contact form|request form)\b", explicit_form_request, re.IGNORECASE):
+    verified_field_definitions = bool(re.search(r"VERIFIED INQUIRY FIELD DEFINITIONS:\s*\n\s*\S", request_text, re.IGNORECASE))
+    direct_form_request = bool(re.search(
+        r"\b(?:include|provide|add|create|build|use)\s+(?:a\s+)?(?:business\s+)?(?:contact|inquiry|booking|request)?\s*form\b|\bform\s+is\s+required\b",
+        explicit_form_request,
+        re.IGNORECASE,
+    ))
+    if verified_field_definitions or direct_form_request:
         checks["requested_form_present"] = parser.forms > 0
+    source_assessment_path = session_dir / "debug" / "source_assessment.json"
+    try:
+        source_assessment = json.loads(source_assessment_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        source_assessment = {}
+    reviewed_pages = {
+        str(page.get("url", "")) for page in source_assessment.get("pages_reviewed", [])
+        if isinstance(page, dict)
+    } if isinstance(source_assessment, dict) else set()
+    expected_fields = []
+    for field in source_assessment.get("contact_form_fields", []) if isinstance(source_assessment, dict) else []:
+        if not isinstance(field, dict) or str(field.get("type") or field.get("input_type") or "").strip().casefold() == "file":
+            continue
+        label = " ".join(str(field.get("label") or field.get("field") or "").split())
+        citations = field.get("source_urls", [])
+        if label and isinstance(citations, list) and any(str(url) in reviewed_pages for url in citations):
+            expected_fields.append(field)
+    if expected_fields:
+        normalize = lambda value: " ".join(str(value or "").split()).casefold()
+        actual_by_label = {normalize(field.get("label")): field for field in parser.form_fields if field.get("label")}
+        missing_labels = []
+        required_mismatches = []
+        type_mismatches = []
+        for field in expected_fields:
+            label = " ".join(str(field.get("label") or field.get("field") or "").split())
+            actual = actual_by_label.get(normalize(label))
+            if actual is None:
+                missing_labels.append(label)
+                continue
+            if isinstance(field.get("required"), bool) and actual.get("required") is not field["required"]:
+                required_mismatches.append(label)
+            expected_type = str(field.get("type") or field.get("input_type") or "").strip().casefold()
+            if expected_type:
+                expected_type = {"dropdown": "select", "multiline": "textarea"}.get(expected_type, expected_type)
+                actual_type = str(actual.get("type", "")).casefold()
+                if expected_type != actual_type:
+                    type_mismatches.append(label)
+        checks["source_contact_form_fields_preserved"] = not missing_labels
+        checks["source_contact_form_required_states_preserved"] = not required_mismatches
+        checks["source_contact_form_types_preserved"] = not type_mismatches
+        checks["source_contact_form_fields_preserved"] = checks["source_contact_form_fields_preserved"] and parser.forms > 0
+        checks["source_contact_form_required_states_preserved"] = checks["source_contact_form_required_states_preserved"] and parser.forms > 0
+        checks["source_contact_form_types_preserved"] = checks["source_contact_form_types_preserved"] and parser.forms > 0
+    file_uploads = [field for field in parser.form_fields if field.get("type") == "file"]
+    checks["public_file_uploads_omitted"] = not file_uploads
 
     advisory_checks = {
         "source_site_hero_photo_used",
@@ -1006,6 +1091,8 @@ def assess_website(prompt, session_dir):
             "template_layout_signature_matches": "selected template layout signature is preserved",
             "mobile_menu_clicks_work": "mobile menu opens and closes by click",
             "mobile_menu_keyboard_works": "mobile menu works with keyboard controls",
+            "mobile_navigation_hidden_until_opened": "mobile navigation stays hidden until the menu button opens it",
+            "mobile_menu_focus_indicator_visible": "mobile menu button shows a visible keyboard focus indicator",
             "mobile_has_no_horizontal_overflow": "mobile page has no horizontal overflow",
             "fonts_load_in_browser": "browser fonts load successfully",
             "images_load_in_browser": "browser images load successfully",
@@ -1027,6 +1114,10 @@ def assess_website(prompt, session_dir):
         "checks_passed": passed,
         "checks_total": total,
         "checks": checks,
+        "source_contact_form_fields_missing": missing_labels if expected_fields else [],
+        "source_contact_form_required_state_mismatches": required_mismatches if expected_fields else [],
+        "source_contact_form_type_mismatches": type_mismatches if expected_fields else [],
+        "public_file_upload_fields_found": len(file_uploads),
         "blocking_failures": [name for name, value in checks.items() if value is False],
         "automated_success": automated_success,
         "required_sections": required,
