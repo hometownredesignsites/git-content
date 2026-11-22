@@ -358,7 +358,6 @@ CATEGORY_FALLBACK_POOLS = {
     "Comic book shops": "comic_retail",
 
     "Independent bookstores": "books_records",
-    "Hobby/model shops": "craft_hobby_retail",
     "Craft stores": "craft_hobby_retail",
     "Quilt/fabric shops": "fabric_quilting_retail",
     "Florists": "garden_floral",
@@ -371,14 +370,11 @@ CATEGORY_FALLBACK_POOLS = {
     "Jewelry stores": "jewelry_retail",
     "Pawn shops": "specialty_inventory",
     "Independent furniture stores": "home_showrooms",
-    "Mattress stores": "home_showrooms",
     "Flooring showrooms": "home_materials_showrooms",
     "Cabinet showrooms": "home_materials_showrooms",
-    "Fireplace/stove shops": "home_materials_showrooms",
     "Appliance stores": "appliance_retail",
     "Lighting stores": "lighting_retail",
     "Kitchen/bath showrooms": "home_materials_showrooms",
-    "Pool/spa stores": "pool_spa",
     "Bicycle shops": "sports_outdoor_retail",
     "Golf pro shops": "golf_retail",
     "Breweries": "beverage",
@@ -399,10 +395,6 @@ CATEGORY_FALLBACK_POOLS = {
     "Food trucks": "food_beverage",
     "Bed & breakfasts": "hospitality",
     "Boutique inns": "hospitality",
-    "HVAC companies": "home",
-    "Plumbers": "home",
-    "Electricians": "home",
-    "Roofers": "home",
     "General contractors": "home",
     "Remodelers": "home",
     "Kitchen remodelers": "kitchen",
@@ -413,9 +405,6 @@ CATEGORY_FALLBACK_POOLS = {
     "Concrete contractors": "home",
     "Excavation companies": "home",
     "Landscaping companies": "landscap",
-    "Tree services": "landscap",
-    "Lawn-care companies": "landscap",
-    "Irrigation companies": "landscap",
     "Fence companies": "fence",
     "Deck builders": "deck",
     "Pool installers": "pool_spa",
@@ -423,11 +412,6 @@ CATEGORY_FALLBACK_POOLS = {
     "Window cleaning": "home",
     "Gutter companies": "home",
     "Chimney sweeps": "home",
-    "Pest control": "home",
-    "Septic services": "home",
-    "Well services": "home",
-    "Garage-door companies": "home",
-    "Locksmiths": "home",
     "Home inspectors": "home",
     "Independent auto repair shops": "automotive",
     "Transmission shops": "automotive",
@@ -443,10 +427,6 @@ CATEGORY_FALLBACK_POOLS = {
     "Classic-car restoration": "classic_car_restoration",
 
     "Custom exhaust shops": "exhaust_performance",
-    "Performance shops": "automotive",
-    "Car audio installers": "automotive",
-    "Towing companies": "automotive",
-    "Mobile mechanics": "automotive",
     "Horse stables": "equestrian",
     "Riding schools": "equestrian",
     "Boarding stables": "equestrian",
@@ -455,12 +435,7 @@ CATEGORY_FALLBACK_POOLS = {
     "Feed mills": "feed_retail",
     "Farm equipment dealers": "farm_equipment_retail",
     # Tractor/agricultural equipment repair intentionally has no fixed fallback until repair-specific assets are curated.
-    "Custom farming": "agriculture_rural",
     "Local farm markets": "specialty_food_retail",
-    "Orchards": "agriculture_rural",
-    "Christmas tree farms": "agriculture_rural",
-    "Pumpkin farms": "agriculture_rural",
-    "Agritourism businesses": "agriculture_rural",
     "Wedding/event farms": "events_venues",
     # Hunting preserves intentionally have no fixed fallback until preserve-specific assets are curated.
     "Barbershops": "personal_services",
@@ -484,7 +459,6 @@ CATEGORY_FALLBACK_POOLS = {
     # Aquarium maintenance intentionally has no fixed fallback until service-specific assets are curated.
     "Horse boarding": "equestrian",
     "Bowling alleys": "indoor_attractions",
-    "Mini golf": "family_attractions",
     "Go-kart tracks": "family_attractions",
     "Escape rooms": "indoor_attractions",
     "Indoor playgrounds": "family_attractions",
@@ -501,7 +475,6 @@ CATEGORY_FALLBACK_POOLS = {
     "Wedding venues": "events_venues",
     "Event halls": "events_venues",
     "Party rental companies": "event_rentals",
-    "Tent rental": "event_rentals",
     "Wedding planners": "event_planning",
 
     "Wedding photographers": "photography_studios",
@@ -509,7 +482,6 @@ CATEGORY_FALLBACK_POOLS = {
     "Tuxedo shops": "formalwear_retail",
     # Limousine companies intentionally have no fixed fallback until transport-specific assets are curated.
 
-    "Photo booths": "photography_studios",
     "Used furniture stores": "home_showrooms",
     "Salvage/reclamation stores": "specialty_inventory",
     "Used bookstores": "books_records",
@@ -547,12 +519,47 @@ def _fallback_pool(category: str) -> tuple[tuple[str, str], ...]:
         "small engine repair",
         "tractor repair",
         "agricultural equipment repair",
+        "pool spa stores",
+        "mattress stores",
+        "fireplace stove shops",
+        "hobby model shops",
+        "tent rental",
+        "photo booths",
+        "mini golf",
+        "hvac companies",
+        "plumbers",
+        "electricians",
+        "roofers",
+        "pest control",
+        "septic services",
+        "well services",
+        "garage door companies",
+        "locksmiths",
+        "tree services",
+        "lawn care companies",
+        "irrigation companies",
+        "performance shops",
+        "car audio installers",
+        "towing companies",
+        "mobile mechanics",
+        "custom farming",
+        "orchards",
+        "christmas tree farms",
+        "pumpkin farms",
+        "agritourism businesses",
         "automotive upholstery",
         "bounce house rental",
     }
     if lowered in no_fallback_categories or re.search(
         r"aquarium maintenance|aquarium service|fish tank maintenance|limousine|"
         r"tractor repair|agricultural equipment repair|hunting preserves?",
+        r"pool spa stores?|pool and spa stores?|pool supply stores?|hot tub stores?|spa supply stores?|"
+        r"mattress stores?|fireplace(?:/stove| and stove)? shops?|hobby(?:/model| and model)? shops?|"
+        r"tent rental|photo booths?|mini golf|"
+        r"hvac companies|plumbers?|electricians?|roofers?|pest control|septic services?|well services?|"
+        r"garage door companies|locksmiths?|tree services?|lawn care companies|irrigation companies?|"
+        r"performance shops?|car audio installers?|towing companies|mobile mechanics|"
+        r"custom farming|orchards?|christmas tree farms?|pumpkin farms?|agritourism businesses",
         lowered,
     ):
         return ()
