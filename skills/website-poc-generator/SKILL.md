@@ -321,6 +321,8 @@ Open and validate each of the three files independently, in isolation from the o
 
 ### 6.6 Structured evidence package and review records
 
+Use the machine-readable JSON Schema at `skills/website-poc-generator/evidence.schema.json` as the structural contract for these records. Validate every JSON record against its matching `$defs` entry when schema validation tooling is available; if it is unavailable, follow the required fields below and explicitly report schema validation as UNVERIFIED. The schema is permissive about additional properties so original workflow diagnostics can be retained; it does not make missing required evidence optional.
+
 Use one deterministic output root for every run. Keep the three deliverable HTML files at the root and store evidence in candidate-specific folders so reports and screenshots cannot be accidentally shared across candidates:
 
 ```text
