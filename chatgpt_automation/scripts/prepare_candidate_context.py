@@ -82,11 +82,84 @@ FALLBACK_IMAGES = {
         ("https://images.unsplash.com/photo-1722411927625-0e478acf502b?auto=format&fit=crop&w=1800&q=85", "woodworker shaping a piece of wood in a workshop"),
         ("https://images.unsplash.com/photo-1759756480941-7230dedf5fc9?auto=format&fit=crop&w=1800&q=85", "woodworking shop with tools and machinery"),
     ),
+
+    "automotive": (
+        ("https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?auto=format&fit=crop&w=1800&q=85", "vehicle being serviced in an automotive workshop"),
+        ("https://images.unsplash.com/photo-1486006920555-c77dcf18193c?auto=format&fit=crop&w=1800&q=85", "automotive garage and repair workspace"),
+        ("https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=1800&q=85", "sports car exterior"),
+    ),
+    "pet_services": (
+        ("https://images.unsplash.com/photo-1548199973-03cce0bbc87b?auto=format&fit=crop&w=1800&q=85", "dogs outdoors together"),
+        ("https://images.unsplash.com/photo-1552053831-71594a27632d?auto=format&fit=crop&w=1800&q=85", "dog portrait"),
+        ("https://images.unsplash.com/photo-1516734212186-a967f81ad0d7?auto=format&fit=crop&w=1800&q=85", "dog being cared for"),
+    ),
+    "events_venues": (
+        ("https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1800&q=85", "wedding ceremony and outdoor event setup"),
+        ("https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=1800&q=85", "event reception tables and venue lighting"),
+        ("https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?auto=format&fit=crop&w=1800&q=85", "celebration table setting"),
+    ),
+    "food_beverage": (
+        ("https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=1800&q=85", "prepared food on a restaurant table"),
+        ("https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1800&q=85", "restaurant dining room"),
+        ("https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1800&q=85", "restaurant interior and dining tables"),
+    ),
+    "retail": (
+        ("https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1800&q=85", "retail clothing store interior"),
+        ("https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=1800&q=85", "retail storefront and merchandise"),
+        ("https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=1800&q=85", "small retail shop display"),
+    ),
+    "hospitality": (
+        ("https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1800&q=85", "hotel exterior and pool"),
+        ("https://images.unsplash.com/photo-1611892440504-42a792e24d32?auto=format&fit=crop&w=1800&q=85", "welcoming hotel guest room"),
+        ("https://images.unsplash.com/photo-1571896349842-33c89424de2d?auto=format&fit=crop&w=1800&q=85", "resort hospitality setting"),
+    ),
+    "personal_services": (
+        ("https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?auto=format&fit=crop&w=1800&q=85", "salon styling station"),
+        ("https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=1800&q=85", "beauty salon interior"),
+        ("https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&w=1800&q=85", "personal care service setting"),
+    ),
+    "agriculture_rural": (
+        ("https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1800&q=85", "open farmland and fields"),
+        ("https://images.unsplash.com/photo-1500595046743-cd271d694d30?auto=format&fit=crop&w=1800&q=85", "farm landscape with livestock"),
+        ("https://images.unsplash.com/photo-1472396961693-142e6e269027?auto=format&fit=crop&w=1800&q=85", "rural landscape and wildlife"),
+    ),
+    "recreation": (
+        ("https://images.unsplash.com/photo-1517649763962-0c623066013b?auto=format&fit=crop&w=1800&q=85", "outdoor cycling and recreation"),
+        ("https://images.unsplash.com/photo-1530549387789-4c1017266635?auto=format&fit=crop&w=1800&q=85", "swimming pool recreation"),
+        ("https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=1800&q=85", "fitness and movement studio"),
+    ),
+    "specialty_inventory": (
+        ("https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&w=1800&q=85", "carefully arranged specialty products"),
+        ("https://images.unsplash.com/photo-1531058020387-3be344556be6?auto=format&fit=crop&w=1800&q=85", "specialty retail display"),
+        ("https://images.unsplash.com/photo-1490312278390-ab64016e0aa9?auto=format&fit=crop&w=1800&q=85", "curated shop interior"),
+    ),
 }
 
 
 def _fallback_pool(category: str) -> tuple[tuple[str, str], ...]:
-    lowered = category.lower()
+    """Choose the most specific fixed imagery pool for a catalog business type."""
+    lowered = re.sub(r"[^a-z0-9]+", " ", category.lower()).strip()
+    # Specific trades first; broad catalog sectors are deliberate fallbacks.
+    if re.search(r"auto|automotive|mechanic|collision|tire|transmission|vehicle|motorcycle|rv repair|boat repair|towing|exhaust", lowered):
+        return FALLBACK_IMAGES["automotive"]
+    if re.search(r"pet|dog|cat|groom|kennel|boarding|animal|aquarium|farrier|horse", lowered):
+        return FALLBACK_IMAGES["pet_services"]
+    if re.search(r"event|venue|wedding|party|banquet|tent rental|dj|bounce house|photo booth|planner", lowered):
+        return FALLBACK_IMAGES["events_venues"]
+    if re.search(r"restaurant|food|beverage|cater|bakery|coffee|brewery|winery|distillery|deli|butcher|ice cream|food truck", lowered):
+        return FALLBACK_IMAGES["food_beverage"]
+    if re.search(r"hotel|hospitality|inn|bed and breakfast|lodging|resort", lowered):
+        return FALLBACK_IMAGES["hospitality"]
+    if re.search(r"salon|barber|nail|spa|tailor|dry cleaner|shoe repair|watch repair|photograph", lowered):
+        return FALLBACK_IMAGES["personal_services"]
+    if re.search(r"farm|agricultur|rural|orchard|livestock|tractor|feed mill|equestrian|agritourism|pumpkin", lowered):
+        return FALLBACK_IMAGES["agriculture_rural"]
+    if re.search(r"recreation|bowling|mini golf|go kart|escape room|playground|dance|martial arts|gym|kayak|fishing|makerspace|pottery", lowered):
+        return FALLBACK_IMAGES["recreation"]
+    if re.search(r"retail|store|shop|florist|jewelry|furniture|mattress|appliance|lighting|bicycle|golf|clothing", lowered):
+        return FALLBACK_IMAGES["retail"]
+    if re.search(r"antique|salvage|estate sale|used furniture|book|record|instrument|auto parts|specialty inventory|pawn", lowered):
+        return FALLBACK_IMAGES["specialty_inventory"]
     if re.search(r"fenc|gate", lowered):
         return FALLBACK_IMAGES["fence"]
     if re.search(r"deck|patio", lowered):
@@ -99,7 +172,7 @@ def _fallback_pool(category: str) -> tuple[tuple[str, str], ...]:
         return FALLBACK_IMAGES["bathroom"]
     if re.search(r"carpent|woodwork", lowered):
         return FALLBACK_IMAGES["carpentry"]
-    if re.search(r"home|roof|siding|window|remodel|renovat|contractor|construction", lowered):
+    if re.search(r"home|roof|siding|window|remodel|renovat|contractor|construction|plumb|hvac|electric|masonry|concrete|floor|garage door|locksmith|septic|well|pest|gutter|chimney", lowered):
         return FALLBACK_IMAGES["home"]
     return ()
 
