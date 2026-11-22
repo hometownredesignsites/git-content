@@ -162,7 +162,7 @@ def _fallback_pool(category: str) -> tuple[tuple[str, str], ...]:
     # Specific inventory and specialist services must precede generic store/shop,
     # pet, event, and home-service matches.
     rules = (
-        (r"used auto parts|auto parts|automotive parts", "specialty_inventory"),
+        (r"used auto parts|auto parts|automotive parts", "auto_parts"),
         (r"used book|bookstore|book shop|record store|vinyl", "books_records"),
         (r"musical instrument|instrument store|antique|salvage|reclamation|estate sale|pawn|used furniture", "specialty_inventory"),
         (r"horse boarding|horse stable|riding school|farrier|equestrian|livestock|tack shop|feed mill|feed store|farm equipment|tractor repair|agricultural equipment|custom farming|hunting preserve", "agriculture_rural"),
