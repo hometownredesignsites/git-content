@@ -278,7 +278,7 @@ FALLBACK_IMAGES = {
     "powersports_repair": (
         ("https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&w=1800&q=85", "motorcycle in a service workshop"),
         ("https://images.unsplash.com/photo-1558981403-c5f9899a28bc?auto=format&fit=crop&w=1800&q=85", "motorcycle engine and mechanical detail"),
-        ("https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&w=1800&q=85", "motorcycle maintenance and repair"),
+        ("https://images.unsplash.com/photo-1771402629408-968fc5cdc505?auto=format&fit=crop&w=1800&q=85", "motorcycle being serviced by a mechanic in a workshop"),
     ),
     "home_materials_showrooms": (
         ("https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1800&q=85", "interior flooring and finished room materials"),
