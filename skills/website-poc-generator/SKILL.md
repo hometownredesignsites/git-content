@@ -274,8 +274,55 @@ When a blocking check fails, identify the exact check, viewport, selector/elemen
 
 If browser tooling is unavailable, run only the static checks that can actually be executed. Mark all browser-dependent checks BLOCKED/UNVERIFIED, including hero coverage, rendered template geometry, visible navigation/menu interaction, computed contrast, clipping/overflow, font/image browser loading, and screenshot review. Do not claim workflow-equivalent automated QA.
 
+### 6.5 Assemble and verify the three final standalone deliverables
+
+The skill intentionally skips the workflow's intermediate HTML/CSS chunk files, chunk manifests, ordering checks, and separate CSS assembly. Do not recreate those intermediate artifacts. Their final-output guarantees still apply. Treat the three named HTML files—not prompts, drafts, snippets, or earlier QA copies—as the deliverables.
+
+**Final file set — blocking**
+
+- Produce exactly these three independent files:
+  - `candidate-forty.html`
+  - `candidate-landed.html`
+  - `candidate-story.html`
+- Before delivery, verify that all three paths exist, are regular files, and contain non-whitespace content. Record each exact path and byte size. A missing, empty, duplicated, or misnamed candidate blocks completion; do not silently substitute one template or return fewer files.
+- Each file must contain its own complete HTML5 document, including doctype, `html`, `head`, `body`, and closing document tags. Each must independently declare its language, nonempty title, viewport metadata, and exactly one main landmark and one nonempty H1.
+- Each file must contain its complete page CSS in its own embedded `<style>` block(s). Verify the embedded CSS is nonempty and syntactically balanced. Do not rely on a sibling `.css` file, a shared stylesheet, or styles embedded only in another candidate.
+- If a temporary external CSS source was used during authoring, apply all intended CSS—including the selected palette and any form-control repairs—before packaging. Then inline it into that candidate's HTML and verify the resulting delivered file. Temporary source CSS may be retained as debug evidence, but it is not a runtime dependency and must not be required to render the page.
+
+**Standalone dependency audit — blocking**
+
+Inspect each final HTML file, not just the authoring source:
+
+- No stylesheet `<link rel="stylesheet">`, CSS `@import`, external CSS bundle, or unresolved local stylesheet reference may be required for layout or styling.
+- No external JavaScript file, bundler, package manager, framework build, transpilation, or generated runtime bundle may be required for the page's core presentation or navigation. Do not leave script references to missing local files or chunk artifacts.
+- No unresolved references to intermediate HTML/CSS chunks, assembly manifests, temporary paths, or files outside that candidate's delivered package may remain.
+- Check local `src`, `href`, `poster`, CSS `url(...)`, fragment, and form-action references. Every required local target must exist and resolve within that candidate's output. Verified external business links, approved remote image URLs, and intentional contact links (`mailto:`/`tel:`) are permitted; they are content/runtime references, not build dependencies. Record external font or other remote runtime resources separately rather than describing them as build dependencies.
+- A standalone file may still use approved externally hosted images. “Standalone” means no external build or page-style dependency; it does not mean all image bytes are embedded in the HTML. Preserve the existing image provenance, byte-validation, browser-load, and human relevance checks.
+- Confirm that the page does not require a server-side build step or a sibling asset directory to display its core layout. If a genuinely required local asset remains, either package and verify it as part of that candidate's explicit deliverable set or remove the dependency; do not claim a single-file standalone result while omitting it.
+
+**Per-file independent validity — blocking**
+
+Open and validate each of the three files independently, in isolation from the other candidates and from temporary authoring files:
+
+1. Parse the final HTML and run all applicable static/document checks from §6.1 against that exact file.
+2. Confirm its embedded CSS is the CSS actually used by that file; do not validate an external source stylesheet and assume the inlined copy is identical.
+3. Verify the assigned template attribution comments and palette tokens survived packaging, and that there is no visible template credit.
+4. Recheck contact form controls after all form repairs: labels, names/types, required/optional state, and source-field preservation must still pass. A repair or packaging step must not silently remove or alter captured fields.
+5. Confirm all local links, fragment targets, image references, and interactive controls resolve as intended in the isolated file.
+6. Record a per-file package result with file name, bytes, embedded-style status, external build-dependency status, local-reference status, parse/document status, and PASS/FAIL/BLOCKED/UNVERIFIED.
+
+**Final QA must target the exact delivered bytes — blocking**
+
+- Run the complete static/document and asset QA from §6.1 on each final named file after all CSS inlining, palette application, form repairs, and packaging changes are complete.
+- Run the complete Chromium/browser QA from §6.2 separately on each final file at desktop 1440×900 and mobile 390×844. Use the actual delivered file path or an identical byte-for-byte copy; do not test an earlier draft, a separate CSS source, or a pre-repair version.
+- Capture and associate the desktop/mobile screenshots, browser report, static report, and human visual/image review evidence with the matching candidate filename. Do not reuse one candidate's passing report or screenshots for another.
+- Compute and record a SHA-256 digest for each final delivered HTML file after the last change. The digest identifies the bytes that were tested and returned. If any file changes after QA—even a CSS, form, metadata, or link edit—rerun the applicable static and browser checks for that file, regenerate its screenshots/reviews, and update its digest.
+- A missing file, incomplete embedded CSS, unresolved required dependency, invalid standalone document, or failed final QA check blocks that candidate. If any one candidate is blocked or fails, the three-file set is not complete. Browser tooling unavailable means browser checks remain BLOCKED/UNVERIFIED; do not infer final-file validity from static inspection alone.
+
 ### 7. Save and report
-Save the three named files in the requested directory, or the current task output location if none was specified. Return the files and a concise evidence report containing:
+Save exactly the three named, independently verified standalone HTML files in the requested directory, or the current task output location if none was specified. Return all three files and a concise evidence report containing:
+- per-file existence, exact path, byte size, SHA-256 digest, embedded CSS result, standalone dependency audit, independent parse/document result, and final package status
+- confirmation that final static and Chromium QA ran against the exact delivered file bytes for each candidate, with matching report and screenshot evidence; identify any checks not run
 - design direction and template conformance result for each candidate
 - source URLs used for factual claims, contact details, logo, images, and form schema
 - image validation/load results and any approved fallback imagery
@@ -285,7 +332,7 @@ Save the three named files in the requested directory, or the current task outpu
 - screenshots/evidence available, checks not run, failures, repairs, source gaps, and attribution/license considerations
 
 ## Completion gate
-Do not call the task complete or feature-parity compliant unless all three files exist and every required design, source-evidence, template, and QA gate above passes. Missing references, assets, browser tooling, or evidence must be disclosed as BLOCKED/UNVERIFIED; never present an inspired substitute as template-compliant.
+Do not call the task complete or feature-parity compliant unless all three named files exist, are nonempty independent HTML documents with their CSS embedded, pass the standalone dependency and per-file validity audits, and every required design, source-evidence, template, and final-file QA gate above passes against the exact delivered bytes. A report for an earlier draft does not qualify. Any post-QA edit invalidates that file's final QA status until rerun. Missing references, assets, browser tooling, or evidence must be disclosed as BLOCKED/UNVERIFIED; never present an inspired substitute as template-compliant.
 
 ## Safe output rule
 Do not commit, publish, deploy, or overwrite a business website. The task creates local POC files only unless the user separately requests a repository write or deployment.
