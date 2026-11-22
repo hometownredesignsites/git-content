@@ -319,6 +319,75 @@ Open and validate each of the three files independently, in isolation from the o
 - Compute and record a SHA-256 digest for each final delivered HTML file after the last change. The digest identifies the bytes that were tested and returned. If any file changes after QA—even a CSS, form, metadata, or link edit—rerun the applicable static and browser checks for that file, regenerate its screenshots/reviews, and update its digest.
 - A missing file, incomplete embedded CSS, unresolved required dependency, invalid standalone document, or failed final QA check blocks that candidate. If any one candidate is blocked or fails, the three-file set is not complete. Browser tooling unavailable means browser checks remain BLOCKED/UNVERIFIED; do not infer final-file validity from static inspection alone.
 
+### 6.6 Structured evidence package and review records
+
+Use one deterministic output root for every run. Keep the three deliverable HTML files at the root and store evidence in candidate-specific folders so reports and screenshots cannot be accidentally shared across candidates:
+
+```text
+website-poc-output/
+  candidate-forty.html
+  candidate-landed.html
+  candidate-story.html
+  evidence/
+    run.json
+    source-facts.json
+    generation-context.json
+    candidate-forty/
+      candidate-inputs.json
+      static-qa.json
+      browser-qa.json
+      repairs.json
+      image-review.json
+      visual-review.json
+      final-status.json
+      screenshots/
+        desktop.png
+        mobile.png
+    candidate-landed/
+      [same files]
+    candidate-story/
+      [same files]
+```
+
+If the environment requires a different root, preserve this relative layout and record the actual root in `run.json`. Do not put candidate-specific records in a shared folder. Keep raw upstream evidence (captured source pages, source facts, design references, original QA reports, repair logs, and screenshots) alongside this normalized package when available; normalized records summarize and link to evidence, they do not replace it. Use UTF-8 JSON, valid JSON objects, stable candidate IDs (`forty`, `landed`, `story`), and relative paths from the output root. Do not fabricate unavailable evidence: use explicit `null`, empty arrays, and `BLOCKED`/`UNVERIFIED` statuses with a reason.
+
+**Common record rules**
+
+- Every JSON record includes `schema_version: "1.0"`, `record_type`, `run_id`, `candidate_id` (null only for run-level records), `created_at` as an ISO-8601 timestamp with timezone, and `status` where applicable.
+- Status values are `PASS`, `FAIL`, `BLOCKED`, or `UNVERIFIED`; use `NOT_REQUIRED` only for a clearly documented non-applicable check. Never convert missing or unreadable evidence into PASS.
+- Each check is an object with `id`, `status`, `blocking`, `summary`, and `evidence_paths` (array). Add `details` for measured values, observed defects, or error text. Keep blocking and advisory checks distinct.
+- Paths must point to real saved files. Do not claim a screenshot, report, source capture, or repair artifact exists unless it was saved and verified. Include viewport dimensions and candidate ID in screenshot metadata or filenames.
+- Preserve the final HTML SHA-256 in all candidate-level QA/review/final records. If the HTML changes, invalidate its QA and review statuses until rerun and update the digest.
+
+**Required record contracts**
+
+1. `evidence/run.json` — run identity and package index:
+   `{ "schema_version":"1.0", "record_type":"run", "run_id":"...", "created_at":"...", "output_root":"...", "source_url":"...", "candidate_ids":["forty","landed","story"], "deliverables":{"candidate-forty.html":"...", "candidate-landed.html":"...", "candidate-story.html":"..."}, "evidence_index":"evidence/run.json", "status":"PASS|FAIL|BLOCKED|UNVERIFIED" }`.
+   Include tool/runtime availability, any unavailable capabilities, and the run-level failure summary. Set run status to PASS only when all three candidate final-status records pass.
+
+2. `evidence/source-facts.json` — source-grounded business facts and provenance. Store `source_url`, `pages_reviewed` (each page has `url`, `capture_method` = `static_html` or `rendered_dom`, `captured_at`, and saved evidence path or explicit unavailable reason), `facts` (each item has `fact`, `source_url`, `capture_method`, `evidence_excerpt_or_locator`, `confidence`), `contact`, `logo`, `form_schema`, `source_assets`, `user_supplied_facts`, and `unsupported_or_missing`. Distinguish static evidence, rendered observations, and user-provided facts. Do not store credentials, hidden fields, tracking values, or private implementation details.
+
+3. `evidence/generation-context.json` — exact generation inputs and design references. Include `business_name`, `source_url`, `source_facts_path`, `generation_instructions` (the actual prompt/brief or a saved path plus SHA-256), `template_assignments` (one entry per candidate with slot, template name, signature ID, official reference URL, demo URL, license URL), `palette_tokens`, `approved_image_urls`, `source_contact_schema`, `constraints`, and `context_sha256`. Record actual values used; do not merely say “see conversation.” Do not include secrets or unrelated user data.
+
+4. Per-candidate `candidate-inputs.json` — candidate-specific input snapshot. Include `candidate_id`, `slot`, `template`, `template_signature_id`, `palette`, `source_facts_path`, `generation_context_path`, `selected_source_assets` (URL, source page, discovery method, validation status, intended section), `selected_fallback_assets` (exact URL, pool key/label, byte/load-only validation status, and explicit statement that licensing/reuse terms were not checked), `contact_and_form_requirements`, `required_sections`, `output_html_path`, and `input_sha256`. Include the exact candidate-specific prompt/brief or a saved path and digest.
+
+5. Per-candidate `static-qa.json` and `browser-qa.json` — normalized results plus the original raw reports when available. Each contains `candidate_id`, `html_path`, `html_sha256`, `started_at`, `completed_at`, `tool`, `status`, `checks` (common check objects), `blocking_failures`, `advisories`, `evidence_paths`, and `failure_summary`. Browser QA additionally records `viewports` with exact width/height, browser/engine and version when known, screenshot paths, and per-viewport results. Static QA records document/CSS/dependency validation and asset-byte results. Keep the workflow's original detailed check names and values in the raw report; do not flatten away diagnostics.
+
+6. Per-candidate `repairs.json` — repair history. Include `candidate_id`, `html_sha256_before`, `html_sha256_after`, and ordered `repairs`. Each repair has `repair_id`, `triggering_check_ids`, `file_or_region`, `problem`, `change_made`, `result` (`APPLIED`, `NOT_NEEDED`, `FAILED`, `BLOCKED`), `evidence_paths`, and `retest_check_ids`. Include `repair_attempts`, `remaining_failures`, and `status`. A no-op repair record must say `NOT_NEEDED`; do not invent a repair to fill the file.
+
+7. Per-candidate `image-review.json` — one entry for every unique image URL used in the final HTML, including hero and CSS-background images. Each entry includes `url`, `source_type`, `source_page_or_pool`, `observed_subject`, `intended_section`, `relevant` (boolean), `crop_ok` (boolean), `alt_accurate` (boolean), `alt_text`, `reviewer_or_method`, `evidence_path`, and `notes`. Top-level fields include `candidate_id`, `html_sha256`, `status`, `images`, `missing_image_urls`, and `issues`. For a source image not actually inspected, use `UNVERIFIED` and leave observed subject empty; byte validation is not visual review. For fixed fallback images, never claim a subject observation, license, or reuse permission without direct evidence.
+
+8. Per-candidate `visual-review.json` — human/visual design review. Include `candidate_id`, `html_sha256`, `status`, `checks` for `first_screen_hierarchy`, `section_rhythm`, `typography`, `business_specificity`, and `footer` (each boolean plus concise finding), `blocking_defects`, `screenshots` (viewport, width, height, path, and HTML digest), `reviewer_or_method`, `reviewed_at`, and `issues`. Require desktop and mobile screenshot evidence tied to the exact candidate digest. If no genuine visual inspection occurred, status is UNVERIFIED; do not infer review from generated markup or successful browser loading.
+
+9. Per-candidate `final-status.json` — authoritative completion decision. Include `candidate_id`, `html_path`, `html_bytes`, `html_sha256`, `package_checks`, `static_qa_status`, `browser_qa_status`, `repair_status`, `image_review_status`, `visual_review_status`, `blocking_failures`, `advisories`, `failure_summary`, `evidence_paths`, `final_status`, and `finalized_at`. The final status is PASS only if the file/package checks and every required blocking QA and review gate pass for the same HTML digest. Any missing required record or digest mismatch is BLOCKED; any failed blocking check is FAIL. Keep advisory findings visible without overriding a blocking failure.
+
+**Run and candidate completion rules**
+
+- Write evidence incrementally: source capture and facts first; generation context and candidate inputs before generation; repair records whenever a repair is attempted; QA and screenshot records after each test; image and visual review records after actual review; final status last.
+- Maintain a concise failure summary for every unsuccessful candidate, listing failed check IDs, the observed reason, attempted repairs, and what remains unresolved. Do not discard failed candidates' evidence when a later candidate succeeds.
+- The three final HTML files and their evidence records must agree on candidate ID, output path, and SHA-256. Verify that agreement before reporting completion.
+- If a requested evidence artifact cannot be created in the current environment, record it as BLOCKED/UNVERIFIED with the reason and identify which parity gate remains unmet. Do not claim the workflow's structured evidence parity merely because a prose summary was returned.
+
 ### 7. Save and report
 Save exactly the three named, independently verified standalone HTML files in the requested directory, or the current task output location if none was specified. Return all three files and a concise evidence report containing:
 - per-file existence, exact path, byte size, SHA-256 digest, embedded CSS result, standalone dependency audit, independent parse/document result, and final package status
@@ -330,9 +399,10 @@ Save exactly the three named, independently verified standalone HTML files in th
 - exact desktop/mobile viewport sizes, candidate-specific screenshot paths, and PASS/FAIL/BLOCKED/UNVERIFIED status for every required gate; separate blocking failures from advisory findings
 - whether human visual review was completed for each candidate and viewport, with findings/fixes
 - screenshots/evidence available, checks not run, failures, repairs, source gaps, and attribution/license considerations
+- the complete evidence directory path and a link/index to the run-level and candidate-level JSON records; confirm that each record references the same final HTML digest as the delivered file
 
 ## Completion gate
-Do not call the task complete or feature-parity compliant unless all three named files exist, are nonempty independent HTML documents with their CSS embedded, pass the standalone dependency and per-file validity audits, and every required design, source-evidence, template, and final-file QA gate above passes against the exact delivered bytes. A report for an earlier draft does not qualify. Any post-QA edit invalidates that file's final QA status until rerun. Missing references, assets, browser tooling, or evidence must be disclosed as BLOCKED/UNVERIFIED; never present an inspired substitute as template-compliant.
+Do not call the task complete or feature-parity compliant unless all three named files exist, are nonempty independent HTML documents with their CSS embedded, pass the standalone dependency and per-file validity audits, and every required design, source-evidence, template, final-file QA, and structured-evidence gate above passes against the exact delivered bytes. The run-level index and all required candidate records must exist, be valid JSON, and agree on candidate IDs and final HTML digests. A report for an earlier draft does not qualify. Any post-QA edit invalidates that file's final QA status until rerun. Missing references, assets, browser tooling, or evidence must be disclosed as BLOCKED/UNVERIFIED; never present an inspired substitute as template-compliant.
 
 ## Safe output rule
 Do not commit, publish, deploy, or overwrite a business website. The task creates local POC files only unless the user separately requests a repository write or deployment.
