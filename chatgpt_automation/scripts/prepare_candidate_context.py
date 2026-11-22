@@ -146,7 +146,7 @@ FALLBACK_IMAGES = {
     "books_records": (
         ("https://images.unsplash.com/photo-1507842217343-583bb7270b66?auto=format&fit=crop&w=1800&q=85", "independent bookstore shelves"),
         ("https://images.unsplash.com/photo-1519682337058-a94d519337bc?auto=format&fit=crop&w=1800&q=85", "books and reading"),
-        ("https://images.unsplash.com/photo-149544해서?auto=format&fit=crop&w=1800&q=85", "curated bookshop interior"),
+        ("https://images.unsplash.com/photo-1495446815901-a7297e633e8d?auto=format&fit=crop&w=1800&q=85", "curated bookshop interior"),
     ),
     "upholstery": (
         ("https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=1800&q=85", "upholstered furniture in a living room"),
@@ -163,11 +163,12 @@ def _fallback_pool(category: str) -> tuple[tuple[str, str], ...]:
     # pet, event, and home-service matches.
     rules = (
         (r"used auto parts|auto parts|automotive parts", "specialty_inventory"),
-        (r"used book|bookstore|book shop|record store|vinyl|musical instrument|instrument store|antique|salvage|reclamation|estate sale|pawn|used furniture", "specialty_inventory"),
+        (r"used book|bookstore|book shop|record store|vinyl", "books_records"),
+        (r"musical instrument|instrument store|antique|salvage|reclamation|estate sale|pawn|used furniture", "specialty_inventory"),
         (r"horse boarding|horse stable|riding school|farrier|equestrian|livestock|tack shop|feed mill|feed store|farm equipment|tractor repair|agricultural equipment|custom farming|hunting preserve", "agriculture_rural"),
         (r"wedding.*farm|event.*farm|agritourism|orchard|christmas tree farm|pumpkin farm|farm market|local farm", "agriculture_rural"),
         (r"aquarium maintenance|aquarium service|fish tank maintenance", "pet_services"),
-        (r"upholstery|furniture restoration|furniture repair", "specialty_inventory"),
+        (r"upholstery|furniture restoration|furniture repair", "upholstery"),
         (r"auto|automotive|mechanic|collision|tire|transmission|vehicle|motorcycle|rv repair|boat repair|towing|exhaust|car audio|classic car|small engine", "automotive"),
         (r"pet|dog|cat|groom|kennel|boarding|animal|pet sitter|daycare", "pet_services"),
         (r"event|venue|wedding|party|banquet|tent rental|dj|bounce house|photo booth|planner|limousine|bridal|tuxedo", "events_venues"),
