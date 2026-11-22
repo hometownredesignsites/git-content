@@ -366,7 +366,7 @@ CATEGORY_FALLBACK_POOLS = {
     "Consignment shops": "retail",
     "Thrift stores": "retail",
     "Comic book shops": "comic_retail",
-    "Record stores": "records_retail",
+
     "Independent bookstores": "books_records",
     "Hobby/model shops": "craft_hobby_retail",
     "Craft stores": "craft_hobby_retail",
@@ -397,10 +397,10 @@ CATEGORY_FALLBACK_POOLS = {
     "Cideries": "beverage",
     "Taprooms": "beverage",
     "Coffee shops": "food_beverage",
-    "Bakeries": "food_beverage",
-    "Donut shops": "food_beverage",
-    "Ice cream shops": "food_beverage",
-    "Candy shops": "food_beverage",
+
+
+
+
     "Specialty food stores": "specialty_food_retail",
     "Butcher shops": "butcher_deli_retail",
     "Delis": "butcher_deli_retail",
@@ -446,12 +446,12 @@ CATEGORY_FALLBACK_POOLS = {
     "Collision repair": "automotive",
     "Auto glass": "automotive",
     "Motorcycle repair": "powersports_repair",
-    "Small engine repair": "powersports_repair",
+
     "Boat repair": "marine_repair",
-    "RV repair": "rv_repair",
+
     "Trailer repair": "trailer_repair",
     "Classic-car restoration": "classic_car_restoration",
-    "Automotive upholstery": "upholstery",
+
     "Custom exhaust shops": "exhaust_performance",
     "Performance shops": "automotive",
     "Car audio installers": "automotive",
@@ -460,7 +460,7 @@ CATEGORY_FALLBACK_POOLS = {
     "Horse stables": "equestrian",
     "Riding schools": "equestrian",
     "Boarding stables": "equestrian",
-    "Farriers": "equestrian",
+
     "Livestock services": "livestock_services",
     "Feed mills": "feed_retail",
     "Farm equipment dealers": "farm_equipment_retail",
@@ -480,7 +480,7 @@ CATEGORY_FALLBACK_POOLS = {
     "Tailors": "garment_care",
     "Alterations shops": "garment_care",
     "Dry cleaners": "garment_care",
-    "Shoe repair": "garment_care",
+
     "Upholstery shops": "upholstery",
     "Watch repair": "watch_repair",
     "Photography studios": "photography_studios",
@@ -498,27 +498,27 @@ CATEGORY_FALLBACK_POOLS = {
     "Go-kart tracks": "family_attractions",
     "Escape rooms": "indoor_attractions",
     "Indoor playgrounds": "family_attractions",
-    "Dance studios": "recreation",
-    "Martial-arts schools": "recreation",
+
+
     "Music schools": "music_education",
     "Art studios": "creative_studios",
     "Pottery studios": "creative_studios",
     "Woodworking studios": "creative_studios",
     "Makerspaces": "creative_studios",
-    "Fishing guides": "recreation",
-    "Kayak/canoe rental": "recreation",
+
+
     "Local gyms": "recreation",
     "Wedding venues": "events_venues",
     "Event halls": "events_venues",
     "Party rental companies": "event_rentals",
     "Tent rental": "event_rentals",
     "Wedding planners": "event_planning",
-    "DJs": "events_venues",
+
     "Wedding photographers": "photography_studios",
     "Bridal shops": "formalwear_retail",
     "Tuxedo shops": "formalwear_retail",
     # Limousine companies intentionally have no fixed fallback until transport-specific assets are curated.
-    "Bounce-house rental": "event_rentals",
+
     "Photo booths": "photography_studios",
     "Used furniture stores": "home_showrooms",
     "Salvage/reclamation stores": "specialty_inventory",
@@ -535,8 +535,36 @@ def _fallback_pool(category: str) -> tuple[tuple[str, str], ...]:
     exact_pool = CATEGORY_FALLBACK_POOLS.get(category.strip())
     if exact_pool:
         return FALLBACK_IMAGES[exact_pool]
-    # Avoid misleading imagery when no suitable fixed specialist pool exists.
-    if re.search(r"aquarium maintenance|aquarium service|fish tank maintenance|limousine|tractor repair|agricultural equipment repair|hunting preserves?", lowered):
+    # Categories with no suitable curated fixed imagery must not fall through
+    # to a broad pool that depicts a different product or service.
+    no_fallback_categories = {
+        "aquarium maintenance",
+        "bakeries",
+        "candy shops",
+        "dance studios",
+        "djs",
+        "donut shops",
+        "farriers",
+        "fishing guides",
+        "hunting preserves",
+        "ice cream shops",
+        "kayak canoe rental",
+        "limousine companies",
+        "martial arts schools",
+        "record stores",
+        "rv repair",
+        "shoe repair",
+        "small engine repair",
+        "tractor repair",
+        "agricultural equipment repair",
+        "automotive upholstery",
+        "bounce house rental",
+    }
+    if lowered in no_fallback_categories or re.search(
+        r"aquarium maintenance|aquarium service|fish tank maintenance|limousine|"
+        r"tractor repair|agricultural equipment repair|hunting preserves?",
+        lowered,
+    ):
         return ()
     # Specific inventory and specialist services must precede generic store/shop,
     # pet, event, and home-service matches.
