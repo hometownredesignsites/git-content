@@ -246,9 +246,9 @@ FALLBACK_IMAGES = {
         ("https://images.unsplash.com/photo-1524805444758-089113d48a6d?auto=format&fit=crop&w=1800&q=85", "watch face and fine timepiece detail"),
     ),
     "golf_retail": (
-        ("https://images.unsplash.com/photo-1535131749006-b7f58c99034b?auto=format&fit=crop&w=1800&q=85", "golf course and putting green"),
-        ("https://images.unsplash.com/photo-1593111774240-d529f12cf4bb?auto=format&fit=crop&w=1800&q=85", "golf equipment and clubs"),
-        ("https://images.unsplash.com/photo-1587174486073-ae5e5cff23aa?auto=format&fit=crop&w=1800&q=85", "golf bag and course equipment"),
+        ("https://images.unsplash.com/photo-1505413461823-c5628c330608?auto=format&fit=crop&w=1800&q=85", "close-up display of golf clubs and equipment"),
+        ("https://images.unsplash.com/photo-1691608787437-0b9d184984ae?auto=format&fit=crop&w=1800&q=85", "golf iron and club product detail"),
+        ("https://images.unsplash.com/photo-1587174486073-ae5e5cff23aa?auto=format&fit=crop&w=1800&q=85", "golf bag and equipment"),
     ),
     "butcher_deli_retail": (
         ("https://images.unsplash.com/photo-1584048603508-4b31894439a9?auto=format&fit=crop&w=1800&q=85", "raw meat displayed at a butcher and deli counter"),
@@ -301,12 +301,12 @@ FALLBACK_IMAGES = {
         ("https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1800&q=85", "farm setting for agricultural supply business"),
     ),
     "farm_equipment_retail": (
-        ("https://images.unsplash.com/photo-1530267981375-f0de937f5f13?auto=format&fit=crop&w=1800&q=85", "tractor and agricultural machinery in a field"),
+        ("https://images.unsplash.com/photo-1530267981375-f0de937f5f13?auto=format&fit=crop&w=1800&q=85", "tractor and agricultural machinery"),
         ("https://images.unsplash.com/photo-1592982537447-6f2a6a0a0b9e?auto=format&fit=crop&w=1800&q=85", "farm machinery and tractor equipment"),
-        ("https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1800&q=85", "agricultural field and farm equipment setting"),
+        ("https://images.unsplash.com/photo-1645012861926-d352a6d22e51?auto=format&fit=crop&w=1800&q=85", "tractor and farm implement displayed beside a farm building"),
     ),
     "trailer_repair": (
-        ("https://images.unsplash.com/photo-1519003722824-194d4455a60c?auto=format&fit=crop&w=1800&q=85", "commercial trailer and truck transport"),
+        ("https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?auto=format&fit=crop&w=1800&q=85", "vehicle repair technician working in a service workshop"),
         ("https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?auto=format&fit=crop&w=1800&q=85", "truck and trailer at a service facility"),
         ("https://images.unsplash.com/photo-1586191582151-f73872dfd183?auto=format&fit=crop&w=1800&q=85", "utility trailer and hauling equipment"),
     ),
@@ -320,6 +320,36 @@ FALLBACK_IMAGES = {
         ("https://images.unsplash.com/photo-1513506003901-1e6a229e2d15?auto=format&fit=crop&w=1800&q=85", "table lamps and decorative lighting"),
         ("https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?auto=format&fit=crop&w=1800&q=85", "architectural lighting fixtures and illuminated space"),
     ),
+    "comic_retail": (
+        ("https://images.unsplash.com/photo-1785913957077-6d594a2a841e?auto=format&fit=crop&w=1800&q=85", "comic books and graphic novels displayed in a shop window"),
+        ("https://images.unsplash.com/photo-1689277037704-49a09b66f27f?auto=format&fit=crop&w=1800&q=85", "comic books and collectibles displayed in a store"),
+        ("https://images.unsplash.com/photo-1639634252346-0a27c7d168dc?auto=format&fit=crop&w=1800&q=85", "collection of comic books spread out for browsing"),
+    ),
+    "fabric_quilting_retail": (
+        ("https://images.unsplash.com/photo-1775662039200-8e9e4a635367?auto=format&fit=crop&w=1800&q=85", "fabric shop shelves filled with colorful textiles"),
+        ("https://images.unsplash.com/photo-1772290660319-ed78b7a2b469?auto=format&fit=crop&w=1800&q=85", "fabric sewing and quilting work with thread and tools"),
+        ("https://images.unsplash.com/photo-1590736969955-71cc94901144?auto=format&fit=crop&w=1800&q=85", "sewing and textile workspace with materials"),
+    ),
+    "classic_car_restoration": (
+        ("https://images.unsplash.com/photo-1792789539830-81fc2bd5aacc?auto=format&fit=crop&w=1800&q=85", "vintage classic car in a dimly lit garage"),
+        ("https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=1800&q=85", "sports car exterior and automotive detailing"),
+        ("https://images.unsplash.com/photo-1486006920555-c77dcf18193c?auto=format&fit=crop&w=1800&q=85", "automotive garage and restoration workspace"),
+    ),
+    "exhaust_performance": (
+        ("https://images.unsplash.com/photo-1759419281480-bacc913c9606?auto=format&fit=crop&w=1800&q=85", "automotive exhaust systems and catalytic converter parts"),
+        ("https://images.unsplash.com/photo-1487754180451-c456f719a1fc?auto=format&fit=crop&w=1800&q=85", "vehicle engine and mechanical parts detail"),
+        ("https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?auto=format&fit=crop&w=1800&q=85", "automotive service bay and performance work"),
+    ),
+    "event_planning": (
+        ("https://images.unsplash.com/photo-1705592388467-e70cebf44725?auto=format&fit=crop&w=1800&q=85", "event planner designed reception table and chair setup"),
+        ("https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1800&q=85", "wedding ceremony planning and event design"),
+        ("https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?auto=format&fit=crop&w=1800&q=85", "event tablescape and celebration styling"),
+    ),
+    "event_rentals": (
+        ("https://images.unsplash.com/photo-1705592388467-e70cebf44725?auto=format&fit=crop&w=1800&q=85", "event tables and chair covers arranged for a rental setup"),
+        ("https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=1800&q=85", "event reception seating, tables, and lighting"),
+        ("https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?auto=format&fit=crop&w=1800&q=85", "party and event table setup"),
+    ),
 }
 
 
@@ -330,12 +360,12 @@ CATEGORY_FALLBACK_POOLS = {
     "Vintage clothing stores": "retail",
     "Consignment shops": "retail",
     "Thrift stores": "retail",
-    "Comic book shops": "books_records",
+    "Comic book shops": "comic_retail",
     "Record stores": "records_retail",
     "Independent bookstores": "books_records",
     "Hobby/model shops": "craft_hobby_retail",
     "Craft stores": "craft_hobby_retail",
-    "Quilt/fabric shops": "craft_hobby_retail",
+    "Quilt/fabric shops": "fabric_quilting_retail",
     "Florists": "garden_floral",
     "Garden centers": "garden_floral",
     "Nurseries": "garden_floral",
@@ -415,9 +445,9 @@ CATEGORY_FALLBACK_POOLS = {
     "Boat repair": "marine_repair",
     "RV repair": "rv_repair",
     "Trailer repair": "trailer_repair",
-    "Classic-car restoration": "automotive",
+    "Classic-car restoration": "classic_car_restoration",
     "Automotive upholstery": "upholstery",
-    "Custom exhaust shops": "automotive",
+    "Custom exhaust shops": "exhaust_performance",
     "Performance shops": "automotive",
     "Car audio installers": "automotive",
     "Towing companies": "automotive",
@@ -457,7 +487,7 @@ CATEGORY_FALLBACK_POOLS = {
     "Pet sitters": "pet_services",
     "Mobile pet grooming": "pet_services",
     "Kennels": "pet_services",
-    "Aquarium maintenance": "aquarium_retail",
+    # Aquarium maintenance intentionally has no fixed fallback until service-specific assets are curated.
     "Horse boarding": "equestrian",
     "Bowling alleys": "indoor_attractions",
     "Mini golf": "family_attractions",
@@ -476,15 +506,15 @@ CATEGORY_FALLBACK_POOLS = {
     "Local gyms": "recreation",
     "Wedding venues": "events_venues",
     "Event halls": "events_venues",
-    "Party rental companies": "events_venues",
-    "Tent rental": "events_venues",
-    "Wedding planners": "events_venues",
+    "Party rental companies": "event_rentals",
+    "Tent rental": "event_rentals",
+    "Wedding planners": "event_planning",
     "DJs": "events_venues",
     "Wedding photographers": "photography_studios",
     "Bridal shops": "formalwear_retail",
     "Tuxedo shops": "formalwear_retail",
-    "Limousine companies": "events_venues",
-    "Bounce-house rental": "events_venues",
+    # Limousine companies intentionally have no fixed fallback until transport-specific assets are curated.
+    "Bounce-house rental": "event_rentals",
     "Photo booths": "photography_studios",
     "Used furniture stores": "home_showrooms",
     "Salvage/reclamation stores": "specialty_inventory",
@@ -501,6 +531,9 @@ def _fallback_pool(category: str) -> tuple[tuple[str, str], ...]:
     exact_pool = CATEGORY_FALLBACK_POOLS.get(category.strip())
     if exact_pool:
         return FALLBACK_IMAGES[exact_pool]
+    # Avoid misleading category imagery when no suitable fixed service pool exists.
+    if re.search(r"aquarium maintenance|aquarium service|fish tank maintenance|limousine", lowered):
+        return ()
     # Specific inventory and specialist services must precede generic store/shop,
     # pet, event, and home-service matches.
     rules = (
@@ -513,6 +546,12 @@ def _fallback_pool(category: str) -> tuple[tuple[str, str], ...]:
         (r"appliance stores?|appliance retailers?", "appliance_retail"),
         (r"lighting stores?|lighting showrooms?|lighting retailers?", "lighting_retail"),
         (r"wedding photographers?|photo booths?", "photography_studios"),
+        (r"comic book shops?|comic book stores?|comic shops?|graphic novel stores?", "comic_retail"),
+        (r"quilt shops?|fabric shops?|textile stores?|sewing supply stores?", "fabric_quilting_retail"),
+        (r"classic car restoration|vintage car restoration|automotive restoration", "classic_car_restoration"),
+        (r"custom exhaust|exhaust shops?|muffler shops?|performance exhaust", "exhaust_performance"),
+        (r"wedding planners?|event planners?|event coordinators?", "event_planning"),
+        (r"party rental|tent rental|bounce house rental|event rental", "event_rentals"),
         (r"day spa|wellness spa|massage spa|med spa|medspa|sauna|float spa", "wellness_spa"),
         (r"photography studio|photo studio|portrait studio|product photography", "photography_studios"),
         (r"bicycle shop|bike shop|sporting goods", "sports_outdoor_retail"),
@@ -534,7 +573,7 @@ def _fallback_pool(category: str) -> tuple[tuple[str, str], ...]:
         (r"livestock|feed mill|farm equipment|tractor repair|agricultural equipment|custom farming|hunting preserve", "agriculture_rural"),
         (r"wedding.*farm|event.*farm|agritourism|orchard|christmas tree farm|pumpkin farm", "agriculture_rural"),
         (r"farm market|local farm market", "specialty_food_retail"),
-        (r"aquarium maintenance|aquarium service|fish tank maintenance", "aquarium_retail"),
+
         (r"upholstery|furniture restoration|furniture repair", "upholstery"),
         (r"pool spa stores?|pool and spa stores?|pool supply stores?|swimming pool supplies?|hot tub stores?|spa supply stores?", "pool_spa"),
         (r"appliance store|appliance retailer", "appliance_retail"),
@@ -545,9 +584,9 @@ def _fallback_pool(category: str) -> tuple[tuple[str, str], ...]:
         (r"mini golf|go kart|indoor playground|family entertainment", "family_attractions"),
         (r"bowling|escape room", "indoor_attractions"),
         (r"trailer repair|trailer service", "trailer_repair"),
-        (r"auto|automotive|mechanic|collision|tire|transmission|vehicle|motorcycle|rv repair|boat repair|trailer|towing|exhaust|car audio|classic car|small engine", "automotive"),
+        (r"auto|automotive|mechanic|collision|tire|transmission|vehicle|motorcycle|rv repair|boat repair|trailer|towing|car audio|small engine", "automotive"),
         (r"pet|dog|\bcat\b|groom|kennel|dog boarding|pet boarding|animal|pet sitter|daycare", "pet_services"),
-        (r"event|venue|wedding|party|banquet|tent rental|dj|bounce house|photo booth|planner|limousine", "events_venues"),
+        (r"event|venue|wedding|party|banquet|dj|photo booth", "events_venues"),
         (r"brewery|breweries|winery|wineries|distillery|distilleries|cidery|cideries|taproom|tasting room|wine bar|craft beer", "beverage"),
         (r"restaurant|food|beverage|cater|bakery|bakeries|coffee|deli|butcher|ice cream|food truck|donut|candy", "food_beverage"),
         (r"hotel|hospitality|inn|bed and breakfast|bed breakfasts|lodging|resort", "hospitality"),
