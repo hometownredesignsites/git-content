@@ -89,7 +89,7 @@ TEMPLATES: dict[str, dict[str, Any]] = {
         "css_selectors": (".banner.style1", ".spotlight.style1", ".gallery.style2", ".items.style1"),
         "signature_id": "story-fullbleed-divided-panels-gallery",
         "signature_note": (
-            "Make the Story hero a full-bleed flooring photo in .banner.fullscreen: the image must cover the entire hero "
+            "Make the Story hero use a validated, business-relevant photo in .banner.fullscreen, selected from verified source imagery when available or an appropriate fallback; do not assume a specific business category. The image must cover the entire hero "
             "edge-to-edge and top-to-bottom on desktop and mobile. Overlay the headline and one readable CTA on a restrained "
             "opaque paper panel. Do not use a half-width side-by-side hero image or a narrow mobile image rail; keep the "
             "mobile photo full-width and the CTA on the first screen. Below it, preserve "
