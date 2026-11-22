@@ -552,7 +552,7 @@ def _fallback_pool(category: str) -> tuple[tuple[str, str], ...]:
     }
     if lowered in no_fallback_categories or re.search(
         r"aquarium maintenance|aquarium service|fish tank maintenance|limousine|"
-        r"tractor repair|agricultural equipment repair|hunting preserves?",
+        r"tractor repair|agricultural equipment repair|hunting preserves?|"
         r"pool spa stores?|pool and spa stores?|pool supply stores?|hot tub stores?|spa supply stores?|"
         r"mattress stores?|fireplace(?:/stove| and stove)? shops?|hobby(?:/model| and model)? shops?|"
         r"tent rental|photo booths?|mini golf|go kart tracks?|indoor playgrounds?|"
