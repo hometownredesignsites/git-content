@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Website POC structured evidence records",
-  "description": "Schemas for normalized run and candidate evidence emitted by the website-poc-generator skill and GitHub Actions workflow.",
+  "description": "Schema for the normalized evidence package emitted by the skill and by chatgpt_automation/scripts/package_website_poc.py after workflow-specific assembly. Native workflow diagnostics are also retained as raw evidence.",
   "oneOf": [
     {
       "$ref": "#/$defs/run"
@@ -75,9 +75,24 @@
         },
         "deliverables": {
           "type": "object",
-          "properties": {},
-          "required": [],
-          "additionalProperties": true
+          "minProperties": 0,
+          "maxProperties": 3,
+          "propertyNames": {
+            "pattern": "^candidate-(forty|landed|story)\\.html$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "path": {"type": "string", "minLength": 1},
+              "bytes": {"type": "integer", "minimum": 1},
+              "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+              "qa_html_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+              "package_status": {"type": "string", "enum": ["PASS", "FAIL", "BLOCKED", "UNVERIFIED"]},
+              "candidate_id": {"type": "string", "minLength": 1}
+            },
+            "required": ["path", "bytes", "sha256", "qa_html_sha256", "package_status", "candidate_id"],
+            "additionalProperties": true
+          }
         },
         "evidence_index": {
           "type": "string"
@@ -1013,6 +1028,29 @@
             "additionalProperties": true
           }
         },
+        "design_scorecard": {
+          "type": "object",
+          "properties": {
+            "is_advisory": {"type": "boolean", "const": true},
+            "weighted_total": {"type": "number", "minimum": 0, "maximum": 100},
+            "scores": {
+              "type": "object",
+              "properties": {
+                "first_screen_impact": {"$ref": "#/$defs/design_score"},
+                "business_specificity": {"$ref": "#/$defs/design_score"},
+                "typography_hierarchy": {"$ref": "#/$defs/design_score"},
+                "image_composition": {"$ref": "#/$defs/design_score"},
+                "section_rhythm_spacing": {"$ref": "#/$defs/design_score"},
+                "mobile_experience": {"$ref": "#/$defs/design_score"},
+                "conversion_clarity": {"$ref": "#/$defs/design_score"}
+              },
+              "required": ["first_screen_impact", "business_specificity", "typography_hierarchy", "image_composition", "section_rhythm_spacing", "mobile_experience", "conversion_clarity"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["is_advisory", "weighted_total", "scores"],
+          "additionalProperties": false
+        },
         "reviewer_or_method": {
           "type": "string"
         },
@@ -1217,6 +1255,16 @@
         "finalized_at"
       ],
       "additionalProperties": true
+    },
+    "design_score": {
+      "type": "object",
+      "properties": {
+        "score": {"type": "number", "minimum": 0, "maximum": 5},
+        "weight": {"type": "integer", "enum": [5, 10, 15, 20]},
+        "finding": {"type": "string", "minLength": 1}
+      },
+      "required": ["score", "weight", "finding"],
+      "additionalProperties": false
     },
     "candidate_ledger": {
       "type": "object",
