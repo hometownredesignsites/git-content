@@ -348,6 +348,10 @@ def _repair_cta_contrast(candidate: Path, browser: dict) -> list[str]:
     selectors = []
     for issue in _cta_issues(browser):
         selector = str(issue.get("selector", "")).strip()
+        # Forty's tile links are full-card click overlays. Giving one a CTA
+        # background paints over the card image, so never style it as a button.
+        if ".tile-link" in selector:
+            continue
         if SAFE_SELECTOR.fullmatch(selector) and selector not in selectors:
             selectors.append(selector)
     if not selectors:

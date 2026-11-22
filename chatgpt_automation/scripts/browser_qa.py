@@ -374,6 +374,9 @@ VIEWPORT_CHECKS_JS = r"""async () => {
   });
   const primaryCtas = Array.from(document.querySelectorAll('a,button,[role="button"],input[type="submit"]')).filter(element => {
     if (!visible(element)) return false;
+    // A full-card link is a click target, not a visible button. Measuring its
+    // hidden label as CTA text can trigger a repair that covers the card image.
+    if (element.matches('a.tile-link') && element.closest('.tiles article')?.querySelector('.image img')) return false;
     const label = [element.innerText, element.getAttribute('aria-label'), element.getAttribute('value'), element.getAttribute('href')].filter(Boolean).join(' ');
     const classes = String(element.className || '');
     return ctaWords.test(label) || /(?:^|[\s_-])(?:button|btn|cta|primary|call[-_]?to[-_]?action)(?:$|[\s_-])/i.test(classes);
@@ -420,6 +423,19 @@ VIEWPORT_CHECKS_JS = r"""async () => {
   });
   const images = Array.from(document.images);
   images.forEach(image => { image.loading = 'eager'; });
+  const opaqueImageTileOverlays = Array.from(document.querySelectorAll('.tiles article a.tile-link')).flatMap(element => {
+    const article = element.closest('article');
+    const image = article && article.querySelector('.image img');
+    if (!image) return [];
+    const style = getComputedStyle(element);
+    const overlay = element.getBoundingClientRect();
+    const card = article.getBoundingClientRect();
+    const coversCard = style.position === 'absolute' && overlay.width >= card.width * 0.9 && overlay.height >= card.height * 0.9;
+    const background = rgba(style.backgroundColor);
+    return coversCard && background && background.alpha >= 0.95
+      ? [{selector: stableSelector(element), background: style.backgroundColor}]
+      : [];
+  });
   const imageResults = images.map(image => ({
     src: image.currentSrc || image.src || '',
     loaded: image.complete && image.naturalWidth > 0,
@@ -462,6 +478,7 @@ VIEWPORT_CHECKS_JS = r"""async () => {
       pass: primaryCtas.length > 0 && primaryCtaContrastIssues.length === 0,
       issues: primaryCtas.length ? primaryCtaContrastIssues : [{reason: 'no visible primary CTA could be identified'}]
     },
+    opaque_image_tile_overlays: opaqueImageTileOverlays,
     visible_content_images: {distinct_count: distinctVisibleAssets.size, loaded_count: loadedVisibleAssets.size, failures: visibleMediaResults.filter(item => !item.loaded)},
     horizontal_overflow: {scroll_width: documentWidth, viewport_width: root.clientWidth, overflow: documentWidth > root.clientWidth + 1},
     images: {count: images.length, loaded_count: imageResults.filter(item => item.loaded).length, failures: imageResults.filter(item => !item.loaded)},
@@ -1024,6 +1041,9 @@ def main() -> int:
             "hero_spans_viewport_desktop_and_mobile": bool(desktop.get("hero_spans_viewport") and mobile.get("hero_spans_viewport")),
             "hero_media_covers_hero_desktop_and_mobile": bool(desktop.get("hero_media_covers_hero") and mobile.get("hero_media_covers_hero")),
             "hero_image_loads_desktop_and_mobile": bool(desktop.get("hero_image_loaded") and mobile.get("hero_image_loaded")),
+            "image_tile_overlays_do_not_hide_photos": bool(
+                not desktop.get("opaque_image_tile_overlays") and not mobile.get("opaque_image_tile_overlays")
+            ),
             "visible_content_images_load_in_browser": bool(
                 desktop.get("visible_content_images", {}).get("distinct_count", 0) >= 1
                 and mobile.get("visible_content_images", {}).get("distinct_count", 0) >= 1

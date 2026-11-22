@@ -451,6 +451,7 @@ def _browser_qa_result(session_dir):
         "hero_spans_viewport_desktop_and_mobile",
         "hero_media_covers_hero_desktop_and_mobile",
         "hero_image_loads_desktop_and_mobile",
+        "image_tile_overlays_do_not_hide_photos",
         "visible_content_images_load_in_browser",
         "cta_arrows_absent_desktop_and_mobile",
         "cta_visible_first_screen_desktop_and_mobile",
@@ -1333,6 +1334,7 @@ def assess_website(prompt, session_dir):
         "hero_spans_viewport_desktop_and_mobile",
         "hero_media_covers_hero_desktop_and_mobile",
         "hero_image_loads_desktop_and_mobile",
+        "image_tile_overlays_do_not_hide_photos",
         "visible_content_images_load_in_browser",
         "cta_arrows_absent_desktop_and_mobile",
         "cta_visible_first_screen_desktop_and_mobile",
@@ -1496,6 +1498,7 @@ def assess_website(prompt, session_dir):
         "browser_hero_spans_viewport_desktop_and_mobile",
         "browser_hero_media_covers_hero_desktop_and_mobile",
         "browser_hero_image_loads_desktop_and_mobile",
+        "browser_image_tile_overlays_do_not_hide_photos",
         "browser_visible_content_images_load_in_browser",
         "browser_cta_arrows_absent_desktop_and_mobile",
         "browser_cta_visible_first_screen_desktop_and_mobile",
@@ -1544,6 +1547,8 @@ def assess_website(prompt, session_dir):
         missing_sections.append("a successfully loaded hero image on desktop and mobile")
     if not checks.get("browser_visible_content_images_load_in_browser"):
         missing_sections.append("all visible content images loading in desktop and mobile browsers")
+    if not checks.get("browser_image_tile_overlays_do_not_hide_photos"):
+        missing_sections.append("image-tile click overlays that do not cover photos with opaque backgrounds")
     if not checks.get("browser_cta_arrows_absent_desktop_and_mobile"):
         missing_sections.append("CTA buttons without rendered arrow characters, icons, or pseudo-elements")
     if not checks.get("browser_desktop_navigation_has_single_visible_menu"):
