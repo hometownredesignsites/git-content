@@ -133,49 +133,62 @@ FALLBACK_IMAGES = {
         ("https://images.unsplash.com/photo-1531058020387-3be344556be6?auto=format&fit=crop&w=1800&q=85", "specialty retail display"),
         ("https://images.unsplash.com/photo-1490312278390-ab64016e0aa9?auto=format&fit=crop&w=1800&q=85", "curated shop interior"),
     ),
+    "equestrian": (
+        ("https://images.unsplash.com/photo-1500595046743-cd271d694d30?auto=format&fit=crop&w=1800&q=85", "farm landscape with livestock"),
+        ("https://images.unsplash.com/photo-1472396961693-142e6e269027?auto=format&fit=crop&w=1800&q=85", "rural landscape and wildlife"),
+        ("https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1800&q=85", "open farmland and fields"),
+    ),
+    "auto_parts": (
+        ("https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?auto=format&fit=crop&w=1800&q=85", "automotive workshop and parts service"),
+        ("https://images.unsplash.com/photo-1486006920555-c77dcf18193c?auto=format&fit=crop&w=1800&q=85", "automotive garage and repair workspace"),
+        ("https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=1800&q=85", "automotive product and vehicle detail"),
+    ),
+    "books_records": (
+        ("https://images.unsplash.com/photo-1507842217343-583bb7270b66?auto=format&fit=crop&w=1800&q=85", "independent bookstore shelves"),
+        ("https://images.unsplash.com/photo-1519682337058-a94d519337bc?auto=format&fit=crop&w=1800&q=85", "books and reading"),
+        ("https://images.unsplash.com/photo-149544해서?auto=format&fit=crop&w=1800&q=85", "curated bookshop interior"),
+    ),
+    "upholstery": (
+        ("https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=1800&q=85", "upholstered furniture in a living room"),
+        ("https://images.unsplash.com/photo-1567538096630-e0c55bd6374c?auto=format&fit=crop&w=1800&q=85", "furniture and upholstery detail"),
+        ("https://images.unsplash.com/photo-1493663284031-b7e3aefcae8e?auto=format&fit=crop&w=1800&q=85", "furniture and interior furnishings"),
+    ),
 }
 
 
 def _fallback_pool(category: str) -> tuple[tuple[str, str], ...]:
-    """Choose the most specific fixed imagery pool for a catalog business type."""
+    """Choose a specific fixed image pool before considering broad category pools."""
     lowered = re.sub(r"[^a-z0-9]+", " ", category.lower()).strip()
-    # Specific trades first; broad catalog sectors are deliberate fallbacks.
-    if re.search(r"auto|automotive|mechanic|collision|tire|transmission|vehicle|motorcycle|rv repair|boat repair|towing|exhaust", lowered):
-        return FALLBACK_IMAGES["automotive"]
-    if re.search(r"pet|dog|cat|groom|kennel|boarding|animal|aquarium|farrier|horse", lowered):
-        return FALLBACK_IMAGES["pet_services"]
-    if re.search(r"event|venue|wedding|party|banquet|tent rental|dj|bounce house|photo booth|planner", lowered):
-        return FALLBACK_IMAGES["events_venues"]
-    if re.search(r"restaurant|food|beverage|cater|bakery|coffee|brewery|winery|distillery|deli|butcher|ice cream|food truck", lowered):
-        return FALLBACK_IMAGES["food_beverage"]
-    if re.search(r"hotel|hospitality|inn|bed and breakfast|lodging|resort", lowered):
-        return FALLBACK_IMAGES["hospitality"]
-    if re.search(r"salon|barber|nail|spa|tailor|dry cleaner|shoe repair|watch repair|photograph", lowered):
-        return FALLBACK_IMAGES["personal_services"]
-    if re.search(r"farm|agricultur|rural|orchard|livestock|tractor|feed mill|equestrian|agritourism|pumpkin", lowered):
-        return FALLBACK_IMAGES["agriculture_rural"]
-    if re.search(r"recreation|bowling|mini golf|go kart|escape room|playground|dance|martial arts|gym|kayak|fishing|makerspace|pottery", lowered):
-        return FALLBACK_IMAGES["recreation"]
-    if re.search(r"retail|store|shop|florist|jewelry|furniture|mattress|appliance|lighting|bicycle|golf|clothing", lowered):
-        return FALLBACK_IMAGES["retail"]
-    if re.search(r"antique|salvage|estate sale|used furniture|book|record|instrument|auto parts|specialty inventory|pawn", lowered):
-        return FALLBACK_IMAGES["specialty_inventory"]
-    if re.search(r"fenc|gate", lowered):
-        return FALLBACK_IMAGES["fence"]
-    if re.search(r"deck|patio", lowered):
-        return FALLBACK_IMAGES["deck"]
-    if "landscap" in lowered or "garden" in lowered:
-        return FALLBACK_IMAGES["landscap"]
-    if "kitchen" in lowered:
-        return FALLBACK_IMAGES["kitchen"]
-    if "bath" in lowered:
-        return FALLBACK_IMAGES["bathroom"]
-    if re.search(r"carpent|woodwork", lowered):
-        return FALLBACK_IMAGES["carpentry"]
-    if re.search(r"home|roof|siding|window|remodel|renovat|contractor|construction|plumb|hvac|electric|masonry|concrete|floor|garage door|locksmith|septic|well|pest|gutter|chimney", lowered):
-        return FALLBACK_IMAGES["home"]
+    # Specific inventory and specialist services must precede generic store/shop,
+    # pet, event, and home-service matches.
+    rules = (
+        (r"used auto parts|auto parts|automotive parts", "specialty_inventory"),
+        (r"used book|bookstore|book shop|record store|vinyl|musical instrument|instrument store|antique|salvage|reclamation|estate sale|pawn|used furniture", "specialty_inventory"),
+        (r"horse boarding|horse stable|riding school|farrier|equestrian|livestock|tack shop|feed mill|feed store|farm equipment|tractor repair|agricultural equipment|custom farming|hunting preserve", "agriculture_rural"),
+        (r"wedding.*farm|event.*farm|agritourism|orchard|christmas tree farm|pumpkin farm|farm market|local farm", "agriculture_rural"),
+        (r"aquarium maintenance|aquarium service|fish tank maintenance", "pet_services"),
+        (r"upholstery|furniture restoration|furniture repair", "specialty_inventory"),
+        (r"auto|automotive|mechanic|collision|tire|transmission|vehicle|motorcycle|rv repair|boat repair|towing|exhaust|car audio|classic car|small engine", "automotive"),
+        (r"pet|dog|cat|groom|kennel|boarding|animal|pet sitter|daycare", "pet_services"),
+        (r"event|venue|wedding|party|banquet|tent rental|dj|bounce house|photo booth|planner|limousine|bridal|tuxedo", "events_venues"),
+        (r"restaurant|food|beverage|cater|bakery|coffee|brewery|winery|distillery|deli|butcher|ice cream|food truck|donut|candy|taproom|cidery", "food_beverage"),
+        (r"hotel|hospitality|inn|bed and breakfast|lodging|resort", "hospitality"),
+        (r"salon|barber|nail|spa|tailor|alteration|dry cleaner|shoe repair|watch repair|photograph", "personal_services"),
+        (r"farm|agricultur|rural|orchard|livestock|tractor|feed mill|equestrian|agritourism|pumpkin", "agriculture_rural"),
+        (r"recreation|bowling|mini golf|go kart|escape room|playground|dance|martial arts|gym|kayak|fishing|makerspace|pottery|music school|art studio|woodworking studio", "recreation"),
+        (r"retail|store|shop|florist|jewelry|furniture|mattress|appliance|lighting|bicycle|golf|clothing|garden center|nursery|flooring showroom|cabinet showroom|fireplace|kitchen bath|pool spa", "retail"),
+        (r"fenc|gate", "fence"),
+        (r"deck|patio", "deck"),
+        (r"landscap|garden|tree service|lawn care|irrigation", "landscap"),
+        (r"kitchen", "kitchen"),
+        (r"bath", "bathroom"),
+        (r"carpent|woodwork", "carpentry"),
+        (r"hvac|plumb|electric|roof|siding|general contractor|remodel|renovat|masonry|concrete|excavation|pressure wash|window cleaning|gutter|chimney|pest control|septic|well service|garage door|locksmith|home inspector|home service|construction", "home"),
+    )
+    for pattern, pool_name in rules:
+        if re.search(pattern, lowered):
+            return FALLBACK_IMAGES[pool_name]
     return ()
-
 
 def _is_source_image_host_allowed(image_url: str, source_domain: str) -> bool:
     """Allow source-host photos and URLs served by common first-party image CDNs."""
