@@ -204,7 +204,7 @@ def _retry_guidance(previous_candidate: Path | None) -> str:
         missing_files = [str(field) for field in missing_fields if str(field).casefold() == "file"]
         if missing_files:
             corrections.append(
-                "Do not add a public file-upload control. Uploads are opt-in for this demo and the source site having one is not approval. "
+                "Do not add a public file-upload control. Public uploads are omitted from demo forms, even when the source site has one. "
                 "Preserve all captured non-file contact fields."
             )
         else:
@@ -590,7 +590,7 @@ def compact_facts(facts: dict) -> tuple[dict, list[str]]:
         "page_sections": headings,
         "contact_details": contact_details,
         "contact_fields": form_fields,
-        "public_file_upload_policy": "disabled_by_default; require explicit redesign approval",
+        "public_file_upload_policy": "omit_public_upload_fields_even_if_present_on_source",
         "contact_form_source": selected_form.get("page_url", ""),
         "contact_page_source": str(contact_pages[0].get("url", "")) if contact_pages else "",
         "contact_actions": links,

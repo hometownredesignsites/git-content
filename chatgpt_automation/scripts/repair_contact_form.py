@@ -131,8 +131,8 @@ class _DocumentParser(HTMLParser):
                 node.text.append(clean)
 
 
-def source_contact_form(source_facts: dict, *, allow_public_file_uploads: bool = False) -> dict:
-    """Select a source contact form; public uploads are opt-in, not copied by default."""
+def source_contact_form(source_facts: dict) -> dict:
+    """Select a source contact form while omitting public file uploads from demos."""
     candidates = []
     contact_page_seen = False
     ignored_noncontact_forms = 0
@@ -146,14 +146,13 @@ def source_contact_form(source_facts: dict, *, allow_public_file_uploads: bool =
         is_article_page = bool(ARTICLE_PATH_HINT.search(page_path))
         for form_index, form in enumerate(page.get("forms", [])):
             raw_fields = form.get("fields", [])
-            if not allow_public_file_uploads:
-                omitted_public_file_upload_fields += sum(
-                    str(field.get("type", "")).lower() == "file" for field in raw_fields
-                )
+            omitted_public_file_upload_fields += sum(
+                str(field.get("type", "")).lower() == "file" for field in raw_fields
+            )
             form_fields = [
                 field for field in form.get("fields", [])
                 if str(field.get("type", "")).lower() not in EXCLUDED_TYPES
-                and (allow_public_file_uploads or str(field.get("type", "")).lower() != "file")
+                and str(field.get("type", "")).lower() != "file"
             ]
             if not form_fields:
                 continue
@@ -390,8 +389,8 @@ def _render_field(field: dict, used_ids: set[str]) -> str | None:
     label = " ".join(str(field.get("label") or field.get("aria_label") or field.get("placeholder") or field.get("name") or "").split())
     source_tag = str(field.get("tag", "input")).lower()
     source_type = str(field.get("type", "text")).lower()
-    # Public upload controls require an explicit opt-in; source presence alone
-    # must never cause the repair step to add one to a demo site.
+    # Public upload controls are omitted from demo sites, even if they appear
+    # in the source form; the repair step must never add one.
     if source_type == "file":
         return None
     if not label:

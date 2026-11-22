@@ -173,7 +173,7 @@ class SavedResponsePipelineTest(unittest.TestCase):
         contact_fields = compact["contact_fields"]
         self.assertEqual(len(contact_fields), 9)
         self.assertFalse(any(field["type"] == "file" for field in contact_fields))
-        self.assertEqual(compact["public_file_upload_policy"], "disabled_by_default; require explicit redesign approval")
+        self.assertEqual(compact["public_file_upload_policy"], "omit_public_upload_fields_even_if_present_on_source")
         message_field = next(field for field in contact_fields if field["label"] == "Message")
         self.assertTrue(message_field["required"])
         self.assertEqual(message_field["placeholder"], "Describe your project")
