@@ -29,6 +29,9 @@
     },
     {
       "$ref": "#/$defs/final_status"
+    },
+    {
+      "$ref": "#/$defs/candidate_ledger"
     }
   ],
   "$defs": {
@@ -1152,6 +1155,280 @@
         "html_sha256",
         "final_status",
         "finalized_at"
+      ],
+      "additionalProperties": true
+    },
+    "candidate_ledger": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "const": "1.0"
+        },
+        "record_type": {
+          "type": "string",
+          "const": "candidate_ledger"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "candidate_id": {
+          "type": "null"
+        },
+        "target_passing_slots": {
+          "type": "integer",
+          "const": 3
+        },
+        "initial_attempt_limit": {
+          "type": "integer",
+          "const": 12
+        },
+        "continuation_attempt_limit": {
+          "type": "integer",
+          "const": 12
+        },
+        "max_total_attempts": {
+          "type": "integer",
+          "const": 24
+        },
+        "attempts_used": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 24
+        },
+        "batch_attempts": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 12
+          },
+          "minItems": 1,
+          "maxItems": 2
+        },
+        "passing_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "passing_slots": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "slot": {
+                "type": "integer",
+                "enum": [
+                  1,
+                  2,
+                  3
+                ]
+              },
+              "candidate_id": {
+                "type": "string"
+              },
+              "html_path": {
+                "type": "string"
+              },
+              "html_sha256": {
+                "type": "string"
+              },
+              "final_status": {
+                "type": "string",
+                "const": "PASS"
+              },
+              "evidence_path": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "slot",
+              "candidate_id",
+              "html_path",
+              "html_sha256",
+              "final_status",
+              "evidence_path"
+            ],
+            "additionalProperties": true
+          },
+          "maxItems": 3
+        },
+        "missing_slots": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "enum": [
+              1,
+              2,
+              3
+            ]
+          },
+          "uniqueItems": true
+        },
+        "continuation": {
+          "type": "object",
+          "properties": {
+            "eligible": {
+              "type": "boolean"
+            },
+            "reason": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "eligible",
+            "reason"
+          ],
+          "additionalProperties": true
+        },
+        "terminal_status": {
+          "type": "string",
+          "enum": [
+            "PASS",
+            "INCOMPLETE",
+            "BLOCKED",
+            "FAIL"
+          ]
+        },
+        "attempts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "attempt_number": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 24
+              },
+              "batch_number": {
+                "type": "integer",
+                "enum": [
+                  1,
+                  2
+                ]
+              },
+              "batch_attempt_number": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 12
+              },
+              "candidate_id": {
+                "type": "string"
+              },
+              "candidate_path": {
+                "type": "string"
+              },
+              "slot": {
+                "type": "integer",
+                "enum": [
+                  1,
+                  2,
+                  3
+                ]
+              },
+              "template": {
+                "type": "string",
+                "enum": [
+                  "Forty",
+                  "Landed",
+                  "Story"
+                ]
+              },
+              "template_signature_id": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "PASS",
+                  "FAIL",
+                  "BLOCKED",
+                  "UNVERIFIED",
+                  "REPAIRED",
+                  "RETESTING"
+                ]
+              },
+              "qualifies_as_pass": {
+                "type": "boolean"
+              },
+              "failed_check_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "failure_summary": {
+                "type": "string"
+              },
+              "repair_status": {
+                "type": "string"
+              },
+              "retest_status": {
+                "type": "string"
+              },
+              "html_sha256": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "evidence_paths": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "retention": {
+                "type": "string",
+                "enum": [
+                  "retained",
+                  "surplus_pass",
+                  "failed",
+                  "superseded"
+                ]
+              }
+            },
+            "required": [
+              "attempt_number",
+              "batch_number",
+              "batch_attempt_number",
+              "candidate_id",
+              "candidate_path",
+              "slot",
+              "template",
+              "status",
+              "qualifies_as_pass",
+              "failed_check_ids",
+              "failure_summary",
+              "evidence_paths",
+              "retention"
+            ],
+            "additionalProperties": true
+          }
+        }
+      },
+      "required": [
+        "schema_version",
+        "record_type",
+        "run_id",
+        "created_at",
+        "candidate_id",
+        "target_passing_slots",
+        "initial_attempt_limit",
+        "continuation_attempt_limit",
+        "max_total_attempts",
+        "attempts_used",
+        "batch_attempts",
+        "passing_count",
+        "passing_slots",
+        "missing_slots",
+        "continuation",
+        "terminal_status",
+        "attempts"
       ],
       "additionalProperties": true
     }
