@@ -393,6 +393,7 @@ website-poc-output/
   candidate-story.html
   evidence/
     run.json
+    candidate-ledger.json
     source-facts.json
     generation-context.json
     candidate-forty/
@@ -421,6 +422,10 @@ If the environment requires a different root, preserve this relative layout and 
 - Each check is an object with `id`, `status`, `blocking`, `summary`, and `evidence_paths` (array). Add `details` for measured values, observed defects, or error text. Keep blocking and advisory checks distinct.
 - Paths must point to real saved files. Do not claim a screenshot, report, source capture, or repair artifact exists unless it was saved and verified. Include viewport dimensions and candidate ID in screenshot metadata or filenames.
 - Preserve the final HTML SHA-256 in all candidate-level QA/review/final records. If the HTML changes, invalidate its QA and review statuses until rerun and update the digest.
+
+**Candidate ledger contract**
+
+`evidence/candidate-ledger.json` is the authoritative append-only attempt history. Include the common record fields plus `target_passing_slots: 3`, `initial_attempt_limit: 12`, `continuation_attempt_limit: 12`, `max_total_attempts: 24`, `attempts_used`, `batch_attempts`, `passing_count`, `passing_slots` (slot, candidate ID, HTML path/digest, final status, evidence path), `missing_slots`, `continuation` (eligible boolean and reason), `terminal_status`, and ordered `attempts`. Each attempt records `attempt_number`, `batch_number`, `batch_attempt_number`, `candidate_id`, `candidate_path`, `slot`, `template`, `template_signature_id`, `status`, `qualifies_as_pass`, `failed_check_ids`, `failure_summary`, `repair_status`, `retest_status`, `html_sha256`, `evidence_paths`, and `retention` (`retained`, `surplus_pass`, `failed`, or `superseded`). Keep every attempt; never reuse an attempt number or overwrite an earlier record. The terminal status is PASS only with three distinct passing slots; otherwise use INCOMPLETE, BLOCKED, or FAIL with the missing-slot list and reason.
 
 **Required record contracts**
 
