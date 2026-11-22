@@ -30,12 +30,14 @@ class TemplateScaffoldsTest(unittest.TestCase):
         for selector in TEMPLATES["story"]["css_selectors"]:
             self.assertIn(f"{selector} {{", context)
 
-    def test_story_scaffold_requires_full_bleed_hero_photo(self):
+    def test_story_scaffold_requires_business_relevant_full_bleed_hero_photo(self):
         story = next(reference for reference in supported_references() if reference["name"] == "Story")
         context = scaffold_context(story)
 
         self.assertEqual(TEMPLATES["story"]["signature_id"], "story-fullbleed-divided-panels-gallery")
-        self.assertIn("full-bleed flooring photo", context)
+        self.assertIn("validated, business-relevant photo", context)
+        self.assertIn("do not assume a specific business category", context)
+        self.assertNotIn("flooring photo", context)
         self.assertIn("cover the entire hero edge-to-edge and top-to-bottom on desktop and mobile", context)
         self.assertIn("Do not use a half-width side-by-side hero image or a narrow mobile image rail", context)
 
