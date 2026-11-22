@@ -1377,6 +1377,7 @@ def assess_website(prompt, session_dir):
     missing_contact_channels = []
     missing_form_fields = []
     missing_required_fields = []
+    required_status_mismatches = []
     if source_facts_path.is_file():
         try:
             source_facts = json.loads(source_facts_path.read_text(encoding="utf-8"))
@@ -1406,9 +1407,12 @@ def assess_website(prompt, session_dir):
                 checks["source_contact_channels_preserved"] = not missing_contact_channels
             source_forms = source_form_assessment.get("fields", [])
             if source_form_assessment.get("status") == "captured" and source_forms:
-                expected_fields = {normalize_form_field(field) for field in source_forms} - {"", "text"}
-                actual_fields = {normalize_form_field(field) for field in parser.form_fields} - {"", "text"}
+                expected_file_fields = [field for field in source_forms if str(field.get("type", "")).lower() == "file"]
+                actual_file_fields = [field for field in parser.form_fields if str(field.get("type", "")).lower() == "file"]
+                expected_fields = {normalize_form_field(field) for field in source_forms} - {"", "text", "file"}
+                actual_fields = {normalize_form_field(field) for field in parser.form_fields} - {"", "text", "file"}
                 missing_form_fields = sorted(expected_fields - actual_fields)
+                missing_form_fields.extend(["file"] * max(0, len(expected_file_fields) - len(actual_file_fields)))
                 checks["source_contact_form_present"] = parser.forms > 0
                 checks["source_contact_form_fields_preserved"] = parser.forms > 0 and not missing_form_fields
                 expected_required = {
@@ -1418,7 +1422,39 @@ def assess_website(prompt, session_dir):
                     normalize_form_field(field) for field in parser.form_fields if field.get("required") is True
                 } - {"", "text"}
                 missing_required_fields = sorted(expected_required - actual_required)
-                checks["source_contact_form_required_fields_preserved"] = not missing_required_fields
+                actual_by_key = {}
+                for field in parser.form_fields:
+                    key = normalize_form_field(field)
+                    if key and key not in {"", "text"}:
+                        actual_by_key.setdefault(key, []).append(field)
+                for field in source_forms:
+                    if str(field.get("type", "")).lower() == "file":
+                        continue
+                    key = normalize_form_field(field)
+                    if not key or key == "text":
+                        continue
+                    candidates = actual_by_key.get(key, [])
+                    expected_state = field.get("required") is True
+                    actual_states = sorted({candidate.get("required") is True for candidate in candidates})
+                    if candidates and expected_state not in actual_states:
+                        required_status_mismatches.append({
+                            "field": key,
+                            "expected_required": expected_state,
+                            "actual_required_states": actual_states,
+                        })
+                for index, field in enumerate(expected_file_fields[:len(actual_file_fields)]):
+                    expected_state = field.get("required") is True
+                    actual_state = actual_file_fields[index].get("required") is True
+                    if expected_state != actual_state:
+                        required_status_mismatches.append({
+                            "field": "file",
+                            "index": index,
+                            "expected_required": expected_state,
+                            "actual_required_states": [actual_state],
+                        })
+                checks["source_contact_form_required_fields_preserved"] = (
+                    not missing_required_fields and not required_status_mismatches
+                )
             else:
                 source_form_assessment["status"] = "not_found"
                 if parser.forms:
@@ -1653,6 +1689,7 @@ def assess_website(prompt, session_dir):
         "generated_form_fields": parser.form_fields,
         "source_form_fields_missing": missing_form_fields,
         "source_form_required_fields_missing": missing_required_fields,
+        "source_form_required_status_mismatches": required_status_mismatches,
         "contact_form_repair": contact_form_repair,
         "source_contact_form_assessment": source_form_assessment,
         "local_link_repair": local_link_repair,

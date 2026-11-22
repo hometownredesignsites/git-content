@@ -165,13 +165,54 @@ def _retry_guidance(previous_candidate: Path | None) -> str:
     if failures & {"cta_buttons_no_arrows", "browser_cta_arrows_absent_desktop_and_mobile"}:
         corrections.append("Remove arrow characters and arrow icons from CTA buttons, including SVG icons and CSS ::before/::after content.")
     if "browser_cta_visible_first_screen_desktop_and_mobile" in failures:
-        corrections.append("Keep a clearly labeled primary CTA visible in the first screen on desktop and mobile.")
+        browser_report = _read_json(previous_candidate / "debug" / "browser_qa.json")
+        viewports = browser_report.get("viewports", {}) if isinstance(browser_report, dict) else {}
+        measured = []
+        if isinstance(viewports, dict):
+            for viewport_name in ("desktop", "mobile"):
+                viewport = viewports.get(viewport_name, {})
+                if not isinstance(viewport, dict):
+                    continue
+                cta = viewport.get("cta", {})
+                if not isinstance(cta, dict):
+                    continue
+                size = f"{viewport.get('width', '?')}x{viewport.get('height', '?')}"
+                if cta.get("visible_first_screen"):
+                    measured.append(
+                        f"{viewport_name} {size}: {str(cta.get('text', '')).strip()[:60]!r} ends at y={cta.get('bottom')}"
+                    )
+                else:
+                    candidates = cta.get("candidates", [])
+                    candidate_details = [
+                        f"{str(item.get('text', '')).strip()[:40]!r} -> {str(item.get('href', ''))[:100]!r} at y={item.get('top')}"
+                        for item in candidates[:3] if isinstance(item, dict)
+                    ] if isinstance(candidates, list) else []
+                    detail = "; existing actions: " + ", ".join(candidate_details) if candidate_details else ""
+                    measured.append(f"{viewport_name} {size}: no qualifying CTA is visible in the first screen{detail}")
+        detail = " Measured: " + "; ".join(measured) + "." if measured else ""
+        corrections.append(
+            "Place a clearly labeled primary action inside the hero or first-screen content, visible without opening navigation "
+            "at both desktop and mobile sizes; keep its verified href/action and label." + detail
+        )
     if "browser_rendered_sections_visible_desktop_and_mobile" in failures:
         corrections.append("Ensure every requested section has visible, nonempty content at desktop and mobile sizes.")
     if "generated_contact_form_has_source_basis" in failures:
         corrections.append("No source form fields were captured. Omit the form and use only verified phone or email contact links.")
     if "source_contact_form_fields_preserved" in failures or "source_contact_form_required_fields_preserved" in failures:
-        corrections.append("Preserve every captured source contact-form field, label, required state, and placeholder; the pipeline can repair only simple missing controls.")
+        checker = _read_json(previous_candidate / "debug" / "checker_report.json")
+        missing_fields = checker.get("source_form_fields_missing", []) if isinstance(checker, dict) else []
+        missing_files = [str(field) for field in missing_fields if str(field).casefold() == "file"]
+        if missing_files:
+            corrections.append(
+                "The source contact form contains an optional file upload. Include an accessible "
+                '<label for="...">Attach a file</label><input type="file" ...> control and leave it optional (no required attribute). '
+                "Preserve the supplied field type and required state for every contact_fields entry."
+            )
+        else:
+            corrections.append(
+                "Preserve every captured source contact-form field's supplied type, label, required state, and placeholder. "
+                "Include fields even when the source has no name or label; use a concise accessible label for an unlabeled control."
+            )
     if "source_contact_channels_preserved" in failures:
         corrections.append("Include clickable links for all verified source email and phone contact details.")
     if "local_routes_resolve" in failures:
@@ -180,6 +221,33 @@ def _retry_guidance(previous_candidate: Path | None) -> str:
         corrections.append("Include every requested section with its own clear heading and substantial supporting content; missing or incomplete sections fail the candidate.")
     if "browser_mobile_has_no_horizontal_overflow" in failures:
         corrections.append("Prevent any element from creating horizontal page overflow at the mobile viewport.")
+    mobile_failures = failures & {
+        "browser_desktop_navigation_has_single_visible_menu",
+        "browser_mobile_navigation_hidden_until_opened",
+        "browser_mobile_navigation_is_only_visible_menu_when_open",
+        "browser_mobile_menu_clicks_work",
+        "browser_mobile_menu_control_visible",
+        "browser_mobile_menu_focus_indicator_visible",
+        "browser_mobile_menu_keyboard_works",
+    }
+    if mobile_failures:
+        browser_report = _read_json(previous_candidate / "debug" / "browser_qa.json")
+        menu = browser_report.get("mobile_menu", {}) if isinstance(browser_report, dict) else {}
+        diagnostic_keys = (
+            "controlled_nav_id", "button_inside_navigation", "hidden_until_open", "only_one_nav_visible_when_open", "click_opens", "click_closes",
+            "tab_reachable", "focus_indicator_visible", "enter_opens", "space_toggles", "escape_closes",
+        )
+        measured = {key: menu.get(key) for key in diagnostic_keys if key in menu} if isinstance(menu, dict) else {}
+        corrections.append(
+            "Use one mobile-menu toggle linked to its controlled navigation; it must start hidden, open and close on click, "
+            "support Enter and Space, close on Escape and return focus to the toggle, and leave only the mobile menu visible when open. "
+            "Measured menu behavior: " + json.dumps(measured, ensure_ascii=False, separators=(",", ":")) + "."
+        )
+    if "styles_css_linked" in failures:
+        corrections.append(
+            'Link the generated stylesheet from the document head with <link rel="stylesheet" href="styles.css">; '
+            "keep the stylesheet file present and the href relative to index.html."
+        )
     if "browser_primary_ctas_readable_desktop_and_mobile" in failures:
         browser_report = _read_json(previous_candidate / "debug" / "browser_qa.json")
         measured = []
@@ -367,15 +435,27 @@ def compact_facts(facts: dict) -> tuple[dict, list[str]]:
         label = re.sub(r"\s*[(*]required[*)]\s*", " ", label, flags=re.IGNORECASE).strip()
         if not label and field_type == "textarea":
             label = "Message"
+        elif not label and field_type == "file":
+            label = "Attach a file"
         elif not label:
             label = placeholder
         if not label or str(field.get("name", "")).lower().startswith(("ak_hp", "honeypot")):
             continue
-        item = {"label": label[:70], "required": bool(field.get("required"))}
+        item = {
+            "type": field_type,
+            "label": label[:70],
+            "required": bool(field.get("required")),
+        }
         if placeholder and placeholder.casefold() != label.casefold():
             item["placeholder"] = placeholder[:110]
-        if item not in form_fields:
+        if field_type == "file" or item not in form_fields:
             form_fields.append(item)
+        if field_type == "file":
+            accepted = [value.strip() for value in str(field.get("accept", "")).split(",") if value.strip()]
+            if accepted:
+                form_fields[-1]["accept"] = ",".join(accepted)[:100]
+            if field.get("multiple") is True:
+                form_fields[-1]["multiple"] = True
         if len(form_fields) >= MAX_CONTACT_FIELDS:
             break
 

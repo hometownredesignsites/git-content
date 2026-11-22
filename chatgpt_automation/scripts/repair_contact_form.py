@@ -19,7 +19,7 @@ VOID_TAGS = {
 EXCLUDED_TYPES = {"hidden", "submit", "image", "reset"}
 SAFE_INPUT_TYPES = {
     "text", "email", "tel", "url", "number", "date", "time", "datetime-local",
-    "month", "week", "search",
+    "month", "week", "search", "file",
 }
 CONTACT_HINT = re.compile(r"contact|contactus|enquir|inquir|quote|appointment|booking|booknow", re.I)
 ARTICLE_PATH_HINT = re.compile(r"/(?:blog|blogs|article|articles|post|posts|news|comment|comments)(?:/|$)", re.I)
@@ -43,6 +43,8 @@ def normalize_form_field(field: dict) -> str:
     if len(words) % 2 == 0 and words[:len(words) // 2] == words[len(words) // 2:]:
         label = " ".join(words[:len(words) // 2])
     field_type = str(field.get("type", "")).lower()
+    if field_type == "file":
+        return "file"
     if field_type == "email" or "email" in label:
         return "email"
     if field_type == "tel" or re.search(r"\b(phone|telephone|mobile|tel)\b", label):
@@ -190,17 +192,24 @@ def source_contact_form(source_facts: dict) -> dict:
         }
 
     _, _, _, page_url, form, fields = max(candidates, key=lambda item: item[:3])
-    deduplicated = {}
+    deduplicated = []
+    seen_categories = {}
     for field in fields:
         key = normalize_form_field(field)
+        if key == "file":
+            deduplicated.append(field)
+            continue
         if key and key not in {"text", "select"}:
-            existing = deduplicated.get(key)
-            if existing is None or (field.get("required") and not existing.get("required")):
-                deduplicated[key] = field
+            existing_index = seen_categories.get(key)
+            if existing_index is None:
+                seen_categories[key] = len(deduplicated)
+                deduplicated.append(field)
+            elif field.get("required") and not deduplicated[existing_index].get("required"):
+                deduplicated[existing_index] = field
     return {
         "status": "captured",
         "page_url": page_url,
-        "fields": list(deduplicated.values()),
+        "fields": deduplicated,
         "form": form,
         "contact_page_seen": contact_page_seen,
         "ignored_noncontact_forms": ignored_noncontact_forms,
@@ -340,12 +349,27 @@ def _add_required(raw_start: str) -> str:
     return raw_start
 
 
+def _set_required_state(raw_start: str, required: bool) -> str:
+    if required:
+        return _add_required(raw_start)
+    return re.sub(
+        r"\s+required(?:\s*=\s*(?:\"[^\"]*\"|'[^']*'|[^\s>]+))?",
+        "",
+        raw_start,
+        flags=re.IGNORECASE,
+    )
+
+
 def _render_field(field: dict, used_ids: set[str]) -> str | None:
     label = " ".join(str(field.get("label") or field.get("aria_label") or field.get("placeholder") or field.get("name") or "").split())
-    if not label:
-        return None
     source_tag = str(field.get("tag", "input")).lower()
     source_type = str(field.get("type", "text")).lower()
+    # File inputs are commonly unlabeled in embedded source forms. Preserve
+    # their type and optional state while providing a usable accessible label.
+    if not label and source_tag == "input" and source_type == "file":
+        label = "Attach a file"
+    if not label:
+        return None
     if source_type in {"checkbox", "radio", "select"} or source_tag == "select":
         return None
     if source_tag == "textarea" or normalize_form_field(field) == "message":
@@ -372,6 +396,12 @@ def _render_field(field: dict, used_ids: set[str]) -> str | None:
     placeholder = str(field.get("placeholder", "")).strip()
     placeholder_attr = f' placeholder="{escape(placeholder, quote=True)}"' if placeholder else ""
     field_attrs = f'id="{field_id}" name="{escape(name, quote=True)}"'
+    if field_type == "file":
+        accepted = [item.strip() for item in str(field.get("accept", "")).split(",") if item.strip()]
+        if accepted and all(re.fullmatch(r"[A-Za-z0-9.+*/_-]+", item) for item in accepted):
+            field_attrs += f' accept="{escape(",".join(accepted), quote=True)}"'
+        if field.get("multiple") is True:
+            field_attrs += " multiple"
     if tag == "textarea":
         control = f"<textarea {field_attrs}{placeholder_attr}{required}></textarea>"
     else:
@@ -631,33 +661,68 @@ def repair(candidate: Path) -> dict:
                 if key:
                     actual_by_key.setdefault(key, []).append((node, field))
 
-            expected_by_key = {normalize_form_field(field): field for field in expected}
+            expected_file_fields = [field for field in expected if str(field.get("type", "")).lower() == "file"]
+            expected_by_key = {
+                normalize_form_field(field): field for field in expected
+                if str(field.get("type", "")).lower() != "file"
+            }
             required_repairs = []
             replacements = []
             for key, source_field in expected_by_key.items():
-                if source_field.get("required") is not True:
-                    continue
+                expected_state = source_field.get("required") is True
                 candidates = actual_by_key.get(key, [])
-                if any(field.get("required") is True for _, field in candidates):
+                if any((field.get("required") is True) == expected_state for _, field in candidates):
                     continue
                 if candidates:
                     node, _ = candidates[0]
                     raw_start = original[node.start:node.start_end]
-                    replacement = _add_required(raw_start)
+                    replacement = _set_required_state(raw_start, expected_state)
                     if replacement != raw_start:
                         replacements.append((node.start, node.start_end, replacement))
                         required_repairs.append(key)
+            file_controls = actual_by_key.get("file", [])
+            for index, source_field in enumerate(expected_file_fields[:len(file_controls)]):
+                node, actual_field = file_controls[index]
+                expected_state = source_field.get("required") is True
+                if (actual_field.get("required") is True) == expected_state:
+                    continue
+                raw_start = original[node.start:node.start_end]
+                replacement = _set_required_state(raw_start, expected_state)
+                if replacement != raw_start:
+                    replacements.append((node.start, node.start_end, replacement))
+                    required_repairs.append("file")
             for start, end, replacement in sorted(replacements, reverse=True):
                 original = original[:start] + replacement + original[end:]
             parser, actual = _inventory(original)
             actual_keys = {normalize_form_field(field) for _, field in actual}
             actual_required = {normalize_form_field(field) for _, field in actual if field.get("required") is True}
-            missing = [field for field in expected if normalize_form_field(field) not in actual_keys]
+            actual_file_fields = [field for _, field in actual if str(field.get("type", "")).lower() == "file"]
+            missing = [
+                field for field in expected
+                if str(field.get("type", "")).lower() != "file"
+                and normalize_form_field(field) not in actual_keys
+            ]
+            missing.extend(expected_file_fields[len(actual_file_fields):])
             missing_required = [field for field in expected if field.get("required") is True and normalize_form_field(field) not in actual_required]
+            actual_by_key = {}
+            for _, field in actual:
+                actual_by_key.setdefault(normalize_form_field(field), []).append(field)
+            required_status_mismatches = [
+                field for field in expected
+                if str(field.get("type", "")).lower() != "file"
+                if actual_by_key.get(normalize_form_field(field))
+                and not any(
+                    (candidate.get("required") is True) == (field.get("required") is True)
+                    for candidate in actual_by_key[normalize_form_field(field)]
+                )
+            ]
+            for index, field in enumerate(expected_file_fields[:len(actual_file_fields)]):
+                if (field.get("required") is True) != (actual_file_fields[index].get("required") is True):
+                    required_status_mismatches.append(field)
             result["required_fields_repaired"] = required_repairs
             result["fields_added"] = []
 
-            if missing or missing_required:
+            if missing or missing_required or required_status_mismatches:
                 target = _contact_container(parser)
                 if target is None:
                     result.update(status="needs_manual_repair", reason="No contact section or contact form could be identified safely.")

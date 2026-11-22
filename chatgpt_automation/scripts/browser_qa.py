@@ -155,7 +155,7 @@ VIEWPORT_CHECKS_JS = r"""async () => {
     };
   }
 
-  const ctaWords = /ask|call|contact|book|schedule|inquir|reserve|visit|get in touch|quote|estimate|get started|start a project|let.s talk/i;
+  const ctaWords = /ask|call|contact|email|book|schedule|inquir|reserve|visit|get in touch|quote|estimate|get started|start a project|let.s talk/i;
   const arrowGlyphs = /[←↑→↓↗↘↙↖↩↪⇢⇨⟶⟹➔➜➝➞➟➠➡➢➤⮕⮞❯❱›»]/;
   const actions = Array.from(document.querySelectorAll('a,button,[role="button"],input[type="submit"]'));
   const visibleCtas = actions.filter(element => {
@@ -163,6 +163,21 @@ VIEWPORT_CHECKS_JS = r"""async () => {
     const ctaClass = /(?:^|[\s_-])(?:button|btn|cta|call[-_]?to[-_]?action)(?:$|[\s_-])/i.test(String(element.className || ''));
     return (ctaWords.test(label) || ctaClass) && visible(element);
   });
+  const ctaCandidates = actions.filter(element => {
+    const label = [element.innerText, element.getAttribute('aria-label'), element.getAttribute('value'), element.getAttribute('href')].filter(Boolean).join(' ');
+    const ctaClass = /(?:^|[\s_-])(?:button|btn|cta|call[-_]?to[-_]?action)(?:$|[\s_-])/i.test(String(element.className || ''));
+    return ctaWords.test(label) || ctaClass;
+  }).map(element => {
+    const rect = element.getBoundingClientRect();
+    return {
+      text: (element.innerText || element.getAttribute('aria-label') || element.getAttribute('value') || '').trim().slice(0, 100),
+      href: element.getAttribute('href') || '',
+      tag: element.tagName.toLowerCase(),
+      visible: visible(element),
+      top: Math.round(rect.top),
+      bottom: Math.round(rect.bottom)
+    };
+  }).slice(0, 12);
   const ctaArrowIssues = visibleCtas.filter(element => {
     const label = [element.innerText, element.getAttribute('aria-label'), element.getAttribute('title'), element.getAttribute('value')].filter(Boolean).join(' ');
     if (arrowGlyphs.test(label)) return true;
@@ -419,7 +434,15 @@ VIEWPORT_CHECKS_JS = r"""async () => {
   return {
     hero: heroData,
     header_navigation: headerNavigation,
-    cta: {visible_first_screen: Boolean(cta), text: cta ? (cta.innerText || cta.getAttribute('aria-label') || '') : '', bottom: ctaRect ? Math.round(ctaRect.bottom) : null, arrow_issues: ctaArrowIssues.map(element => (element.innerText || element.getAttribute('aria-label') || '').trim())},
+    cta: {
+      visible_first_screen: Boolean(cta),
+      text: cta ? (cta.innerText || cta.getAttribute('aria-label') || '').trim() : '',
+      href: cta ? (cta.getAttribute('href') || '') : '',
+      tag: cta ? cta.tagName.toLowerCase() : '',
+      bottom: ctaRect ? Math.round(ctaRect.bottom) : null,
+      candidates: ctaCandidates,
+      arrow_issues: ctaArrowIssues.map(element => (element.innerText || element.getAttribute('aria-label') || '').trim())
+    },
     critical_content_clipping: {pass: clippingIssues.length === 0, issues: clippingIssues},
     contact_email_ctas: {
       count: contactEmailButtons.length,
@@ -719,7 +742,11 @@ def _exercise_mobile_menu(page) -> dict:
         }
 
     nav_id = button.get_attribute("aria-controls")
-    result = {"found": True}
+    result = {
+        "found": True,
+        "controlled_nav_id": nav_id,
+        "button_inside_navigation": bool(button.evaluate("(button, id) => { const nav = document.getElementById(id); return Boolean(nav && nav.contains(button)); }", nav_id)),
+    }
     try:
         initial_nav_audit = page.evaluate(HEADER_NAV_AUDIT_JS)
         result["hidden_until_open"] = not initial_nav_audit.get("controlled_nav_visible", True)

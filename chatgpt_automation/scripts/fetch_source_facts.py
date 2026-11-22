@@ -150,6 +150,8 @@ class _PageParser(HTMLParser):
                     "label": values.get("aria-label", ""),
                     "placeholder": values.get("placeholder", ""),
                     "required": "required" in values,
+                    "accept": values.get("accept", ""),
+                    "multiple": "multiple" in values,
                 })
 
     def handle_endtag(self, tag: str) -> None:
@@ -329,7 +331,7 @@ def _capture_rendered_page(source_url: str, base_host: str) -> dict:
                 action: form.action || '', method: (form.method || 'get').toLowerCase(),
                 fields: Array.from(form.querySelectorAll('input,select,textarea')).filter(el => !['hidden','submit','image','reset'].includes((el.type || '').toLowerCase())).slice(0, 32).map(el => {
                   const label = el.labels && el.labels.length ? clean(Array.from(el.labels).map(label => label.innerText).join(' ')) : '';
-                  return {tag: el.tagName.toLowerCase(), type: el.type || el.tagName.toLowerCase(), name: el.name || '', id: el.id || '', label: label || clean(el.getAttribute('aria-label') || ''), placeholder: el.placeholder || '', required: !!el.required};
+                  return {tag: el.tagName.toLowerCase(), type: el.type || el.tagName.toLowerCase(), name: el.name || '', id: el.id || '', label: label || clean(el.getAttribute('aria-label') || ''), placeholder: el.placeholder || '', required: !!el.required, accept: el.accept || '', multiple: !!el.multiple};
                 })
               }));
               return {title: clean(document.title), headings, text: clean(document.body && document.body.innerText).slice(0,16000), images, backgrounds, links, forms};

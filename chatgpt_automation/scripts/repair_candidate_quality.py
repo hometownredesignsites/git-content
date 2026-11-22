@@ -9,6 +9,7 @@ import json
 import re
 from html.parser import HTMLParser
 from pathlib import Path
+import urllib.parse
 
 from site_quality import (
     _category_fallback_image_urls_from_prompt,
@@ -25,6 +26,8 @@ REPAIRABLE_IMAGE_CHECKS = {
     "hero_uses_source_or_category_asset",
 }
 CTA_CHECK = "browser_primary_ctas_readable_desktop_and_mobile"
+CTA_VISIBILITY_CHECK = "browser_cta_visible_first_screen_desktop_and_mobile"
+CSS_LINK_CHECK = "styles_css_linked"
 LAYOUT_CHECK = "browser_template_layout_signature_matches"
 SAFE_SELECTOR = re.compile(r"^[A-Za-z0-9_#.:,>+~*\\()\s-]+$")
 
@@ -354,6 +357,191 @@ def _repair_cta_contrast(candidate: Path, browser: dict) -> list[str]:
     return selectors
 
 
+def _repair_stylesheet_link(candidate: Path) -> bool:
+    html_path = candidate / "files" / "index.html"
+    css_path = candidate / "files" / "styles.css"
+    if not html_path.is_file() or not css_path.is_file():
+        return False
+    source = html_path.read_text(encoding="utf-8", errors="replace")
+    if re.search(
+        r"<link\b(?=[^>]*\brel\s*=\s*(['\"])stylesheet\1)(?=[^>]*\bhref\s*=\s*(['\"])(?:\./)?styles\.css\2)[^>]*>",
+        source,
+        re.IGNORECASE,
+    ):
+        return False
+    link = '<link rel="stylesheet" href="styles.css">'
+    head_close = re.search(r"</head\s*>", source, re.IGNORECASE)
+    if head_close:
+        source = source[:head_close.start()] + link + "\n" + source[head_close.start():]
+    else:
+        head_open = re.search(r"<head\b[^>]*>", source, re.IGNORECASE)
+        if head_open:
+            insert_at = head_open.end()
+            source = source[:insert_at] + "\n" + link + source[insert_at:]
+        else:
+            html_open = re.search(r"<html\b[^>]*>", source, re.IGNORECASE)
+            if not html_open:
+                return False
+            insert_at = html_open.end()
+            source = source[:insert_at] + "\n<head>" + link + "</head>" + source[insert_at:]
+    html_path.write_text(source, encoding="utf-8")
+    return True
+
+
+def _repair_first_screen_cta(candidate: Path, browser: dict) -> dict | None:
+    html_path = candidate / "files" / "index.html"
+    css_path = candidate / "files" / "styles.css"
+    if not html_path.is_file() or not css_path.is_file():
+        return None
+    source = html_path.read_text(encoding="utf-8", errors="replace")
+    if 'id="qa-first-screen-cta"' in source:
+        return None
+    viewports = browser.get("viewports", {}) if isinstance(browser, dict) else {}
+    cta = None
+    if isinstance(viewports, dict):
+        for viewport_name in ("desktop", "mobile"):
+            viewport = viewports.get(viewport_name, {})
+            viewport_cta = viewport.get("cta", {}) if isinstance(viewport, dict) else {}
+            candidates = [viewport_cta] if isinstance(viewport_cta, dict) else []
+            if isinstance(viewport_cta, dict) and isinstance(viewport_cta.get("candidates"), list):
+                candidates.extend(viewport_cta["candidates"])
+            cta = next((item for item in candidates if isinstance(item, dict) and item.get("href") and item.get("text")), None)
+            if cta:
+                break
+    if not isinstance(cta, dict):
+        return None
+    href = html.unescape(str(cta.get("href", "")).strip())
+    parsed = urllib.parse.urlsplit(href)
+    if not href or parsed.scheme.lower() not in {"", "http", "https", "mailto", "tel"}:
+        return None
+    if parsed.scheme.lower() in {"http", "https"} or parsed.netloc:
+        facts = _read_json(candidate / "debug" / "source_facts.json")
+        source_url = str(facts.get("requested_url", ""))
+        if not source_url or parsed.hostname != urllib.parse.urlsplit(source_url).hostname:
+            return None
+    label = " ".join(str(cta.get("text", "")).split())
+    if not label or re.search(r"[<>\r\n]", label):
+        return None
+    heading_end = re.search(r"</h1\s*>", source, re.IGNORECASE)
+    if not heading_end:
+        return None
+    addition = (
+        f'\n<a id="qa-first-screen-cta" class="button primary" '
+        f'href="{html.escape(href, quote=True)}">{html.escape(label)}</a>\n'
+    )
+    source = source[:heading_end.end()] + addition + source[heading_end.end():]
+    html_path.write_text(source, encoding="utf-8")
+    css = css_path.read_text(encoding="utf-8", errors="replace")
+    css_path.write_text(
+        css.rstrip() + "\n\n/* QA repair pass: keep the measured primary action in the first screen. */\n"
+        "#qa-first-screen-cta { display: inline-flex !important; visibility: visible !important; "
+        "opacity: 1 !important; position: relative; z-index: 2; margin-top: 1rem; color: #fff !important; "
+        "background-color: var(--accent-dark) !important; border: 2px solid var(--accent-dark) !important; "
+        "text-shadow: none !important; }\n"
+        "#qa-first-screen-cta::before, #qa-first-screen-cta::after { content: none !important; }\n",
+        encoding="utf-8",
+    )
+    return {"label": label, "href": href, "inserted_after": "h1"}
+
+
+def _repair_mobile_navigation(candidate: Path, browser: dict, failures: set[str]) -> list[str]:
+    mobile_checks = {
+        "browser_desktop_navigation_has_single_visible_menu",
+        "browser_mobile_navigation_hidden_until_opened",
+        "browser_mobile_navigation_is_only_visible_menu_when_open",
+        "browser_mobile_menu_clicks_work",
+        "browser_mobile_menu_control_visible",
+        "browser_mobile_menu_focus_indicator_visible",
+        "browser_mobile_menu_keyboard_works",
+    }
+    if not failures & mobile_checks:
+        return []
+    html_path = candidate / "files" / "index.html"
+    css_path = candidate / "files" / "styles.css"
+    if not html_path.is_file() or not css_path.is_file():
+        return []
+    menu = browser.get("mobile_menu", {}) if isinstance(browser, dict) else {}
+    nav_id = str(menu.get("controlled_nav_id", "")) if isinstance(menu, dict) else ""
+    if (
+        not nav_id
+        or not re.fullmatch(r"[A-Za-z0-9_-]+", nav_id)
+        or menu.get("button_inside_navigation") is not False
+        or "/* QA repair pass: measured mobile navigation behavior. */" in html_path.read_text(encoding="utf-8", errors="replace")
+    ):
+        return []
+    report = browser.get("viewports", {}) if isinstance(browser, dict) else {}
+    desktop_navs = report.get("desktop", {}).get("header_navigation", {}).get("navs", []) if isinstance(report, dict) else []
+    if not any(isinstance(nav, dict) and nav.get("id") != nav_id and nav.get("link_count", 0) for nav in desktop_navs):
+        return []
+    source = html_path.read_text(encoding="utf-8", errors="replace")
+    escaped_id = re.escape(nav_id)
+    if not re.search(rf"<nav\b(?=[^>]*\bid\s*=\s*(['\"]){escaped_id}\1)[^>]*>", source, re.IGNORECASE):
+        return []
+    button_pattern = re.compile(
+        rf"<button\b(?=[^>]*\baria-controls\s*=\s*(['\"]){escaped_id}\1)[^>]*>",
+        re.IGNORECASE | re.DOTALL,
+    )
+    if not button_pattern.search(source):
+        return []
+    marker = "/* QA repair pass: measured mobile navigation behavior. */"
+    css = css_path.read_text(encoding="utf-8", errors="replace")
+    if marker not in css:
+        css += (
+            f"\n\n{marker}\n"
+            f'@media (min-width: 701px) {{ header nav[id="{nav_id}"] {{ display: none !important; }} }}\n'
+            "@media (max-width: 700px) {\n"
+            f'  header nav:not([id="{nav_id}"]) {{ display: none !important; }}\n'
+            f'  header nav[id="{nav_id}"][hidden] {{ display: none !important; }}\n'
+            f'  header nav[id="{nav_id}"]:not([hidden]) {{ display: flex !important; flex-direction: column !important; }}\n'
+            "}\n"
+        )
+    script = f'''\n<script>
+/* QA repair pass: measured mobile navigation behavior. */
+(() => {{
+  const id = {json.dumps(nav_id)};
+  const button = document.querySelector(`button[aria-controls="${{id}}"]`);
+  const menu = document.getElementById(id);
+  if (!button || !menu || menu.contains(button)) return;
+  const setOpen = open => {{
+    button.setAttribute("aria-expanded", String(open));
+    button.setAttribute("aria-label", open ? "Close navigation menu" : "Open navigation menu");
+    menu.hidden = !open;
+    menu.setAttribute("aria-hidden", String(!open));
+    menu.classList.toggle("is-open", open);
+  }};
+  setOpen(false);
+  document.addEventListener("click", event => {{
+    const target = event.target instanceof Element ? event.target : null;
+    if (target && target.closest(`button[aria-controls="${{id}}"]`) === button) {{
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setOpen(button.getAttribute("aria-expanded") !== "true");
+    }} else if (button.getAttribute("aria-expanded") === "true" && menu.contains(event.target) && target && target.closest("a")) {{
+      setOpen(false);
+      event.stopImmediatePropagation();
+    }} else if (button.getAttribute("aria-expanded") === "true" && !menu.contains(event.target) && !button.contains(event.target)) {{
+      setOpen(false);
+    }}
+  }}, true);
+  document.addEventListener("keydown", event => {{
+    if (event.key === "Escape" && button.getAttribute("aria-expanded") === "true") {{
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setOpen(false);
+      button.focus();
+    }}
+  }}, true);
+}})();
+</script>\n'''
+    body_close = re.search(r"</body\s*>", source, re.IGNORECASE)
+    if not body_close:
+        return []
+    source = source[:body_close.start()] + script + source[body_close.start():]
+    html_path.write_text(source, encoding="utf-8")
+    css_path.write_text(css, encoding="utf-8")
+    return ["normalized measured mobile menu open/close, Escape handling, and desktop/mobile nav visibility"]
+
+
 def repair(candidate: Path) -> dict:
     candidate = candidate.resolve()
     debug = candidate / "debug"
@@ -364,6 +552,9 @@ def repair(candidate: Path) -> dict:
     failures = set(checker.get("blocking_failures", []))
     image_replacements = _repair_images(candidate, checker, context) if failures & REPAIRABLE_IMAGE_CHECKS else []
     cta_selectors = _repair_cta_contrast(candidate, browser) if CTA_CHECK in failures else []
+    stylesheet_link_repaired = _repair_stylesheet_link(candidate) if CSS_LINK_CHECK in failures else False
+    first_screen_cta = _repair_first_screen_cta(candidate, browser) if CTA_VISIBILITY_CHECK in failures else None
+    mobile_navigation_repairs = _repair_mobile_navigation(candidate, browser, failures)
 
     layout = browser.get("template_layout", {})
     layout_repairs = _repair_template_layout(candidate, layout) if LAYOUT_CHECK in failures and isinstance(layout, dict) else []
@@ -382,12 +573,27 @@ def repair(candidate: Path) -> dict:
             "targeted_correction": layout_repairs or "No safe structural repair was possible; retry guidance will include expected and actual signatures.",
         }
 
+    repaired = bool(
+        image_replacements or cta_selectors or layout_repairs or stylesheet_link_repaired
+        or first_screen_cta or mobile_navigation_repairs
+    )
     result = {
-        "status": "repaired" if image_replacements or cta_selectors or layout_repairs else "no_safe_repair_available",
-        "changed": bool(image_replacements or cta_selectors or layout_repairs),
-        "triggered_failures": sorted(failures & (REPAIRABLE_IMAGE_CHECKS | {CTA_CHECK, LAYOUT_CHECK})),
+        "status": "repaired" if repaired else "no_safe_repair_available",
+        "changed": repaired,
+        "triggered_failures": sorted(failures & (REPAIRABLE_IMAGE_CHECKS | {CTA_CHECK, CTA_VISIBILITY_CHECK, CSS_LINK_CHECK, LAYOUT_CHECK} | {
+            "browser_desktop_navigation_has_single_visible_menu",
+            "browser_mobile_navigation_hidden_until_opened",
+            "browser_mobile_navigation_is_only_visible_menu_when_open",
+            "browser_mobile_menu_clicks_work",
+            "browser_mobile_menu_control_visible",
+            "browser_mobile_menu_focus_indicator_visible",
+            "browser_mobile_menu_keyboard_works",
+        })),
         "image_replacements": image_replacements,
         "cta_selectors": cta_selectors,
+        "first_screen_cta": first_screen_cta,
+        "stylesheet_link_repaired": stylesheet_link_repaired,
+        "mobile_navigation_repairs": mobile_navigation_repairs,
         "layout_repairs": layout_repairs,
         "template_layout": layout_diagnostic,
     }
