@@ -106,7 +106,7 @@ FALLBACK_IMAGES = {
     "retail": (
         ("https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1800&q=85", "retail clothing store interior"),
         ("https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=1800&q=85", "retail storefront and merchandise"),
-        ("https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=1800&q=85", "small retail shop display"),
+        ("https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=1800&q=85", "retail clothing and accessories display"),
     ),
     "hospitality": (
         ("https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1800&q=85", "hotel exterior and pool"),
