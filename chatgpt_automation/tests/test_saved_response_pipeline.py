@@ -142,7 +142,7 @@ class SavedResponsePipelineTest(unittest.TestCase):
         hero = next(image for image in compact["project_images"] if image["url"] == compact["category_fallback_hero"])
         self.assertEqual(hero["alt"], "wooden backyard fence with a gate")
 
-    def test_compact_facts_keeps_unlabeled_message_and_all_contact_fields(self):
+    def test_compact_facts_keeps_non_file_fields_and_omits_public_uploads_by_default(self):
         fields = [
             {"tag": "input", "type": "text", "name": "name", "label": "", "placeholder": "Name", "required": True},
             {"tag": "input", "type": "email", "name": "email", "label": "", "placeholder": "Email", "required": True},
@@ -153,6 +153,7 @@ class SavedResponsePipelineTest(unittest.TestCase):
             {"tag": "select", "type": "select", "name": "timeline", "label": "Project timeline", "placeholder": "", "required": True},
             {"tag": "select", "type": "select", "name": "referral", "label": "How did you hear about us?", "placeholder": "", "required": True},
             {"tag": "input", "type": "text", "name": "other", "label": "", "placeholder": "If other, please specify", "required": True},
+            {"tag": "input", "type": "file", "name": "attachment", "label": "", "placeholder": "", "required": False},
         ]
         facts = {
             "requested_url": "https://fixture.invalid/",
@@ -171,6 +172,8 @@ class SavedResponsePipelineTest(unittest.TestCase):
 
         contact_fields = compact["contact_fields"]
         self.assertEqual(len(contact_fields), 9)
+        self.assertFalse(any(field["type"] == "file" for field in contact_fields))
+        self.assertEqual(compact["public_file_upload_policy"], "disabled_by_default; require explicit redesign approval")
         message_field = next(field for field in contact_fields if field["label"] == "Message")
         self.assertTrue(message_field["required"])
         self.assertEqual(message_field["placeholder"], "Describe your project")

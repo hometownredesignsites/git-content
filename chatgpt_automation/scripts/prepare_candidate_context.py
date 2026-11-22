@@ -204,13 +204,12 @@ def _retry_guidance(previous_candidate: Path | None) -> str:
         missing_files = [str(field) for field in missing_fields if str(field).casefold() == "file"]
         if missing_files:
             corrections.append(
-                "The source contact form contains an optional file upload. Include an accessible "
-                '<label for="...">Attach a file</label><input type="file" ...> control and leave it optional (no required attribute). '
-                "Preserve the supplied field type and required state for every contact_fields entry."
+                "Do not add a public file-upload control. Uploads are opt-in for this demo and the source site having one is not approval. "
+                "Preserve all captured non-file contact fields."
             )
         else:
             corrections.append(
-                "Preserve every captured source contact-form field's supplied type, label, required state, and placeholder. "
+                "Preserve every captured non-file source contact-form field's supplied type, label, required state, and placeholder. "
                 "Include fields even when the source has no name or label; use a concise accessible label for an unlabeled control."
             )
     if "source_contact_channels_preserved" in failures:
@@ -427,6 +426,8 @@ def compact_facts(facts: dict) -> tuple[dict, list[str]]:
     form_fields = []
     for field in selected_form.get("fields", []):
         field_type = str(field.get("type") or field.get("tag") or "").strip().lower()
+        if field_type == "file":
+            continue
         placeholder = " ".join(str(field.get("placeholder", "")).split())
         label = " ".join(str(
             field.get("label") or field.get("aria_label") or
@@ -435,8 +436,6 @@ def compact_facts(facts: dict) -> tuple[dict, list[str]]:
         label = re.sub(r"\s*[(*]required[*)]\s*", " ", label, flags=re.IGNORECASE).strip()
         if not label and field_type == "textarea":
             label = "Message"
-        elif not label and field_type == "file":
-            label = "Attach a file"
         elif not label:
             label = placeholder
         if not label or str(field.get("name", "")).lower().startswith(("ak_hp", "honeypot")):
@@ -591,6 +590,7 @@ def compact_facts(facts: dict) -> tuple[dict, list[str]]:
         "page_sections": headings,
         "contact_details": contact_details,
         "contact_fields": form_fields,
+        "public_file_upload_policy": "disabled_by_default; require explicit redesign approval",
         "contact_form_source": selected_form.get("page_url", ""),
         "contact_page_source": str(contact_pages[0].get("url", "")) if contact_pages else "",
         "contact_actions": links,

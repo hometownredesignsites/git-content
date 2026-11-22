@@ -131,11 +131,12 @@ class _DocumentParser(HTMLParser):
                 node.text.append(clean)
 
 
-def source_contact_form(source_facts: dict) -> dict:
-    """Select one actual source contact form; never treat article comments as contact forms."""
+def source_contact_form(source_facts: dict, *, allow_public_file_uploads: bool = False) -> dict:
+    """Select a source contact form; public uploads are opt-in, not copied by default."""
     candidates = []
     contact_page_seen = False
     ignored_noncontact_forms = 0
+    omitted_public_file_upload_fields = 0
     for page_index, page in enumerate(source_facts.get("pages_reviewed", [])):
         page_url = str(page.get("url", ""))
         page_path = urlsplit(page_url).path or "/"
@@ -144,9 +145,15 @@ def source_contact_form(source_facts: dict) -> dict:
         contact_page_seen = contact_page_seen or is_contact_page
         is_article_page = bool(ARTICLE_PATH_HINT.search(page_path))
         for form_index, form in enumerate(page.get("forms", [])):
+            raw_fields = form.get("fields", [])
+            if not allow_public_file_uploads:
+                omitted_public_file_upload_fields += sum(
+                    str(field.get("type", "")).lower() == "file" for field in raw_fields
+                )
             form_fields = [
                 field for field in form.get("fields", [])
                 if str(field.get("type", "")).lower() not in EXCLUDED_TYPES
+                and (allow_public_file_uploads or str(field.get("type", "")).lower() != "file")
             ]
             if not form_fields:
                 continue
@@ -189,6 +196,7 @@ def source_contact_form(source_facts: dict) -> dict:
             "form": None,
             "contact_page_seen": contact_page_seen,
             "ignored_noncontact_forms": ignored_noncontact_forms,
+            "omitted_public_file_upload_fields": omitted_public_file_upload_fields,
         }
 
     _, _, _, page_url, form, fields = max(candidates, key=lambda item: item[:3])
@@ -213,6 +221,7 @@ def source_contact_form(source_facts: dict) -> dict:
         "form": form,
         "contact_page_seen": contact_page_seen,
         "ignored_noncontact_forms": ignored_noncontact_forms,
+        "omitted_public_file_upload_fields": omitted_public_file_upload_fields,
     }
 
 
@@ -381,10 +390,10 @@ def _render_field(field: dict, used_ids: set[str]) -> str | None:
     label = " ".join(str(field.get("label") or field.get("aria_label") or field.get("placeholder") or field.get("name") or "").split())
     source_tag = str(field.get("tag", "input")).lower()
     source_type = str(field.get("type", "text")).lower()
-    # File inputs are commonly unlabeled in embedded source forms. Preserve
-    # their type and optional state while providing a usable accessible label.
-    if not label and source_tag == "input" and source_type == "file":
-        label = "Attach a file"
+    # Public upload controls require an explicit opt-in; source presence alone
+    # must never cause the repair step to add one to a demo site.
+    if source_type == "file":
+        return None
     if not label:
         return None
     if source_type in {"checkbox", "radio", "select"} or source_tag == "select":
