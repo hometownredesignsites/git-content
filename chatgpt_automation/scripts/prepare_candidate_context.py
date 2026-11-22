@@ -224,11 +224,6 @@ FALLBACK_IMAGES = {
         ("https://images.unsplash.com/photo-1611652022419-a9419f74343d?auto=format&fit=crop&w=1800&q=85", "jewelry retail and product detail"),
         ("https://images.unsplash.com/photo-1611591437281-460bfbe1220a?auto=format&fit=crop&w=1800&q=85", "jewelry pieces and accessories"),
     ),
-    "records_retail": (
-        ("https://images.unsplash.com/photo-1603048588665-791ca8aea617?auto=format&fit=crop&w=1800&q=85", "vinyl record and turntable"),
-        ("https://images.unsplash.com/photo-1461360228754-6e81c478b882?auto=format&fit=crop&w=1800&q=85", "music listening and record collection"),
-        ("https://images.unsplash.com/photo-1510915361894-db8b60106cb1?auto=format&fit=crop&w=1800&q=85", "guitar and music equipment in a shop setting"),
-    ),
     "music_education": (
         ("https://images.unsplash.com/photo-1511379938547-c1f69419868d?auto=format&fit=crop&w=1800&q=85", "music studio and instruments"),
         ("https://images.unsplash.com/photo-1510915361894-db8b60106cb1?auto=format&fit=crop&w=1800&q=85", "guitar lesson and music practice"),
@@ -269,11 +264,6 @@ FALLBACK_IMAGES = {
         ("https://images.unsplash.com/photo-1605281317010-fe5ffe798166?auto=format&fit=crop&w=1800&q=85", "motorboat and marine equipment"),
         ("https://images.unsplash.com/photo-1567899378494-47b22a2ae96a?auto=format&fit=crop&w=1800&q=85", "boat maintenance and marine workshop"),
         ("https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=1800&q=85", "boat and marine service setting"),
-    ),
-    "rv_repair": (
-        ("https://images.unsplash.com/photo-1511533910568-be3ffdc229bb?auto=format&fit=crop&w=1800&q=85", "motorhome and recreational vehicle"),
-        ("https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1800&q=85", "recreational vehicle travel and campsite"),
-        ("https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=1800&q=85", "camper travel in a scenic outdoor setting"),
     ),
     "powersports_repair": (
         ("https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&w=1800&q=85", "motorcycle in a service workshop"),
