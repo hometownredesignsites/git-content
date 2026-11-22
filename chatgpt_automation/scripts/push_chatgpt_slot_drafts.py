@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -95,11 +96,11 @@ def checkout_remote_branch(repo: Path, branch: str) -> None:
 
 
 def push_slot(repo: Path, slot: int, candidate: Path, *, company: str, website: str,
-              batch_id: str, source_run: str, source_commit: str) -> None:
+              batch_id: str, source_run: str, source_commit: str, standalone_html: Path) -> None:
     branch = SLOT_BRANCHES[slot]
     slug = site_slug(website)
     site = repo / "sites" / slug
-    html_source = candidate / "files" / "inlined" / "index.html"
+    html_source = standalone_html
     metadata = {
         "schema_version": 1,
         "company": company,
@@ -145,6 +146,7 @@ def push_slot(repo: Path, slot: int, candidate: Path, *, company: str, website: 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--candidates-dir", type=Path, required=True)
+    parser.add_argument("--deliverables-dir", type=Path, required=True)
     parser.add_argument("--job-file", type=Path, required=True)
     parser.add_argument("--content-post-dir", type=Path, required=True)
     args = parser.parse_args()
@@ -161,10 +163,21 @@ def main() -> None:
         raise RuntimeError("GitHub workflow run metadata is missing or invalid")
     batch_id = f"{run_id}-{attempt}"
     candidates = passed_candidates(args.candidates_dir.resolve())
+    deliverables_dir = args.deliverables_dir.resolve()
+    run_record = read_json(deliverables_dir / "evidence" / "run.json")
+    if run_record.get("status") not in {"PASS", "BLOCKED"}:
+        raise RuntimeError("Normalized evidence package is missing or invalid; refusing to stage files.")
     repo = args.content_post_dir.resolve()
     for slot in (1, 2, 3):
+        slug = {1: "forty", 2: "landed", 3: "story"}[slot]
+        deliverable = deliverables_dir / f"candidate-{slug}.html"
+        entry = run_record.get("deliverables", {}).get(deliverable.name, {})
+        if (not deliverable.is_file() or not entry or entry.get("package_status") != "PASS"
+                or entry.get("sha256") != hashlib.sha256(deliverable.read_bytes()).hexdigest()):
+            raise RuntimeError(f"Standalone deliverable or digest is missing for template slot {slot}.")
         push_slot(repo, slot, candidates[slot], company=company, website=website,
-                  batch_id=batch_id, source_run=batch_id, source_commit=source_commit)
+                  batch_id=batch_id, source_run=batch_id, source_commit=source_commit,
+                  standalone_html=deliverable)
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
         with open(summary, "a", encoding="utf-8") as stream:

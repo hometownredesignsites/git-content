@@ -39,7 +39,9 @@ SOURCE_DESIGN_CONTRACT = (
     "FAQs, selling points, contacts, conversion path, and source URLs beside facts. Invent no claims, contact details, hours, metrics, "
     "credentials, or guarantees. Show each verified phone in full, visibly and via tel:.\n\n"
     "Forms: preserve every captured inquiry field's type, label, required state, and placeholder. Omit file inputs even if sourced. "
-    "Render forms only when fields exist; never imply static submission. Otherwise use verified phone/email links.\n\n"
+    "Render forms only when fields exist; never imply static submission or storage. A local confirmation after valid input is allowed only "
+    "with nearby disclosure that no information is sent or stored. Do not submit to a source-site endpoint, transmit form data, or add storage. "
+    "Otherwise use verified phone/email links.\n\n"
     "Images: prioritize relevant source photos, then approved distinct category images. Exclude logos, icons, social, broken, duplicate, "
     "or unrelated assets. Use three distinct relevant image assets when available; avoid duplicate crops. Vary source photos across "
     "concepts when alternatives exist. Use a matching source photo as a full-width, edge-to-edge hero; else the supplied `category_fallback_hero`; else a stable "
@@ -71,6 +73,26 @@ def _atomic_json(path: Path, payload: dict[str, Any]) -> None:
     temporary = path.with_suffix(path.suffix + ".tmp")
     temporary.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     temporary.replace(path)
+
+
+def _candidate_artifact_sha256(run: Path) -> str:
+    """Hash all candidate HTML/CSS artifacts to identify repair mutations."""
+    digest = hashlib.sha256()
+    found = False
+    for relative in ("files/index.html", "files/styles.css", "files/inlined/index.html"):
+        path = run / relative
+        if path.is_file():
+            found = True
+            digest.update(relative.encode("utf-8"))
+            digest.update(b"\0")
+            digest.update(path.read_bytes())
+            digest.update(b"\0")
+    return digest.hexdigest() if found else ""
+
+
+def _html_sha256(run: Path) -> str:
+    path = run / "files" / "inlined" / "index.html"
+    return hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else ""
 
 
 def _response_text(value: Any) -> tuple[str, dict[str, Any]]:
@@ -135,10 +157,10 @@ def _part_prompt(
         )
     else:
         html_tasks = {
-            1: "Start a complete HTML5 document with metadata/title, stylesheet link, semantic header/nav, main, and edge-to-edge image hero. Reuse the exact hero URL from accepted CSS, including its category_fallback_hero URL when supplied. Never use an indoor-room hero for an outdoor service. Keep the primary CTA visible in the first viewport. Add a native mobile-menu button with accessible name, aria-controls, aria-expanded=false, and exactly three decorative bars; small inline JS must toggle it on click and close on Escape. Give images truthful source-supported alt text. Do not add a form or close main/body/html yet.",
-            2: "Continue inside main with remaining supported content and a complete contact section. Render a form only when non-file source contact_fields were captured; include each supplied non-file field's type, label, required state, and placeholder. Omit all public type=file controls, even if the source includes them. An unlabeled source textarea is Message. Otherwise use verified phone/email links and no form. Use at least three distinct supplied image assets when available, prioritizing source photos and validated fallbacks; do not reuse crops. Keep button-style link labels/icons free of arrows. Close main, add a substantive source-grounded footer, and close body and html. Do not repeat sections or invent a form handler.",
+            1: "Start a complete HTML5 document with metadata/title, stylesheet link, semantic header/nav, main, and edge-to-edge image hero. Reuse the exact hero URL from accepted CSS, including its category_fallback_hero URL when supplied. Never use an indoor-room hero for an outdoor service. Keep the primary CTA visible in the first viewport. Add a native mobile-menu button with accessible name, aria-controls, aria-expanded=false, and exactly three decorative bars; small inline JS must toggle it on click and close on Escape. Inline JS may also support a clearly disclosed local form demo or subtle progressive motion; never add external scripts, network submission, analytics, or storage. Give images truthful source-supported alt text. Do not add a form or close main/body/html yet.",
+            2: "Continue inside main with remaining supported content and a complete contact section. Render a form only when non-file source contact_fields were captured; include each supplied non-file field's type, label, required state, and placeholder. Omit all public type=file controls, even if the source includes them. An unlabeled source textarea is Message. Otherwise use verified phone/email links and no form. A local confirmation after valid form input is allowed only with clear disclosure that no information was sent or stored; do not submit to a network endpoint or use storage. Use at least three distinct supplied image assets when available, prioritizing source photos and validated fallbacks; do not reuse crops. Keep button-style link labels/icons free of arrows. Close main, add a substantive source-grounded footer, and close body and html. Do not repeat sections.",
         }
-        task = html_tasks[number] + " Follow the accepted CSS class names. Do not invent a form handler or unsupported content. Keep markup semantic, concise, accessible, and syntactically closed within this section."
+        task = html_tasks[number] + " Follow the accepted CSS class names. Do not invent submission behavior or unsupported content. Keep any local demo behavior clearly disclosed, dependency-free, semantic, concise, and accessible; keep core content and navigation usable without JavaScript."
     if context_mode == "minimal":
         context = (
             "Build a clearly fictional generic workshop sample. Do not claim facts about the CSV business. "
@@ -1003,11 +1025,16 @@ def finalize_candidate(run_folder: str | Path, request_text: str) -> dict[str, A
     for name, command in zip(step_names, commands):
         if name == "browser_qa":
             (debug / "browser_qa.json").unlink(missing_ok=True)
+        artifact_before = _candidate_artifact_sha256(run)
         started = time.monotonic()
         result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
+        artifact_after = _candidate_artifact_sha256(run)
         step_results[name] = {
             "exit_code": result.returncode,
             "duration_seconds": round(time.monotonic() - started, 3),
+            "artifact_sha256_before": artifact_before,
+            "artifact_sha256_after": artifact_after,
+            "repair_result": "FAILED" if result.returncode else "APPLIED" if artifact_before != artifact_after else "NOT_NEEDED",
             "stdout": result.stdout[-12000:],
             "stderr": result.stderr[-12000:],
         }
@@ -1040,6 +1067,9 @@ def finalize_candidate(run_folder: str | Path, request_text: str) -> dict[str, A
     except json.JSONDecodeError as error:
         raise RuntimeError(f"Website checker did not emit JSON: {check.stderr or check.stdout}") from error
     _atomic_json(debug / "checker_report.json", quality_report)
+    bounded_repair_html_before = _html_sha256(run)
+    bounded_repair_triggering_checks = list(quality_report.get("blocking_failures", []))
+    artifact_before = _candidate_artifact_sha256(run)
     repair_started = time.monotonic()
     repair_step = subprocess.run(
         [sys.executable, str(SCRIPT_DIR / "repair_candidate_quality.py"), str(run)],
@@ -1048,6 +1078,9 @@ def finalize_candidate(run_folder: str | Path, request_text: str) -> dict[str, A
     step_results["bounded_quality_repair"] = {
         "exit_code": repair_step.returncode,
         "duration_seconds": round(time.monotonic() - repair_started, 3),
+        "artifact_sha256_before": artifact_before,
+        "artifact_sha256_after": _candidate_artifact_sha256(run),
+        "repair_result": "FAILED" if repair_step.returncode else "APPLIED" if _candidate_artifact_sha256(run) != artifact_before else "NOT_NEEDED",
         "stdout": repair_step.stdout[-12000:],
         "stderr": repair_step.stderr[-12000:],
     }
@@ -1091,6 +1124,56 @@ def finalize_candidate(run_folder: str | Path, request_text: str) -> dict[str, A
             raise RuntimeError(f"Repaired website checker did not emit JSON: {check.stderr or check.stdout}") from error
         quality_report["bounded_quality_repair"] = repair_report
         _atomic_json(debug / "checker_report.json", quality_report)
+    final_html_sha = _html_sha256(run)
+    browser_check_ids = list(browser_report.get("checks", {}).keys()) if isinstance(browser_report.get("checks"), dict) else []
+    retest_check_ids = list(quality_report.get("checks", {}).keys())
+    repair_step_names = ("palette_repair", "template_attribution", "contact_form_repair", "visual_repair",
+                         "local_link_repair", "phone_cta_repair", "cta_arrow_normalization",
+                         "final_cta_arrow_normalization", "bounded_quality_repair")
+    repair_records = []
+    report_paths = {
+        "palette_repair": "debug/palette.json", "template_attribution": "debug/template_attribution.json",
+        "contact_form_repair": "debug/contact_form_repair.json", "visual_repair": "debug/visual_repair.json",
+        "local_link_repair": "debug/local_link_repair.json", "bounded_quality_repair": "debug/quality_repair.json",
+    }
+    for repair_name in repair_step_names:
+        step = step_results.get(repair_name, {})
+        paths = [f"debug/{repair_name}_step.json"]
+        raw_report_path = report_paths.get(repair_name)
+        if raw_report_path and (run / raw_report_path).is_file():
+            paths.append(raw_report_path)
+        result_name = step.get("repair_result", "NOT_NEEDED")
+        report = {}
+        if raw_report_path and (run / raw_report_path).is_file():
+            try:
+                report = json.loads((run / raw_report_path).read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                report = {}
+        if str(report.get("status", "")).lower() in {"unavailable", "needs_manual_repair", "partial", "no_safe_repair_available"}:
+            result_name = "BLOCKED"
+        repair_records.append({
+            "repair_id": repair_name,
+            "triggering_check_ids": bounded_repair_triggering_checks if repair_name == "bounded_quality_repair" else [],
+            "file_or_region": raw_report_path or "assembled candidate HTML/CSS",
+            "problem": str(report.get("reason", "Workflow preprocessing or a measured quality failure required review.")),
+            "change_made": json.dumps(report, ensure_ascii=False, separators=(",", ":")) if report else str(step.get("repair_result", "not recorded")),
+            "result": result_name,
+            "evidence_paths": paths,
+            "retest_check_ids": retest_check_ids + [f"browser_{name}" for name in browser_check_ids],
+            "artifact_sha256_before": step.get("artifact_sha256_before", ""),
+            "artifact_sha256_after": step.get("artifact_sha256_after", ""),
+        })
+    _atomic_json(debug / "repairs.json", {
+        "schema_version": "1.0", "record_type": "repairs",
+        "run_id": __import__("os").environ.get("GITHUB_RUN_ID", run.name),
+        "created_at": datetime.now(timezone.utc).isoformat(), "candidate_id": run.name,
+        "html_sha256_before": bounded_repair_html_before, "html_sha256_after": final_html_sha,
+        "repairs": repair_records,
+        "repair_attempts": sum(item["result"] == "APPLIED" for item in repair_records),
+        "remaining_failures": list(quality_report.get("blocking_failures", [])),
+        "retest_check_ids": retest_check_ids + [f"browser_{name}" for name in browser_check_ids],
+        "status": "PASS" if quality_report.get("automated_success") else "FAIL",
+    })
     review_templates = debug / "review_templates"
     image_review = {
         "status": "pending",

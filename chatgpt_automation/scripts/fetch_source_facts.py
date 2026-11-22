@@ -13,6 +13,7 @@ import urllib.parse
 import urllib.request
 from html.parser import HTMLParser
 from pathlib import Path
+from datetime import datetime, timezone
 
 
 PAGE_LIMIT = 8
@@ -25,6 +26,10 @@ KEYWORDS = re.compile(r"about|service|product|solution|work|portfolio|contact|lo
 
 def _clean(value: str) -> str:
     return re.sub(r"\s+", " ", html.unescape(value or "")).strip()
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 def _urls_from_srcset(value: str) -> list[str]:
@@ -422,6 +427,9 @@ def _merge_rendered_pages(static_pages: list[dict], rendered_pages: list[dict], 
         if not _same_site_url(rendered.get("url", ""), base_host):
             continue
         target = next((page for page in pages if page.get("url") == rendered.get("url")), homepage)
+        target.setdefault("capture_methods", ["static_html"])
+        if "rendered_dom" not in target["capture_methods"]:
+            target["capture_methods"].append("rendered_dom")
         rendered_text = rendered.get("text", "")
         if rendered.get("frame_url", "").startswith("about:blank") and rendered_text:
             current_text = target.get("text", "")
@@ -429,6 +437,7 @@ def _merge_rendered_pages(static_pages: list[dict], rendered_pages: list[dict], 
                 target["text"] = _clean(f"{current_text} {rendered_text}")[:16000]
         elif len(rendered_text) > len(target.get("text", "")):
             target["text"] = rendered["text"]
+            target["text_capture_method"] = "rendered_dom"
         existing_headings = target.setdefault("headings", [])
         heading_keys = {str(item.get("text", "")).casefold() for item in existing_headings if isinstance(item, dict)}
         for heading in rendered.get("headings", []):
@@ -472,6 +481,9 @@ def collect_source_facts(source_url: str, *, business: str = "", category: str =
                 raise ValueError(f"Source page redirected outside the requested domain: {final_url}")
             page = parser.result()
             page["url"] = final_url
+            page["capture_method"] = "static_html"
+            page["captured_at"] = _utc_now()
+            page["capture_id"] = f"static-{len(pages) + 1}"
             pages.append(page)
             if len(pages) == 1:
                 for link in page["links"]:
@@ -486,12 +498,35 @@ def collect_source_facts(source_url: str, *, business: str = "", category: str =
     if not pages:
         raise RuntimeError(f"Could not retrieve the target website. Source-fetch errors: {errors}")
 
+    static_pages = [dict(page) for page in pages]
+    for page in static_pages:
+        for image in page.get("images", []):
+            image.setdefault("capture_method", "static_html")
+            image.setdefault("capture_id", page.get("capture_id", ""))
+            image.setdefault("source_page", page.get("url", ""))
+        for form in page.get("forms", []):
+            form["capture_method"] = "static_html"
+            form["capture_id"] = page.get("capture_id", "")
+            form["source_page"] = page.get("url", "")
+    rendered_pages = []
     rendered_capture = {"attempted": False, "status": "skipped", "reason": "static capture had sufficient text and images"}
     if _static_capture_is_sparse(pages):
         rendered_capture = {"attempted": True, "status": "failed", "reason": "static capture was sparse"}
         try:
             rendered = _capture_rendered_page(source_url, base_host)
             rendered_pages = rendered.get("pages", [])
+            for index, page in enumerate(rendered_pages):
+                page["capture_method"] = "rendered_dom"
+                page["captured_at"] = _utc_now()
+                page["capture_id"] = f"rendered-{index + 1}"
+                for image in page.get("images", []):
+                    image["capture_method"] = "rendered_dom"
+                    image["capture_id"] = page["capture_id"]
+                    image["source_page"] = page.get("url", "")
+                for form in page.get("forms", []):
+                    form["capture_method"] = "rendered_dom"
+                    form["capture_id"] = page["capture_id"]
+                    form["source_page"] = page.get("url", "")
             pages = _merge_rendered_pages(pages, rendered_pages, base_host)
             rendered_capture = {
                 "attempted": True,
@@ -517,8 +552,10 @@ def collect_source_facts(source_url: str, *, business: str = "", category: str =
                     "width": image.get("width", ""),
                     "height": image.get("height", ""),
                     "discovery_method": image.get("discovery_method", "img_src"),
-                    "source_page": page["url"],
+                    "source_page": image.get("source_page", page["url"]),
                     "source_provenance": "embedded_on_requested_site",
+                    "capture_method": image.get("capture_method", page.get("text_capture_method", "static_html")),
+                    "capture_id": image.get("capture_id", page.get("capture_id", "")),
                 })
     image_priority = {
         "srcset": 0, "data-srcset": 0, "data-lazy-srcset": 0,
@@ -527,11 +564,49 @@ def collect_source_facts(source_url: str, *, business: str = "", category: str =
         "inline_background": 3, "rendered_background": 3,
     }
     all_images.sort(key=lambda image: image_priority.get(image.get("discovery_method", ""), 4))
+    capture_records = [
+        {
+            "url": page.get("url", ""),
+            "capture_method": "static_html",
+            "captured_at": page.get("captured_at", ""),
+            "evidence_path": f"debug/source_facts.json#/static_pages/{index}",
+            "capture_id": page.get("capture_id", f"static-{index + 1}"),
+        }
+        for index, page in enumerate(static_pages)
+    ] + [
+        {
+            "url": page.get("url", ""),
+            "capture_method": "rendered_dom",
+            "captured_at": page.get("captured_at", ""),
+            "evidence_path": f"debug/source_facts.json#/rendered_pages/{index}",
+            "capture_id": page.get("capture_id", f"rendered-{index + 1}"),
+        }
+        for index, page in enumerate(rendered_pages)
+    ]
+    capture_paths = {record["capture_id"]: record["evidence_path"] for record in capture_records}
+    for image in all_images:
+        image["capture_method"] = image.get("capture_method", "static_html")
+        image["evidence_path"] = capture_paths.get(image.get("capture_id", ""), "")
+    for page in pages:
+        page.setdefault("capture_methods", ["static_html"])
     return {
         "requested_url": source_url,
+        "captured_at": _utc_now(),
         "business_metadata_unverified": {"business": business, "category": category, "location": location},
         "source_domain": base_host,
-        "pages_reviewed": [{key: page[key] for key in ("url", "title", "headings", "text", "forms")} for page in pages],
+        "pages_reviewed": [
+            {
+                **{key: page[key] for key in ("url", "title", "headings", "text", "forms")},
+                "capture_method": page.get("text_capture_method", "static_html"),
+                "capture_methods": page.get("capture_methods", ["static_html"]),
+                "captured_at": page.get("captured_at", ""),
+                "evidence_path": next((record["evidence_path"] for record in capture_records if record["url"] == page.get("url")), ""),
+            }
+            for page in pages
+        ],
+        "static_pages": static_pages,
+        "rendered_pages": rendered_pages,
+        "capture_records": capture_records,
         "source_assets": all_images[:120],
         "navigation_links": [{"page": page["url"], **link} for page in pages for link in page["links"][:100]],
         "source_fetch_errors": errors,

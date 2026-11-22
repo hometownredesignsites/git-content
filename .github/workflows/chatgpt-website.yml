@@ -450,6 +450,25 @@ jobs:
             printf '## Private ChatGPT candidate batch\n\n- Distinct-template automated passes: **%s/%s**\n- Attempts: **%s** total, **%s** in this run\n- Candidate evidence is checkpointed to the private `chatgpt` branch after each completed attempt.\n' "$successful" "$target" "$attempt" "$new_attempts" >> "$GITHUB_STEP_SUMMARY"
           fi
 
+      - name: Package standalone candidates and normalized evidence
+        if: always() && steps.private_target.outcome == 'success'
+        env:
+          SOURCE_URL: ${{ env.SOURCE_URL }}
+          PRIOR_JOB_ID: ${{ env.PRIOR_JOB_ID }}
+          PRIOR_RUN_ID: ${{ env.PRIOR_RUN_ID }}
+          ATTEMPTS_USED: ${{ steps.generate.outputs.attempt_count || '0' }}
+        run: |
+          set -euo pipefail
+          python chatgpt_automation/scripts/package_website_poc.py \
+            --candidates-dir chatgpt-runs \
+            --output-root "chatgpt-runs/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-site-1/website-poc-output" \
+            --run-id "${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --source-url "$SOURCE_URL" \
+            --private-results-root private-results/results \
+            --prior-job-id "$PRIOR_JOB_ID" \
+            --prior-public-run-id "$PRIOR_RUN_ID" \
+            --attempts-used "$ATTEMPTS_USED"
+
       - name: Save all candidate evidence to the private repository
         id: save_evidence
         if: always() && steps.validate_marker.outcome == 'success' && steps.private_source.outcome == 'success' && steps.private_results.outcome == 'success'
@@ -478,6 +497,8 @@ jobs:
           cp "$private_source_root/private_automation/queue/jobs/${JOB_ID}.json" "$private_results_root/private_automation/queue/jobs/${JOB_ID}.json"
           result_dir="$private_results_root/results/${result_slug}/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           mkdir -p "$result_dir/candidates"
+          output_root="chatgpt-runs/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-site-1/website-poc-output"
+          if [[ -d "$output_root" ]]; then cp -R "$output_root" "$result_dir/website-poc-output"; fi
           shopt -s nullglob
           run_dirs=(chatgpt-runs/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-site-1-*)
           for run_dir in "${run_dirs[@]}"; do
@@ -581,5 +602,6 @@ jobs:
           JOB_FILE="${PRIVATE_SOURCE_ROOT}/private_automation/queue/jobs/${JOB_ID}.json"
           python chatgpt_automation/scripts/push_chatgpt_slot_drafts.py \
             --candidates-dir chatgpt-runs \
+            --deliverables-dir "chatgpt-runs/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-site-1/website-poc-output" \
             --job-file "$JOB_FILE" \
             --content-post-dir content-post
