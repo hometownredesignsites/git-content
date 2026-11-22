@@ -134,9 +134,9 @@ FALLBACK_IMAGES = {
         ("https://images.unsplash.com/photo-1490312278390-ab64016e0aa9?auto=format&fit=crop&w=1800&q=85", "curated shop interior"),
     ),
     "equestrian": (
-        ("https://images.unsplash.com/photo-1761839256951-10c4468c3621?auto=format&fit=crop&fm=jpg&ixid=NHwxMJA3fDA%3D&ixlib=rb-4.1.0&q=60&w=3000", "two people interacting with a horse at a stable"),
-        ("https://images.unsplash.com/photo-1676504848722-aa8ac23bcc8b?auto=format&fit=crop&fm=jpg&ixid=NHwxMJA3fDA%3D&ixlib=rb-4.1.0&q=60&w=3000", "horse and rider in front of a barn"),
-        ("https://images.unsplash.com/photo-1536032641136-b9b7cb255c8a?auto=format&fit=crop&fm=jpg&ixid=NHwxMJA3fDA%3D&ixlib=rb-4.1.0&q=60&w=3000", "horse inside a stable"),
+        ("https://images.unsplash.com/photo-1761839256951-10c4468c3621?auto=format&fit=crop&fm=jpg&ixid=NHwxMjA3fDA%3D&ixlib=rb-4.1.0&q=60&w=3000", "two people interacting with a horse at a stable"),
+        ("https://images.unsplash.com/photo-1676504848722-aa8ac23bcc8b?auto=format&fit=crop&fm=jpg&ixid=NHwxMjA3fDA%3D&ixlib=rb-4.1.0&q=60&w=3000", "horse and rider in front of a barn"),
+        ("https://images.unsplash.com/photo-1536032641136-b9b7cb255c8a?auto=format&fit=crop&fm=jpg&ixid=NHwxMjA3fDA%3D&ixlib=rb-4.1.0&q=60&w=3000", "horse inside a stable"),
     ),
     "auto_parts": (
         ("https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?auto=format&fit=crop&w=1800&q=85", "automotive workshop and parts service"),
