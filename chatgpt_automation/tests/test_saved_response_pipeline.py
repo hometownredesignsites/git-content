@@ -314,7 +314,7 @@ class SavedResponsePipelineTest(unittest.TestCase):
         self.assertNotIn("eight labeled parts", instructions)
         self.assertIn("literal source text inside a `text` code fence", html)
         self.assertIn("do not omit fields to shorten the form", html2.lower())
-        self.assertIn("unlabeled source textarea is represented as Message", html2)
+        self.assertIn("An unlabeled source textarea is Message.", html2)
         self.assertIn("three distinct supplied image assets", html2)
         self.assertIn("category_fallback_hero URL when supplied", html)
         self.assertIn("Never use an indoor-room hero for an outdoor service", html)
@@ -606,7 +606,7 @@ class SavedResponsePipelineTest(unittest.TestCase):
             self.assertNotIn("Fixture Studio", context)
             self.assertLessEqual(len(context), metadata["generation_context_maximum_characters"])
             self.assertNotIn('"text_excerpt"', context)
-            self.assertNotIn('"type":"tel"', context)
+            self.assertIn('"type":"tel"', context)
 
 
 class _FakeLocator:
