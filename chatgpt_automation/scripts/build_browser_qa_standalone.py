@@ -4,11 +4,15 @@
 from __future__ import annotations
 
 import ast
+import base64
+import hashlib
 from pathlib import Path
+import zlib
 
 
 SCRIPTS = Path(__file__).resolve().parent
 OUTPUT = SCRIPTS / "browser_qa_standalone.py"
+COMPACT_OUTPUT = SCRIPTS / "browser_qa_standalone_compact.py"
 
 
 def _nodes(path: Path, names: set[str]) -> list[str]:
@@ -192,6 +196,34 @@ def run_chatgpt_candidates(candidates, request, output_dir, source_url=""):
 
 '''
     OUTPUT.write_text(headers + "\n\n".join(quality_nodes + image_allowlist) + "\n\n" + template_profile_code + "\n\n" + "\n\n".join(asset_nodes) + "\n\n" + body + "\n\n" + integration + '\nif __name__ == "__main__":\n    raise SystemExit(main())\n', encoding="utf-8")
+    standalone_bytes = OUTPUT.read_bytes()
+    compressed_payload = base64.b85encode(zlib.compress(standalone_bytes, 9)).decode("ascii")
+    wrapped_payload = "\n".join(
+        "    " + repr(compressed_payload[index:index + 100])
+        for index in range(0, len(compressed_payload), 100)
+    )
+    compact_source = f'''#!/usr/bin/env python3
+"""Compact transport wrapper for the self-contained ChatGPT browser QA runner.
+
+The compressed payload is the complete browser_qa_standalone.py source, verified
+by SHA-256 before it is compiled and executed. This wrapper avoids copying a
+100+ KB script into ChatGPT Python Run while keeping the runner self-contained.
+"""
+from __future__ import annotations
+
+import base64 as _base64
+import hashlib as _hashlib
+import zlib as _zlib
+
+_SOURCE_SHA256 = "{hashlib.sha256(standalone_bytes).hexdigest()}"
+_COMPRESSED_SOURCE_B85 = (\n{wrapped_payload}\n)
+_source = _zlib.decompress(_base64.b85decode(_COMPRESSED_SOURCE_B85)).decode("utf-8")
+if _hashlib.sha256(_source.encode("utf-8")).hexdigest() != _SOURCE_SHA256:
+    raise RuntimeError("Embedded browser QA runner SHA-256 mismatch")
+exec(compile(_source, "browser_qa_standalone.py", "exec"), globals())
+del _base64, _hashlib, _zlib, _source, _COMPRESSED_SOURCE_B85
+'''
+    COMPACT_OUTPUT.write_text(compact_source, encoding="utf-8")
 
 
 if __name__ == "__main__":
