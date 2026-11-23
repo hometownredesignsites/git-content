@@ -891,6 +891,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("run_folder", type=Path)
     parser.add_argument("request", help="Original website request used to determine required sections")
+    parser.add_argument("--image-assets-manifest", type=Path, help="Offline image bundle manifest; exact URLs and hashes must match")
+    parser.add_argument("--offline-no-network", action="store_true", help="Abort all HTTP(S) requests during rendering")
     args = parser.parse_args()
 
     run_dir = args.run_folder.resolve()
@@ -913,6 +915,8 @@ def main() -> int:
         "resource_errors": [],
         "image_gate": {"status": "blocked", "reason": "image preparation has not completed", "viewports": {}},
         "screenshots_visual_qa_eligible": False,
+        "offline_no_network": args.offline_no_network,
+        "blocked_external_requests": [],
     }
     if not html_file.is_file():
         report["error"] = "inlined HTML file is missing"
@@ -929,11 +933,17 @@ def main() -> int:
                 source_url = ""
         temporary_dir = tempfile.TemporaryDirectory(prefix="website-poc-screenshot-")
         embedded_file = Path(temporary_dir.name) / "candidate-embedded-images.html"
-        image_manifest = build_embedded_screenshot_html(saved_html_bytes, source_url, embedded_file)
+        image_manifest = build_embedded_screenshot_html(
+            saved_html_bytes, source_url, embedded_file,
+            asset_manifest_path=args.image_assets_manifest,
+        )
         image_url_to_uri = image_manifest.pop("_url_to_data_uri", {})
         report["image_gate"] = {
             "status": "blocked" if image_manifest["status"] != "pass" else "pending_browser_decode",
-            "reason": "one or more image references could not be retrieved and embedded" if image_manifest["status"] != "pass" else "image bytes retrieved and embedded; browser decoding is pending",
+            "reason": "one or more image references could not be verified and embedded" if image_manifest["status"] != "pass" else "image bytes verified and embedded; browser decoding is pending",
+            "asset_source": image_manifest["asset_source"],
+            "runtime_network_retrieval": image_manifest["runtime_network_retrieval"],
+            "bundle_capture_network_status": image_manifest["bundle_capture_network_status"],
             "reference_count": image_manifest["reference_count"],
             "embedded_count": image_manifest["embedded_count"],
             "failed_urls": image_manifest["failed_urls"],
@@ -977,6 +987,14 @@ def main() -> int:
                     page_errors: list[dict] = []
                     page.on("requestfailed", lambda request, dest=page_errors: _resource_event(request, dest))
                     page.on("response", lambda response, dest=page_errors: _resource_event(response, dest))
+                    if args.offline_no_network:
+                        def abort_external(route):
+                            if urlsplit(route.request.url).scheme in {"http", "https"}:
+                                report["blocked_external_requests"].append(route.request.url)
+                                route.abort()
+                            else:
+                                route.continue_()
+                        page.route("**/*", abort_external)
                     try:
                         parsed_source_url = urlsplit(source_url)
                         source_html = render_html_bytes.decode("utf-8")
@@ -1237,7 +1255,7 @@ def main() -> int:
             item.get("status") == "pass" for item in report["image_gate"]["viewports"].values()
         )
         report["image_gate"]["status"] = "pass" if image_manifest["status"] == "pass" and image_viewports_pass else "blocked"
-        report["image_gate"]["reason"] = "all referenced image bytes were embedded and decoded in Chromium at both viewports" if report["image_gate"]["status"] == "pass" else "image retrieval, embedding, browser decoding, or viewport image loading did not pass"
+        report["image_gate"]["reason"] = "all referenced image bytes were verified from the selected source, embedded, and decoded in Chromium at both viewports" if report["image_gate"]["status"] == "pass" else "image bytes, embedding, browser decoding, or viewport image loading did not pass"
         report["screenshots_visual_qa_eligible"] = report["image_gate"]["status"] == "pass"
         manifest_path.write_text(json.dumps({
             "status": image_manifest["status"],
@@ -1246,6 +1264,9 @@ def main() -> int:
             "embedded_count": image_manifest["embedded_count"],
             "failed_urls": image_manifest["failed_urls"],
             "images": report["image_gate"]["images"],
+            "asset_source": image_manifest["asset_source"],
+            "runtime_network_retrieval": image_manifest["runtime_network_retrieval"],
+            "bundle_capture_network_status": image_manifest["bundle_capture_network_status"],
             "temporary_only": True,
         }, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         if report.get("status") != "blocked":

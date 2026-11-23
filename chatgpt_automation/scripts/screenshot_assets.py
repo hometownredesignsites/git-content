@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import base64
+import hashlib
+import json
 from html import escape
 from html.parser import HTMLParser
 import re
@@ -94,6 +96,23 @@ def _references_from_html(source: str, base_url: str) -> list[str]:
     return list(dict.fromkeys(references))
 
 
+def _validate_image_bytes(data: bytes, content_type: str) -> str:
+    if len(data) > MAX_IMAGE_BYTES:
+        raise ValueError(f"image exceeds {MAX_IMAGE_BYTES} byte limit")
+    if not data:
+        raise ValueError("empty image response")
+    if not _looks_like_image(data, content_type):
+        raise ValueError("response bytes are not a recognized image")
+    if content_type and not (content_type.startswith("image/") or content_type == "application/octet-stream"):
+        raise ValueError(f"unexpected content type {content_type}")
+    signature_mime = _signature_mime(data)
+    if not signature_mime:
+        raise ValueError("recognized image signature has no supported MIME type")
+    if content_type.startswith("image/") and content_type not in {signature_mime, "image/jpg" if signature_mime == "image/jpeg" else signature_mime}:
+        raise ValueError(f"content type {content_type} does not match image bytes ({signature_mime})")
+    return signature_mime
+
+
 def _read_image(url: str, source_domain: str, opener: Callable = urllib.request.urlopen) -> tuple[bytes, str, dict]:
     parsed = urllib.parse.urlsplit(url)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
@@ -116,23 +135,9 @@ def _read_image(url: str, source_domain: str, opener: Callable = urllib.request.
         data = response.read(MAX_IMAGE_BYTES + 1)
     if not 200 <= status < 300:
         raise ValueError(f"HTTP status {status}")
-    if len(data) > MAX_IMAGE_BYTES:
-        raise ValueError(f"image exceeds {MAX_IMAGE_BYTES} byte limit")
-    if not data:
-        raise ValueError("empty image response")
-    if not _looks_like_image(data, content_type):
-        raise ValueError("response bytes are not a recognized image")
-    # Require MIME to agree with the decoded file signature, rather than
-    # trusting a server-provided image/* label alone.
-    if content_type and not (content_type.startswith("image/") or content_type == "application/octet-stream"):
-        raise ValueError(f"unexpected content type {content_type}")
-    signature_mime = _signature_mime(data)
-    if not signature_mime:
-        raise ValueError("recognized image signature has no supported MIME type")
-    if content_type.startswith("image/") and content_type not in {signature_mime, "image/jpg" if signature_mime == "image/jpeg" else signature_mime}:
-        raise ValueError(f"content type {content_type} does not match image bytes ({signature_mime})")
-    mime = signature_mime
-    return data, mime, {"http_status": status, "final_url": final_url, "content_type": content_type}
+    mime = _validate_image_bytes(data, content_type)
+    return data, mime, {"http_status": status, "final_url": final_url, "content_type": content_type,
+                        "runtime_network_fetch": "completed"}
 
 
 def _signature_mime(data: bytes) -> str:
@@ -232,25 +237,64 @@ def _rewrite_html(source: str, replacements: dict[str, str], base_url: str) -> s
 
 
 def build_embedded_screenshot_html(source_html: bytes, base_url: str, output_path: Path,
-                                  opener: Callable = urllib.request.urlopen) -> dict:
+                                  opener: Callable = urllib.request.urlopen,
+                                  asset_manifest_path: Path | None = None) -> dict:
     """Download, validate, and embed candidate image references into a temp HTML copy."""
     source = source_html.decode("utf-8")
     urls = _references_from_html(source, base_url)
     source_domain = (urllib.parse.urlsplit(base_url).hostname or "").lower().removeprefix("www.")
+    bundle_assets: dict[str, dict] = {}
+    bundle_root: Path | None = None
+    bundle_meta: dict = {}
+    bundle_load_error = ""
+    if asset_manifest_path is not None:
+        try:
+            manifest_path = Path(asset_manifest_path).resolve()
+            bundle_root = manifest_path.parent
+            bundle_meta = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if not isinstance(bundle_meta, dict) or not isinstance(bundle_meta.get("assets"), list):
+                raise ValueError("image asset manifest must contain an assets array")
+            bundle_assets = {
+                str(item.get("url", "")): item for item in bundle_meta["assets"] if isinstance(item, dict)
+            }
+        except (OSError, json.JSONDecodeError, ValueError) as error:
+            bundle_load_error = str(error)[:300]
     records = []
     replacements: dict[str, str] = {}
     total_bytes = 0
     for url in urls:
         record = {"url": url, "status": "blocked", "bytes": 0, "mime_type": "", "sha256": "", "width": None, "height": None}
         try:
-            data, mime, response = _read_image(url, source_domain, opener)
+            if asset_manifest_path is not None:
+                if bundle_load_error:
+                    raise ValueError(f"provided image asset manifest is invalid: {bundle_load_error}")
+                asset = bundle_assets.get(url)
+                if not asset:
+                    raise ValueError("exact URL is absent from the supplied image asset bundle")
+                asset_path = (bundle_root / str(asset.get("path", ""))).resolve()
+                if bundle_root not in asset_path.parents:
+                    raise ValueError("image asset path escapes the supplied bundle directory")
+                data = asset_path.read_bytes()
+                content_type = str(asset.get("mime_type", "")).lower().strip()
+                mime = _validate_image_bytes(data, content_type)
+                digest = hashlib.sha256(data).hexdigest()
+                if len(data) != int(asset.get("bytes", -1)) or digest != str(asset.get("sha256", "")):
+                    raise ValueError("provided image bytes do not match the asset manifest size/SHA-256")
+                response = {
+                    "runtime_network_fetch": "not_attempted_using_bundle",
+                    "bundle_path": str(asset_path.relative_to(bundle_root).as_posix()),
+                    "bundle_network_retrieval": asset.get("network_retrieval", {}),
+                    "bundle_digest_verified": True,
+                    "content_type": content_type,
+                }
+            else:
+                data, mime, response = _read_image(url, source_domain, opener)
             total_bytes += len(data)
             if total_bytes > MAX_TOTAL_IMAGE_BYTES:
                 raise ValueError(f"images exceed {MAX_TOTAL_IMAGE_BYTES} byte total limit")
             uri = f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
             replacements[url] = uri
             record.update(response)
-            import hashlib
             record.update({"status": "embedded", "bytes": len(data), "mime_type": mime,
                            "sha256": hashlib.sha256(data).hexdigest()})
         except Exception as error:
@@ -258,7 +302,6 @@ def build_embedded_screenshot_html(source_html: bytes, base_url: str, output_pat
         records.append(record)
 
     failed = [item["url"] for item in records if item["status"] != "embedded"]
-    import hashlib
     report = {
         "status": "blocked" if failed else "pass",
         "source_html_sha256": hashlib.sha256(source_html).hexdigest(),
@@ -267,6 +310,9 @@ def build_embedded_screenshot_html(source_html: bytes, base_url: str, output_pat
         "embedded_count": len(replacements),
         "failed_urls": failed,
         "images": records,
+        "asset_source": "provided_bundle" if asset_manifest_path is not None else "live_network",
+        "runtime_network_retrieval": "not_attempted" if asset_manifest_path is not None else "attempted",
+        "bundle_capture_network_status": bundle_meta.get("network_retrieval_status") if bundle_meta else None,
         "temporary_only": True,
         "_url_to_data_uri": replacements,
     }

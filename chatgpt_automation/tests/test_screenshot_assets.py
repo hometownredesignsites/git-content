@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 from email.message import Message
+import hashlib
 import json
 import tempfile
 import unittest
@@ -86,6 +87,54 @@ class ScreenshotAssetsTests(unittest.TestCase):
             result = build_embedded_screenshot_html(html, "", Path(directory) / "candidate.html", opener)
         self.assertEqual("blocked", result["status"])
         self.assertIn("relative image URL", result["images"][0]["error"])
+
+    def test_verified_offline_asset_bundle_is_separate_from_runtime_network_fetch(self):
+        html = b'<html><body><img src="https://example.test/photo.png"></body></html>'
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            assets = root / "assets"
+            assets.mkdir()
+            (assets / "photo.png").write_bytes(PNG)
+            manifest_path = root / "image-assets.json"
+            manifest_path.write_text(json.dumps({
+                "network_retrieval_status": "pass",
+                "retrieval_environment": "source environment",
+                "assets": [{
+                    "url": "https://example.test/photo.png",
+                    "path": "assets/photo.png",
+                    "bytes": len(PNG),
+                    "sha256": hashlib.sha256(PNG).hexdigest(),
+                    "mime_type": "image/png",
+                    "network_retrieval": {"status": "pass", "http_status": 200},
+                }],
+            }), encoding="utf-8")
+            result = build_embedded_screenshot_html(
+                html, "https://example.test/", root / "candidate-embedded.html",
+                asset_manifest_path=manifest_path,
+            )
+        self.assertEqual("pass", result["status"])
+        self.assertEqual("provided_bundle", result["asset_source"])
+        self.assertEqual("not_attempted", result["runtime_network_retrieval"])
+        self.assertEqual("pass", result["images"][0]["bundle_network_retrieval"]["status"])
+        self.assertTrue(result["images"][0]["bundle_digest_verified"])
+
+    def test_offline_asset_bundle_rejects_digest_mismatch(self):
+        html = b'<html><body><img src="https://example.test/photo.png"></body></html>'
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "assets").mkdir()
+            (root / "assets" / "photo.png").write_bytes(PNG)
+            manifest_path = root / "image-assets.json"
+            manifest_path.write_text(json.dumps({"assets": [{
+                "url": "https://example.test/photo.png", "path": "assets/photo.png",
+                "bytes": len(PNG), "sha256": "0" * 64, "mime_type": "image/png",
+            }]}), encoding="utf-8")
+            result = build_embedded_screenshot_html(
+                html, "https://example.test/", root / "candidate-embedded.html",
+                asset_manifest_path=manifest_path,
+            )
+        self.assertEqual("blocked", result["status"])
+        self.assertIn("do not match", result["images"][0]["error"])
 
     def test_quality_gate_rejects_browser_pass_without_image_integrity(self):
         checks = {
