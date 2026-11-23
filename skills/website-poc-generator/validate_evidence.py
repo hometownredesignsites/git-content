@@ -40,6 +40,18 @@ SCORE_WEIGHTS = {
     "mobile_experience": 10,
     "conversion_clarity": 5,
 }
+SCHEMA_DEFINITIONS = {
+    "run": "run",
+    "source_facts": "source_facts",
+    "generation_context": "generation_context",
+    "candidate_inputs": "candidate_inputs",
+    "qa_result": "qa",
+    "repairs": "repairs",
+    "image_review": "image_review",
+    "visual_review": "visual_review",
+    "final_status": "final_status",
+    "candidate_ledger": "candidate_ledger",
+}
 PASS_STATES = {"PASS"}
 
 
@@ -107,8 +119,20 @@ class Audit:
         except ImportError:
             self.warn("jsonschema is unavailable; per-record JSON Schema checks are UNVERIFIED")
             return
-        validator = Draft202012Validator(schema)
+        # Validate each record against its named definition while retaining the
+        # root `$defs` context so nested local references (for example the
+        # design-score item schema) resolve correctly.
         for path, record in self.records:
+            definition = SCHEMA_DEFINITIONS.get(str(record.get("record_type")))
+            if definition is None:
+                self.error(f"{self.rel(path)}: no JSON Schema definition for record_type {record.get('record_type')!r}")
+                continue
+            record_schema = {
+                "$schema": schema["$schema"],
+                "$defs": schema["$defs"],
+                "$ref": f"#/$defs/{definition}",
+            }
+            validator = Draft202012Validator(record_schema)
             issues = sorted(validator.iter_errors(record), key=lambda e: list(e.absolute_path))
             for issue in issues:
                 where = ".".join(map(str, issue.absolute_path)) or "$"
@@ -309,6 +333,22 @@ class Audit:
                         self.error(f"{self.rel(rec_path)}: PASS candidate image review lists missing image URLs")
                     if filename == "image-review.json" and rec.get("status") != final.get("image_review_status"):
                         self.error(f"{self.rel(rec_path)}: image-review status disagrees with final-status")
+                    if filename == "image-review.json" and run.get("execution_mode") == "skill":
+                        for image in rec.get("images", []):
+                            if not isinstance(image, dict):
+                                continue
+                            if final.get("final_status") == "PASS":
+                                for field in ("relevant", "crop_ok", "alt_accurate"):
+                                    if image.get(field) is not True:
+                                        self.error(f"{self.rel(rec_path)}: PASS skill candidate image {image.get('url')!r} requires {field}=true")
+                                if image.get("resolution_status") != "PASS":
+                                    self.error(f"{self.rel(rec_path)}: PASS skill candidate image {image.get('url')!r} requires resolution_status=PASS")
+                                source_width = image.get("source_width")
+                                rendered_width = image.get("rendered_css_width")
+                                if not isinstance(source_width, (int, float)) or not isinstance(rendered_width, (int, float)):
+                                    self.error(f"{self.rel(rec_path)}: PASS skill candidate image {image.get('url')!r} requires verified source_width and rendered_css_width")
+                                elif source_width < rendered_width:
+                                    self.error(f"{self.rel(rec_path)}: PASS skill candidate image {image.get('url')!r} is upscaled ({source_width}px source for {rendered_width}px rendered width)")
                     if filename == "visual-review.json":
                         if rec.get("status") != "PASS":
                             self.error(f"{self.rel(rec_path)}: PASS candidate requires visual-review status PASS")

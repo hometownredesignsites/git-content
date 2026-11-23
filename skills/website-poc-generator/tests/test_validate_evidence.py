@@ -106,7 +106,14 @@ def make_package(root: Path) -> None:
         })
         record("image-review.json", {
             "record_type": "image_review", "html_sha256": digest,
-            "status": "PASS", "images": [], "missing_image_urls": [], "issues": [],
+            "status": "PASS", "images": [{
+                "url": "https://example.test/hero.jpg", "relevant": True,
+                "crop_ok": True, "alt_accurate": True, "observed_subject": "Deck",
+                "source_width": 2880, "source_height": 1800,
+                "requested_width": 2880, "rendered_css_width": 1440,
+                "resolution_status": "PASS",
+                "resolution_finding": "Source width supports desktop hero at 2x density.",
+            }], "missing_image_urls": [], "issues": [],
         })
         scorecard = {
             "is_advisory": True,
@@ -224,6 +231,17 @@ class ValidateEvidenceTests(unittest.TestCase):
             inputs["template"] = "Landed"
             write_json(inputs_path, inputs)
             self.assertTrue(any("slot 1 must use Forty" in e for e in self.run_audit(root).errors))
+
+    def test_skill_pass_rejects_undersized_hero_image(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            make_package(root)
+            review_path = root / "evidence" / "forty-attempt-1" / "image-review.json"
+            review = json.loads(review_path.read_text(encoding="utf-8"))
+            review["images"][0]["source_width"] = 615
+            review["images"][0]["requested_width"] = 615
+            write_json(review_path, review)
+            self.assertTrue(any("is upscaled (615px source for 1440px" in e for e in self.run_audit(root).errors))
 
     def test_shared_schema_still_accepts_action_package_contract(self) -> None:
         try:

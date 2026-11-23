@@ -826,14 +826,25 @@
                 "type": "string"
               },
               "relevant": {
-                "type": "boolean"
+                "type": ["boolean", "null"]
               },
               "crop_ok": {
-                "type": "boolean"
+                "type": ["boolean", "null"]
               },
               "alt_accurate": {
-                "type": "boolean"
+                "type": ["boolean", "null"]
               },
+              "discovered_url": {"type": ["string", "null"]},
+              "canonical_url": {"type": ["string", "null"]},
+              "source_width": {"type": ["integer", "null"], "minimum": 1},
+              "source_height": {"type": ["integer", "null"], "minimum": 1},
+              "requested_width": {"type": ["integer", "null"], "minimum": 1},
+              "rendered_css_width": {"type": ["number", "null"], "minimum": 1},
+              "resolution_status": {
+                "type": "string",
+                "enum": ["PASS", "FAIL", "BLOCKED", "UNVERIFIED", "NOT_REQUIRED"]
+              },
+              "resolution_finding": {"type": "string"},
               "alt_text": {
                 "type": "string"
               },
