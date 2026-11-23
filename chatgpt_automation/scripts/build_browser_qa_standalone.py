@@ -123,7 +123,7 @@ def selection_is_supported(references):
 def _run_chatgpt_candidates_sync(candidates, request, output_dir, source_url=""):
     """Run all three exact candidate strings in this Python session.
 
-    candidates: [{"candidate_id": "forty|landed|story", "html": str}]
+    candidates: [{"candidate_id": "forty|landed|story", "html": str | bytes}]
     Returns paths to the saved production HTML and candidate-specific evidence.
     """
     output_root = Path(output_dir).expanduser().resolve()
@@ -138,9 +138,14 @@ def _run_chatgpt_candidates_sync(candidates, request, output_dir, source_url="")
     with tempfile.TemporaryDirectory(prefix="website-poc-chatgpt-run-") as staging:
         for item in candidates:
             candidate_id = item["candidate_id"]
-            if not isinstance(item.get("html"), str) or not item["html"].strip():
+            candidate_html = item.get("html")
+            if not isinstance(candidate_html, (str, bytes)) or not candidate_html.strip():
                 raise ValueError(f"Candidate {candidate_id} has no HTML string.")
-            html_bytes = item["html"].encode("utf-8")
+            html_bytes = candidate_html if isinstance(candidate_html, bytes) else candidate_html.encode("utf-8")
+            try:
+                html_bytes.decode("utf-8")
+            except UnicodeDecodeError as error:
+                raise ValueError(f"Candidate {candidate_id} is not UTF-8 HTML: {error}") from error
             final_html = output_root / f"candidate-{candidate_id}.html"
             final_html.write_bytes(html_bytes)
             run_dir = Path(staging) / candidate_id
