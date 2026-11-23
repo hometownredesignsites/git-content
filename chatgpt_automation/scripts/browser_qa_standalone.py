@@ -8,11 +8,11 @@ sibling scripts are required.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import base64
-import contextlib
+import concurrent.futures
 import hashlib
 import html as html_module
-import io
 import json
 import os
 import re
@@ -1341,7 +1341,7 @@ def _exercise_mobile_menu(page) -> dict:
     ))
     return result
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, emit: bool = True) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("run_folder", type=Path)
     parser.add_argument("request", help="Original website request used to determine required sections")
@@ -1730,13 +1730,14 @@ def main(argv: list[str] | None = None) -> int:
 
     output = debug_dir / "browser_qa.json"
     output.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    print(json.dumps(report, indent=2, ensure_ascii=False))
+    if emit:
+        print(json.dumps(report, indent=2, ensure_ascii=False))
     return 0
 
 
 
 
-def run_chatgpt_candidates(candidates, request, output_dir, source_url=""):
+def _run_chatgpt_candidates_sync(candidates, request, output_dir, source_url=""):
     """Run all three exact candidate strings in this Python session.
 
     candidates: [{"candidate_id": "forty|landed|story", "html": str}]
@@ -1771,8 +1772,7 @@ def run_chatgpt_candidates(candidates, request, output_dir, source_url=""):
             }), encoding="utf-8")
             evidence_dir = output_root / "evidence" / candidate_id
             (debug / "screenshots").mkdir(parents=True, exist_ok=True)
-            with contextlib.redirect_stdout(io.StringIO()):
-                main([str(run_dir), request, "--offline-no-network"])
+            main([str(run_dir), request, "--offline-no-network"], emit=False)
             report_path = debug / "browser_qa.json"
             report = json.loads(report_path.read_text(encoding="utf-8"))
             evidence_dir.mkdir(parents=True, exist_ok=True)
@@ -1797,8 +1797,19 @@ def run_chatgpt_candidates(candidates, request, output_dir, source_url=""):
                 summary["status"] = "blocked" if candidate_record["status"] == "blocked" else "fail"
     summary_path = output_root / "browser_qa_summary.json"
     summary["summary_path"] = str(summary_path)
-    summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False) + chr(10), encoding="utf-8")
     return summary
+
+def run_chatgpt_candidates(candidates, request, output_dir, source_url=""):
+    """Notebook-safe entry point; isolates synchronous Playwright in a worker thread."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return _run_chatgpt_candidates_sync(candidates, request, output_dir, source_url)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(
+            _run_chatgpt_candidates_sync, candidates, request, output_dir, source_url
+        ).result()
 
 
 if __name__ == "__main__":
