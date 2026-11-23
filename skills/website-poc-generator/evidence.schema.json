@@ -4,6 +4,9 @@
   "description": "Schema for the normalized evidence package emitted by the skill and by chatgpt_automation/scripts/package_website_poc.py after workflow-specific assembly. Native workflow diagnostics are also retained as raw evidence.",
   "oneOf": [
     {
+      "$ref": "#/$defs/renderer_preflight"
+    },
+    {
       "$ref": "#/$defs/run"
     },
     {
@@ -35,6 +38,33 @@
     }
   ],
   "$defs": {
+    "renderer_preflight": {
+      "type": "object",
+      "properties": {
+        "schema_version": {"type": "string", "const": "1.0"},
+        "record_type": {"type": "string", "const": "renderer_preflight"},
+        "run_id": {"type": "string"},
+        "created_at": {"type": "string", "format": "date-time"},
+        "fixture_path": {"type": "string"},
+        "fixture_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "tool": {"type": "string"},
+        "transfer_method": {"type": "string"},
+        "preview_available": {"type": "boolean"},
+        "exact_byte_binding_evidence": {"type": "string"},
+        "exact_saved_bytes_rendered": {"type": "string", "enum": ["PASS", "FAIL", "BLOCKED", "UNVERIFIED"]},
+        "pixels_inspectable_by_assistant": {"type": "string", "enum": ["PASS", "FAIL", "BLOCKED", "UNVERIFIED"]},
+        "screenshot_saved": {"type": "string", "enum": ["PASS", "FAIL", "BLOCKED", "UNVERIFIED"]},
+        "viewports": {"type": "object", "additionalProperties": {"type": "object"}},
+        "images": {"type": "object", "additionalProperties": {"type": "object"}},
+        "measurements": {"type": "object"},
+        "interactions": {"type": "object"},
+        "runtime_errors": {"type": "array"},
+        "evidence_paths": {"type": "array", "items": {"type": "string"}},
+        "failure_summary": {"type": "string"}
+      },
+      "required": ["schema_version", "record_type", "run_id", "created_at", "fixture_sha256", "tool", "transfer_method", "preview_available", "exact_byte_binding_evidence", "exact_saved_bytes_rendered", "pixels_inspectable_by_assistant", "screenshot_saved", "viewports", "images", "measurements", "interactions", "runtime_errors", "evidence_paths", "failure_summary"],
+      "additionalProperties": true
+    },
     "run": {
       "type": "object",
       "properties": {
@@ -354,7 +384,18 @@
           "type": "string"
         },
         "generation_instructions": {
-          "type": "string"
+          "oneOf": [
+            {"type": "string"},
+            {
+              "type": "object",
+              "properties": {
+                "brief": {"type": "string"},
+                "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+              },
+              "required": ["brief", "sha256"],
+              "additionalProperties": true
+            }
+          ]
         },
         "template_assignments": {
           "type": "array",
@@ -500,7 +541,22 @@
             "source_contact_form_status": {
               "type": "string",
               "enum": ["PRESENT", "ABSENT", "UNVERIFIED"]
-            }
+            },
+            "unidentifiable_controls": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "source_position": {"type": "string", "minLength": 1},
+                  "evidence": {"type": "string", "minLength": 1},
+                  "reason": {"const": "OMITTED_UNIDENTIFIABLE"}
+                },
+                "required": ["source_position", "evidence", "reason"],
+                "additionalProperties": true
+              }
+            },
+            "identifiable_fields_preserved": {"type": "boolean"},
+            "exact_full_form_parity": {"type": "boolean"}
           },
           "required": [],
           "additionalProperties": true
@@ -1036,6 +1092,17 @@
               },
               "html_sha256": {
                 "type": "string"
+              },
+              "capture_method": {
+                "type": "string",
+                "enum": ["browser_screenshot", "native_preview_capture"]
+              },
+              "assistant_inspected": {
+                "type": "boolean"
+              },
+              "image_sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
               }
             },
             "required": [
@@ -1043,7 +1110,10 @@
               "width",
               "height",
               "path",
-              "html_sha256"
+              "html_sha256",
+              "capture_method",
+              "assistant_inspected",
+              "image_sha256"
             ],
             "additionalProperties": true
           }

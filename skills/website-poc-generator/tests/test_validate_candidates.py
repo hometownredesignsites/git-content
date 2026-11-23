@@ -35,6 +35,14 @@ class ContactSendButtonTests(unittest.TestCase):
         issues = self.validate(html)
         self.assertFalse(any("no-op CTA" in issue for issue in issues), issues)
 
+    def test_source_derived_contact_fields_require_no_send_disclosure(self) -> None:
+        html = BASE.replace(
+            "</section>",
+            '<button type="button">Send inquiry</button></section>',
+        )
+        issues = self.validate(html)
+        self.assertTrue(any("disclosure" in issue for issue in issues), issues)
+
     def test_disabled_button_fails_cta_check(self) -> None:
         html = BASE.replace(
             "</section>", '<button type="button" disabled>Send</button></section>'

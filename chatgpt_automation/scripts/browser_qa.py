@@ -4,11 +4,16 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import html as html_module
 import json
+import os
 import re
+import shutil
 import sys
+import tempfile
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlsplit
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
@@ -19,6 +24,44 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 from site_quality import SECTION_ALIASES, _required_sections  # noqa: E402
 from template_scaffolds import qa_profile, selection_is_supported  # noqa: E402
+from screenshot_assets import build_embedded_screenshot_html  # noqa: E402
+
+
+def _browser_launch_options(chromium: Any, env: dict[str, str] | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Prefer Playwright's managed Chromium, then an explicitly configured/system Chromium."""
+    env = os.environ if env is None else env
+    configured = env.get("WEBSITE_POC_CHROMIUM_EXECUTABLE", "").strip()
+    if configured:
+        executable = Path(configured).expanduser()
+        if not executable.is_file():
+            raise FileNotFoundError(
+                f"WEBSITE_POC_CHROMIUM_EXECUTABLE does not name a file: {executable}"
+            )
+        launch = {"headless": True, "executable_path": str(executable)}
+        details = {"mode": "configured_system_chromium", "executable_path": str(executable)}
+    else:
+        managed = Path(chromium.executable_path)
+        if managed.is_file():
+            launch = {"headless": True}
+            details = {"mode": "playwright_managed_chromium", "executable_path": str(managed)}
+        else:
+            executable = next(
+                (Path(found) for name in ("chromium", "chromium-browser") if (found := shutil.which(name))),
+                None,
+            )
+            if executable is None or not executable.is_file():
+                raise FileNotFoundError(
+                    "Playwright's managed Chromium is missing and no system Chromium was found. "
+                    "Install the Playwright browser or set WEBSITE_POC_CHROMIUM_EXECUTABLE to a Chromium binary."
+                )
+            launch = {"headless": True, "executable_path": str(executable)}
+            details = {"mode": "system_chromium_fallback", "executable_path": str(executable)}
+
+    no_sandbox = env.get("WEBSITE_POC_CHROMIUM_NO_SANDBOX", "").strip().lower() in {"1", "true", "yes"}
+    if no_sandbox:
+        launch["args"] = ["--no-sandbox"]
+    details["no_sandbox"] = no_sandbox
+    return launch, details
 
 
 SECTION_VISIBILITY_JS = r"""(required) => {
@@ -868,38 +911,94 @@ def main() -> int:
         "template_layout": template_layout,
         "checks": {},
         "resource_errors": [],
+        "image_gate": {"status": "blocked", "reason": "image preparation has not completed", "viewports": {}},
+        "screenshots_visual_qa_eligible": False,
     }
     if not html_file.is_file():
         report["error"] = "inlined HTML file is missing"
     else:
+        saved_html_bytes = html_file.read_bytes()
+        saved_html_sha256 = hashlib.sha256(saved_html_bytes).hexdigest()
+        report["html_sha256"] = saved_html_sha256
+        notes_path = run_dir / "run_notes.json"
+        source_url = ""
+        if notes_path.is_file():
+            try:
+                source_url = str(json.loads(notes_path.read_text(encoding="utf-8")).get("source_url", ""))
+            except (OSError, json.JSONDecodeError):
+                source_url = ""
+        temporary_dir = tempfile.TemporaryDirectory(prefix="website-poc-screenshot-")
+        embedded_file = Path(temporary_dir.name) / "candidate-embedded-images.html"
+        image_manifest = build_embedded_screenshot_html(saved_html_bytes, source_url, embedded_file)
+        image_url_to_uri = image_manifest.pop("_url_to_data_uri", {})
+        report["image_gate"] = {
+            "status": "blocked" if image_manifest["status"] != "pass" else "pending_browser_decode",
+            "reason": "one or more image references could not be retrieved and embedded" if image_manifest["status"] != "pass" else "image bytes retrieved and embedded; browser decoding is pending",
+            "reference_count": image_manifest["reference_count"],
+            "embedded_count": image_manifest["embedded_count"],
+            "failed_urls": image_manifest["failed_urls"],
+            "images": image_manifest["images"],
+            "viewports": {},
+            "temporary_html_sha256": "",
+            "temporary_only": True,
+        }
+        manifest_path = debug_dir / "image_embed_manifest.json"
+        manifest_path.write_text(json.dumps(image_manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        render_html_bytes = embedded_file.read_bytes() if image_manifest["status"] == "pass" else saved_html_bytes
+        report["screenshot_candidate"] = "embedded_image_temporary_copy" if image_manifest["status"] == "pass" else "production_html_diagnostic_only"
+        report["image_gate"]["temporary_html_sha256"] = hashlib.sha256(render_html_bytes).hexdigest() if image_manifest["status"] == "pass" else ""
         with sync_playwright() as playwright:
-            browser = playwright.chromium.launch(headless=True)
+            browser = None
+            try:
+                launch_options, runtime = _browser_launch_options(playwright.chromium)
+                browser = playwright.chromium.launch(**launch_options)
+                runtime["version"] = browser.version
+                report["browser_runtime"] = runtime
+            except Exception as error:
+                report["status"] = "blocked"
+                report["error"] = f"Chromium launch unavailable: {error}"
             try:
                 for name, (width, height) in viewports.items():
+                    if browser is None:
+                        report["viewports"][name] = {
+                            "width": width,
+                            "height": height,
+                            "error": report.get("error", "Chromium is unavailable."),
+                            "all_required_sections_visible": False,
+                            "hero_spans_viewport": False,
+                            "hero_media_covers_hero": False,
+                            "hero_image_loaded": False,
+                            "no_horizontal_overflow": False,
+                            "images_loaded": False,
+                            "fonts_loaded": False,
+                        }
+                        continue
                     page = browser.new_page(viewport={"width": width, "height": height})
                     page_errors: list[dict] = []
                     page.on("requestfailed", lambda request, dest=page_errors: _resource_event(request, dest))
                     page.on("response", lambda response, dest=page_errors: _resource_event(response, dest))
                     try:
-                        notes_path = run_dir / "run_notes.json"
-                        source_url = ""
-                        if notes_path.is_file():
-                            try:
-                                source_url = str(json.loads(notes_path.read_text(encoding="utf-8")).get("source_url", ""))
-                            except (OSError, json.JSONDecodeError):
-                                source_url = ""
                         parsed_source_url = urlsplit(source_url)
+                        source_html = render_html_bytes.decode("utf-8")
                         if parsed_source_url.scheme in {"http", "https"} and parsed_source_url.hostname:
-                            source_html = html_file.read_text(encoding="utf-8")
+                            base_tag_injected = False
                             if not re.search(r"<base\b", source_html, flags=re.IGNORECASE):
                                 base_tag = f'<base href="{html_module.escape(source_url, quote=True)}">'
                                 if re.search(r"<head\b[^>]*>", source_html, flags=re.IGNORECASE):
                                     source_html = re.sub(r"(<head\b[^>]*>)", rf"\1{base_tag}", source_html, count=1, flags=re.IGNORECASE)
                                 else:
                                     source_html = f"<head>{base_tag}</head>" + source_html
+                                base_tag_injected = True
                             page.set_content(source_html, wait_until="domcontentloaded", timeout=45000)
+                            render_transport = "page.set_content_embedded_image_copy" if image_manifest["status"] == "pass" else "page.set_content_source_url_diagnostic_only"
                         else:
-                            page.goto(html_file.as_uri(), wait_until="domcontentloaded", timeout=45000)
+                            # Avoid file:// navigation: restricted runtimes may block it.
+                            base_tag_injected = False
+                            page.set_content(source_html, wait_until="domcontentloaded", timeout=45000)
+                            render_transport = "page.set_content_embedded_image_copy" if image_manifest["status"] == "pass" else "page.set_content_exact_saved_html_diagnostic_only"
+                        report["rendered_html_sha256"] = hashlib.sha256(source_html.encode("utf-8")).hexdigest()
+                        report["exact_candidate_bytes_loaded"] = report["rendered_html_sha256"] == saved_html_sha256
+                        report["candidate_source_sha256_verified"] = image_manifest["source_html_sha256"] == saved_html_sha256
                         page.wait_for_timeout(800)
                         resource_state = page.evaluate(r"""async () => {
                           const timeout = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -914,11 +1013,31 @@ def main() -> int:
                             image_count: images.length,
                             loaded_images: images.filter(image => image.complete && image.naturalWidth > 0).length,
                             failed_images: images.filter(image => image.complete && image.naturalWidth === 0).map(image => image.currentSrc || image.src),
+                            pending_images: images.filter(image => !image.complete).map(image => image.currentSrc || image.src),
+                            image_dimensions: images.map(image => ({src: image.currentSrc || image.src || '', loaded: image.complete && image.naturalWidth > 0, natural_width: image.naturalWidth, natural_height: image.naturalHeight})),
                             font_status: document.fonts.status,
                             loaded_faces: Array.from(document.fonts).filter(face => face.status === 'loaded').length,
                             failed_faces: Array.from(document.fonts).filter(face => face.status === 'error').length
                           };
                         }""")
+                        embedded_data_uris = list(dict.fromkeys(re.findall(r"data:image/[\w.+-]+;base64,[A-Za-z0-9+/=]+", source_html, re.IGNORECASE)))
+                        embedded_decode = page.evaluate(r"""async uris => {
+                          const decode = uri => new Promise(resolve => {
+                            const image = new Image();
+                            const timer = setTimeout(() => resolve({loaded: false, natural_width: 0, natural_height: 0}), 10000);
+                            image.onload = () => { clearTimeout(timer); resolve({loaded: image.naturalWidth > 0 && image.naturalHeight > 0, natural_width: image.naturalWidth, natural_height: image.naturalHeight}); };
+                            image.onerror = () => { clearTimeout(timer); resolve({loaded: false, natural_width: 0, natural_height: 0}); };
+                            image.src = uri;
+                          });
+                          return await Promise.all(uris.map(decode));
+                        }""", embedded_data_uris)
+                        decode_by_uri = {uri: embedded_decode[index] for index, uri in enumerate(embedded_data_uris)}
+                        for image_record in report["image_gate"]["images"]:
+                            uri = image_url_to_uri.get(image_record["url"])
+                            decoded = decode_by_uri.get(uri, {})
+                            image_record["width"] = decoded.get("natural_width")
+                            image_record["height"] = decoded.get("natural_height")
+                            image_record["browser_decoded"] = bool(decoded.get("loaded"))
                         page.evaluate("window.scrollTo(0, 0)")
                         page.wait_for_timeout(150)
                         sections = page.evaluate(SECTION_VISIBILITY_JS, section_aliases)
@@ -932,6 +1051,8 @@ def main() -> int:
                         report["viewports"][name] = {
                             "width": width,
                             "height": height,
+                            "render_transport": render_transport,
+                            "base_tag_injected": base_tag_injected,
                             "sections": sections,
                             "all_required_sections_visible": required_present,
                             "hero": visual["hero"],
@@ -961,6 +1082,7 @@ def main() -> int:
                             "hero_ctas_readable": bool(visual["hero_cta_contrast"]["pass"]),
                             "primary_ctas_readable": bool(visual["primary_cta_contrast"]["pass"]),
                             "images": resource_state,
+                            "embedded_image_decodes": embedded_decode,
                             "visible_content_images": visual["visible_content_images"],
                             "cta_arrows_absent": not visual["cta"].get("arrow_issues"),
                             "images_loaded": (
@@ -977,6 +1099,27 @@ def main() -> int:
                             "resource_errors": page_errors,
                             "screenshot": f"screenshots/{name}.png",
                         }
+                        viewport_images_pass = bool(
+                            image_manifest["status"] == "pass"
+                            and all(item.get("loaded") and item.get("natural_width", 0) > 0 and item.get("natural_height", 0) > 0 for item in embedded_decode)
+                            and not resource_state["failed_images"] and not resource_state["pending_images"]
+                            and resource_state["loaded_images"] == resource_state["image_count"]
+                            and not visual["visible_content_images"]["failures"]
+                            and visual["visible_content_images"]["distinct_count"] >= 1
+                        )
+                        report["image_gate"]["viewports"][name] = {
+                            "status": "pass" if viewport_images_pass else "blocked",
+                            "required_embedded_asset_count": len(embedded_data_uris),
+                            "decoded_asset_count": sum(1 for item in embedded_decode if item.get("loaded")),
+                            "failed_embedded_asset_indexes": [index for index, item in enumerate(embedded_decode) if not item.get("loaded")],
+                            "failed_img_urls": resource_state["failed_images"],
+                            "pending_img_urls": resource_state["pending_images"],
+                            "visible_content_image_failures": visual["visible_content_images"]["failures"],
+                            "visible_content_image_count": visual["visible_content_images"]["distinct_count"],
+                        }
+                        report["viewports"][name]["screenshot_usage"] = (
+                            "visual_qa_evidence" if viewport_images_pass else "layout_diagnostic_only"
+                        )
                         if name == "desktop" and template_profile and report["template_layout"].get("status") == "pending":
                             report["template_layout"] = {
                                 **report["template_layout"], "status": "fail", "pass": False,
@@ -1012,6 +1155,7 @@ def main() -> int:
                             "primary_ctas_readable": False,
                             "images_loaded": False,
                             "visible_content_images": {"distinct_count": 0, "loaded_count": 0, "failures": []},
+                            "screenshot_usage": "layout_diagnostic_only",
                             "cta_arrows_absent": False,
                             "fonts_loaded": False,
                             "screenshot": f"screenshots/{name}.png",
@@ -1019,7 +1163,8 @@ def main() -> int:
                     finally:
                         page.close()
             finally:
-                browser.close()
+                if browser is not None:
+                    browser.close()
 
         desktop = report["viewports"].get("desktop", {})
         mobile = report["viewports"].get("mobile", {})
@@ -1088,7 +1233,25 @@ def main() -> int:
             "images_load_in_browser": bool(desktop.get("images_loaded") and mobile.get("images_loaded")),
             "template_layout_signature_matches": bool(report["template_layout"].get("pass")),
         }
-        report["status"] = "pass" if all(report["checks"].values()) else "fail"
+        image_viewports_pass = len(report["image_gate"]["viewports"]) == 2 and all(
+            item.get("status") == "pass" for item in report["image_gate"]["viewports"].values()
+        )
+        report["image_gate"]["status"] = "pass" if image_manifest["status"] == "pass" and image_viewports_pass else "blocked"
+        report["image_gate"]["reason"] = "all referenced image bytes were embedded and decoded in Chromium at both viewports" if report["image_gate"]["status"] == "pass" else "image retrieval, embedding, browser decoding, or viewport image loading did not pass"
+        report["screenshots_visual_qa_eligible"] = report["image_gate"]["status"] == "pass"
+        manifest_path.write_text(json.dumps({
+            "status": image_manifest["status"],
+            "source_html_sha256": image_manifest["source_html_sha256"],
+            "reference_count": image_manifest["reference_count"],
+            "embedded_count": image_manifest["embedded_count"],
+            "failed_urls": image_manifest["failed_urls"],
+            "images": report["image_gate"]["images"],
+            "temporary_only": True,
+        }, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        if report.get("status") != "blocked":
+            source_verified = report.get("candidate_source_sha256_verified") is True
+            report["status"] = "pass" if all(report["checks"].values()) and source_verified and report["image_gate"]["status"] == "pass" else ("blocked" if report["image_gate"]["status"] != "pass" else "fail")
+        temporary_dir.cleanup()
 
     output = debug_dir / "browser_qa.json"
     output.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

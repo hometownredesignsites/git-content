@@ -456,6 +456,8 @@ class SavedResponsePipelineTest(unittest.TestCase):
             }
             (run / "debug" / "browser_qa.json").write_text(json.dumps({
                 "status": "pass", "checks": browser_checks,
+                "image_gate": {"status": "pass"},
+                "screenshots_visual_qa_eligible": True,
                 "mobile_menu": {"escape_closes": True},
             }), encoding="utf-8")
 

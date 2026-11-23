@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import struct
 import sys
 import tempfile
 import unittest
+import zlib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -26,6 +28,20 @@ WEIGHTS = {
 def write_json(path: Path, value: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value, indent=2), encoding="utf-8")
+
+
+def png_bytes(width: int, height: int) -> bytes:
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+
+    row = b"\x00\x28\x60\x80\xff" * width
+    pixels = zlib.compress(row * height, level=9)
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0))
+        + chunk(b"IDAT", pixels)
+        + chunk(b"IEND", b"")
+    )
 
 
 def make_package(root: Path) -> None:
@@ -66,13 +82,17 @@ def make_package(root: Path) -> None:
         screenshots = []
         for viewport, width, height in (("desktop", 1440, 900), ("mobile", 390, 844)):
             screenshot = folder / f"{viewport}.png"
-            screenshot.write_bytes(b"test-fixture-image")
+            screenshot_bytes = png_bytes(width, height)
+            screenshot.write_bytes(screenshot_bytes)
             screenshots.append({
                 "viewport": viewport,
                 "width": width,
                 "height": height,
                 "path": screenshot.relative_to(root).as_posix(),
                 "html_sha256": digest,
+                "capture_method": "browser_screenshot",
+                "assistant_inspected": True,
+                "image_sha256": hashlib.sha256(screenshot_bytes).hexdigest(),
             })
 
         def record(filename: str, body: dict) -> None:
@@ -188,6 +208,20 @@ def make_package(root: Path) -> None:
         "continuation": {"eligible": False, "reason": "All slots passed."},
         "terminal_status": "PASS", "attempts": attempts,
     })
+    write_json(evidence / "renderer-preflight.json", {
+        **base, "record_type": "renderer_preflight",
+        "fixture_sha256": hashlib.sha256(b"probe fixture").hexdigest(),
+        "tool": "test fixture", "transfer_method": "fixture test harness",
+        "preview_available": True, "exact_byte_binding_evidence": "fixture test harness",
+        "exact_saved_bytes_rendered": "PASS",
+        "pixels_inspectable_by_assistant": "PASS", "screenshot_saved": "PASS",
+        "viewports": {
+            "desktop": {"width": 1440, "height": 900},
+            "mobile": {"width": 390, "height": 844},
+        },
+        "images": {}, "measurements": {}, "interactions": {},
+        "runtime_errors": [], "evidence_paths": [], "failure_summary": "",
+    })
     write_json(evidence / "run.json", {
         **base, "record_type": "run", "execution_mode": "skill",
         "runtime_profile": "full_parity", "output_root": ".",
@@ -229,6 +263,17 @@ class ValidateEvidenceTests(unittest.TestCase):
             write_json(review_path, review)
             self.assertTrue(any("weighted_total does not match" in e for e in self.run_audit(root).errors))
 
+    def test_visual_pass_requires_inspected_hash_bound_png(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            make_package(root)
+            review_path = root / "evidence" / "forty-attempt-1" / "visual-review.json"
+            review = json.loads(review_path.read_text(encoding="utf-8"))
+            review["screenshots"][0]["assistant_inspected"] = False
+            write_json(review_path, review)
+            errors = self.run_audit(root).errors
+            self.assertTrue(any("visually inspected by the assistant" in e for e in errors), errors)
+
     def test_unscored_scorecard_allows_null_scores_without_zero_placeholders(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             audit = Audit(Path(directory))
@@ -243,6 +288,76 @@ class ValidateEvidenceTests(unittest.TestCase):
             }
             audit.validate_design_scorecard(Path("visual-review.json"), scorecard, "UNVERIFIED")
             self.assertEqual([], audit.errors)
+
+    def test_documented_unidentifiable_form_control_does_not_fail_form_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            html_path = root / "candidate.html"
+            html_path.write_text(
+                '<main><section id="contact"><form><label>Email<input type="email"></label>'
+                '<p>Preview only; nothing is sent or stored.</p>'
+                '<button type="button">Send inquiry</button></form></section></main>',
+                encoding="utf-8",
+            )
+            inputs_path = root / "candidate-inputs.json"
+            inputs = {"contact_and_form_requirements": {
+                "source_contact_form_status": "PRESENT",
+                "unidentifiable_controls": [{
+                    "source_position": "Contact form, control 3",
+                    "evidence": "evidence/source-capture.json#contact-form-control-3",
+                    "reason": "OMITTED_UNIDENTIFIABLE",
+                }],
+                "identifiable_fields_preserved": True,
+                "exact_full_form_parity": False,
+            }}
+            qa = {"checks": [
+                {"id": "contact_form_matches_source", "status": "PASS"},
+                {"id": "contact_form_send_cta_present", "status": "PASS"},
+            ]}
+            audit = Audit(root)
+            audit.validate_contact_form_alignment(Path("static-qa.json"), qa, inputs_path, inputs, html_path)
+            self.assertEqual([], audit.errors)
+
+    def test_unidentifiable_form_control_requires_position_evidence_and_disclosure(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            html_path = root / "candidate.html"
+            html_path.write_text(
+                '<main><section id="contact"><form><button type="button">Send</button></form></section></main>',
+                encoding="utf-8",
+            )
+            inputs = {"contact_and_form_requirements": {
+                "source_contact_form_status": "PRESENT",
+                "unidentifiable_controls": [{"reason": "unknown"}],
+            }}
+            qa = {"checks": [
+                {"id": "contact_form_matches_source", "status": "FAIL"},
+                {"id": "contact_form_send_cta_present", "status": "PASS"},
+            ]}
+            audit = Audit(root)
+            audit.validate_contact_form_alignment(Path("static-qa.json"), qa, Path("candidate-inputs.json"), inputs, html_path)
+            self.assertTrue(any("source_position" in error for error in audit.errors), audit.errors)
+
+    def test_unresolved_source_field_cannot_pass_without_omission_record(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            html_path = root / "candidate.html"
+            html_path.write_text(
+                '<main><section id="contact"><form><label>Email<input type="email"></label>'
+                '<p>Nothing is sent or stored.</p><button type="button">Send inquiry</button></form></section></main>',
+                encoding="utf-8",
+            )
+            inputs = {"contact_and_form_requirements": {
+                "source_contact_form_status": "PRESENT",
+                "unresolved_field": {"order": 7, "reproduced": False},
+            }}
+            qa = {"checks": [
+                {"id": "contact_form_matches_source", "status": "PASS"},
+                {"id": "contact_form_send_cta_present", "status": "PASS"},
+            ]}
+            audit = Audit(root)
+            audit.validate_contact_form_alignment(Path("static-qa.json"), qa, Path("candidate-inputs.json"), inputs, html_path)
+            self.assertTrue(any("OMITTED_UNIDENTIFIABLE" in error for error in audit.errors), audit.errors)
 
     def test_slot_template_mapping_is_enforced(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -289,7 +404,8 @@ class ValidateEvidenceTests(unittest.TestCase):
             html_path.write_text(
                 '<!doctype html><html><body><section id="contact"><form>'
                 '<label for="email">Email</label><input id="email" type="email">'
-                '<button type="button">Send inquiry</button></form></section></body></html>',
+                '<button type="button">Send inquiry</button>'
+                '<p>Preview only; nothing is sent or stored.</p></form></section></body></html>',
                 encoding="utf-8",
             )
             qa_path = root / "static-qa.json"

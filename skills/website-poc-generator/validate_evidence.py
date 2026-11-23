@@ -20,7 +20,7 @@ from validate_candidates import DocumentCheck, has_valid_contact_send_cta
 
 
 RECORD_TYPES = {
-    "run", "source_facts", "generation_context", "candidate_inputs",
+    "renderer_preflight", "run", "source_facts", "generation_context", "candidate_inputs",
     "qa_result", "repairs", "image_review", "visual_review",
     "final_status", "candidate_ledger",
 }
@@ -47,6 +47,7 @@ MINIMUM_SKILL_STATIC_CHECKS = {
     "contact_form_send_cta_present",
 }
 SCHEMA_DEFINITIONS = {
+    "renderer_preflight": "renderer_preflight",
     "run": "run",
     "source_facts": "source_facts",
     "generation_context": "generation_context",
@@ -258,10 +259,49 @@ class Audit:
         has_form = parser.tags["form"] > 0
         has_fields = parser.contact_fields > 0
         has_send = has_valid_contact_send_cta(parser)
+        omissions = requirements.get("unidentifiable_controls", [])
+        omission_records_valid = isinstance(omissions, list)
+        if not omission_records_valid:
+            self.error(f"{self.rel(inputs_path)}: unidentifiable_controls must be an array")
+            omissions = []
+        for index, omission in enumerate(omissions):
+            label = f"{self.rel(inputs_path)}.contact_and_form_requirements.unidentifiable_controls[{index}]"
+            if not isinstance(omission, dict):
+                self.error(f"{label}: expected an object")
+                omission_records_valid = False
+                continue
+            if not isinstance(omission.get("source_position"), str) or not omission["source_position"].strip():
+                self.error(f"{label}.source_position: required source position is missing")
+                omission_records_valid = False
+            if not isinstance(omission.get("evidence"), str) or not omission["evidence"].strip():
+                self.error(f"{label}.evidence: required evidence locator/path is missing")
+                omission_records_valid = False
+            if omission.get("reason") != "OMITTED_UNIDENTIFIABLE":
+                self.error(f"{label}.reason: must be OMITTED_UNIDENTIFIABLE")
+                omission_records_valid = False
+        if omissions:
+            if requirements.get("identifiable_fields_preserved") is not True:
+                self.error(f"{self.rel(inputs_path)}: documented omissions require identifiable_fields_preserved=true")
+                omission_records_valid = False
+            if requirements.get("exact_full_form_parity") is not False:
+                self.error(f"{self.rel(inputs_path)}: documented omissions require exact_full_form_parity=false")
+                omission_records_valid = False
+        unresolved_field = requirements.get("unresolved_field")
+        if (
+            isinstance(unresolved_field, dict)
+            and unresolved_field.get("reproduced") is False
+            and not omissions
+        ):
+            self.error(
+                f"{self.rel(inputs_path)}: unresolved source form control must be documented in "
+                "unidentifiable_controls with source position, evidence, and OMITTED_UNIDENTIFIABLE"
+            )
         if source_status == "PRESENT":
-            matches_source = has_form and has_fields
+            matches_source = has_form and (has_fields or (bool(omissions) and omission_records_valid))
             expected_form_status = "PASS" if matches_source else "FAIL"
-            expected_send_status = "PASS" if has_send else "FAIL"
+            disclosure = " ".join(" ".join(parser.contact_text).lower().split())
+            has_disclosure = "nothing is sent or stored" in disclosure
+            expected_send_status = "PASS" if has_send and has_disclosure else "FAIL"
         elif source_status == "ABSENT":
             matches_source = not has_form and not has_fields
             expected_form_status = "PASS" if matches_source else "FAIL"
@@ -306,6 +346,22 @@ class Audit:
         run_id = run.get("run_id")
         if not isinstance(run_id, str) or not run_id:
             self.error(f"{self.rel(run_path)}: missing run_id")
+        preflights = self.records_of("renderer_preflight")
+        if run.get("execution_mode") == "skill" and len(preflights) != 1:
+            self.error(f"skill run requires exactly one renderer_preflight record; found {len(preflights)}")
+        elif run.get("execution_mode") == "skill" and preflights:
+            preflight_path, preflight = preflights[0]
+            if preflight.get("run_id") != run_id:
+                self.error(f"{self.rel(preflight_path)}: run_id differs from run.json")
+            if run.get("status") == "PASS":
+                for key in ("exact_saved_bytes_rendered", "pixels_inspectable_by_assistant", "screenshot_saved"):
+                    if preflight.get(key) != "PASS":
+                        self.error(f"{self.rel(preflight_path)}: run PASS requires {key}=PASS")
+                expected_viewports = {"desktop": (1440, 900), "mobile": (390, 844)}
+                for viewport, (width, height) in expected_viewports.items():
+                    evidence = preflight.get("viewports", {}).get(viewport, {})
+                    if (evidence.get("width"), evidence.get("height")) != (width, height):
+                        self.error(f"{self.rel(preflight_path)}: run PASS requires observed {viewport} viewport {width}x{height}")
         for path, record in self.records:
             if record is run:
                 continue
@@ -383,6 +439,17 @@ class Audit:
                 if qa_path.name != "static-qa.json":
                     continue
                 check_ids = {item.get("id") for item in qa_record.get("checks", []) if isinstance(item, dict)}
+                candidate_id = qa_record.get("candidate_id")
+                candidate_records_for_id = by_candidate.get(str(candidate_id), {})
+                input_records = [
+                    (p, rec) for p, rec in candidate_records_for_id.get("candidate_inputs", [])
+                    if p.name == "candidate-inputs.json"
+                ]
+                html_path = self.resolve_record_path(qa_record.get("html_path"), f"{self.rel(qa_path)}.html_path")
+                if len(input_records) == 1 and html_path is not None:
+                    self.validate_contact_form_alignment(
+                        qa_path, qa_record, input_records[0][0], input_records[0][1], html_path
+                    )
                 if qa_record.get("status") == "PASS":
                     missing = MINIMUM_SKILL_STATIC_CHECKS - check_ids
                     if missing:
@@ -391,18 +458,6 @@ class Audit:
                     if isinstance(check, dict) and check.get("blocking") and check.get("status") != "PASS":
                         if qa_record.get("status") == "PASS":
                             self.error(f"{self.rel(qa_path)}: PASS skill static QA has non-passing blocking check {check.get('id')!r}")
-                if qa_record.get("status") == "PASS":
-                    candidate_id = qa_record.get("candidate_id")
-                    candidate_records_for_id = by_candidate.get(str(candidate_id), {})
-                    input_records = [
-                        (p, rec) for p, rec in candidate_records_for_id.get("candidate_inputs", [])
-                        if p.name == "candidate-inputs.json"
-                    ]
-                    html_path = self.resolve_record_path(qa_record.get("html_path"), f"{self.rel(qa_path)}.html_path")
-                    if len(input_records) == 1 and html_path is not None:
-                        self.validate_contact_form_alignment(
-                            qa_path, qa_record, input_records[0][0], input_records[0][1], html_path
-                        )
 
         final_passes: dict[str, dict[str, Any]] = {}
         final_files = self.records_of("final_status")
@@ -522,12 +577,31 @@ class Audit:
                                 self.error(f"{self.rel(rec_path)}: visual check {check_id!r} did not pass")
                         for shot in rec.get("screenshots", []):
                             if isinstance(shot, dict):
-                                self.evidence_paths_exist(shot.get("path"), f"{self.rel(rec_path)} screenshot")
+                                shot_label = f"{self.rel(rec_path)} screenshot"
+                                self.evidence_paths_exist(shot.get("path"), shot_label)
                                 if shot.get("html_sha256") != digest:
                                     self.error(f"{self.rel(rec_path)}: screenshot digest does not match delivered bytes")
                                 expected_size = {"desktop": (1440, 900), "mobile": (390, 844)}.get(shot.get("viewport"))
                                 if expected_size and (shot.get("width"), shot.get("height")) != expected_size:
                                     self.error(f"{self.rel(rec_path)}: {shot.get('viewport')} screenshot must be {expected_size[0]}x{expected_size[1]}")
+                                if rec.get("status") == "PASS":
+                                    if shot.get("capture_method") not in {"browser_screenshot", "native_preview_capture"}:
+                                        self.error(f"{self.rel(rec_path)}: PASS screenshot requires a supported capture_method")
+                                    if shot.get("assistant_inspected") is not True:
+                                        self.error(f"{self.rel(rec_path)}: PASS screenshot must be visually inspected by the assistant")
+                                    shot_path = self.resolve_record_path(shot.get("path"), shot_label)
+                                    if shot_path is not None:
+                                        try:
+                                            image_bytes = shot_path.read_bytes()
+                                        except OSError as exc:
+                                            self.error(f"{self.rel(rec_path)}: cannot read screenshot: {exc}")
+                                        else:
+                                            if shot.get("image_sha256") != hashlib.sha256(image_bytes).hexdigest():
+                                                self.error(f"{self.rel(rec_path)}: screenshot image SHA-256 does not match saved bytes")
+                                            if len(image_bytes) < 24 or image_bytes[:8] != b"\x89PNG\r\n\x1a\n":
+                                                self.error(f"{self.rel(rec_path)}: PASS screenshot must be a readable PNG")
+                                            elif expected_size and (int.from_bytes(image_bytes[16:20], "big"), int.from_bytes(image_bytes[20:24], "big")) != expected_size:
+                                                self.error(f"{self.rel(rec_path)}: screenshot PNG dimensions do not match its declared viewport")
                         if rec.get("status") != final.get("visual_review_status"):
                             self.error(f"{self.rel(rec_path)}: visual-review status disagrees with final-status")
                     if filename == "final-status.json" and rec.get("final_status") != "PASS":

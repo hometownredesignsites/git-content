@@ -477,6 +477,11 @@ def _browser_qa_result(session_dir):
     )
     if any(not isinstance(checks.get(name), bool) for name in expected):
         return "invalid", {}, {"error": "browser_qa.json is missing one or more boolean checks"}
+    image_gate = report.get("image_gate")
+    if report.get("status") == "blocked" or not isinstance(image_gate, dict) or image_gate.get("status") != "pass":
+        return "blocked", checks, report
+    if report.get("screenshots_visual_qa_eligible") is not True:
+        return "blocked", checks, report
     status = "pass" if report.get("status") == "pass" and all(checks[name] for name in expected) else "fail"
     return status, checks, report
 

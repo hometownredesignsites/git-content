@@ -36,6 +36,7 @@ class DocumentCheck(HTMLParser):
         self.stack = []
         self.contact_depth = 0
         self.contact_fields = 0
+        self.contact_text = []
         self.contact_buttons = []
         self._button_stack = []
         self._contact_stack = []
@@ -101,6 +102,8 @@ class DocumentCheck(HTMLParser):
     def handle_data(self, data):
         if "focus-visible" in data or ":focus" in data:
             self.focus_css = True
+        if self.contact_depth:
+            self.contact_text.append(data)
         for button in self._button_stack:
             button["text"] += data
 
@@ -167,6 +170,9 @@ def check(path: Path) -> list[str]:
                 "Contact inquiry fields need an enabled, named no-op CTA such as "
                 '<button type="button">Send inquiry</button>'
             )
+        disclosure = " ".join(" ".join(parser.contact_text).lower().split())
+        if "nothing is sent or stored" not in disclosure:
+            issues.append('Contact inquiry demo needs a nearby "nothing is sent or stored" disclosure')
 
     # Heuristic only: catches a few common sources of horizontal overflow.
     if "width: 100vw" in text.lower() and "box-sizing: border-box" not in text.lower():
