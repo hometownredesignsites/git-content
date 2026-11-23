@@ -44,7 +44,7 @@ SCORE_WEIGHTS = {
 }
 MINIMUM_SKILL_STATIC_CHECKS = {
     "ids_unique", "fragment_links_resolve", "contact_form_matches_source",
-    "contact_form_send_cta_present",
+    "contact_form_send_cta_present", "no_file_upload_controls",
 }
 SCHEMA_DEFINITIONS = {
     "renderer_preflight": "renderer_preflight",
@@ -258,6 +258,7 @@ class Audit:
 
         has_form = parser.tags["form"] > 0
         has_fields = parser.contact_fields > 0
+        has_file_uploads = parser.file_upload_controls > 0
         has_send = has_valid_contact_send_cta(parser)
         omissions = requirements.get("unidentifiable_controls", [])
         omission_records_valid = isinstance(omissions, list)
@@ -283,9 +284,28 @@ class Audit:
             if requirements.get("identifiable_fields_preserved") is not True:
                 self.error(f"{self.rel(inputs_path)}: documented omissions require identifiable_fields_preserved=true")
                 omission_records_valid = False
+        policy_exclusions = requirements.get("policy_excluded_controls", [])
+        if not isinstance(policy_exclusions, list):
+            self.error(f"{self.rel(inputs_path)}: policy_excluded_controls must be an array")
+            policy_exclusions = []
+        for index, exclusion in enumerate(policy_exclusions):
+            label = f"{self.rel(inputs_path)}.contact_and_form_requirements.policy_excluded_controls[{index}]"
+            if not isinstance(exclusion, dict):
+                self.error(f"{label}: expected an object")
+                continue
+            if not isinstance(exclusion.get("source_position"), str) or not exclusion["source_position"].strip():
+                self.error(f"{label}.source_position: required source position is missing")
+            if not isinstance(exclusion.get("evidence"), str) or not exclusion["evidence"].strip():
+                self.error(f"{label}.evidence: required evidence locator/path is missing")
+            if exclusion.get("reason") != "POLICY_NO_FILE_UPLOAD":
+                self.error(f"{label}.reason: must be POLICY_NO_FILE_UPLOAD")
+        if policy_exclusions or omissions:
+            if requirements.get("identifiable_fields_preserved") is not True:
+                self.error(f"{self.rel(inputs_path)}: documented omissions require identifiable_fields_preserved=true")
             if requirements.get("exact_full_form_parity") is not False:
                 self.error(f"{self.rel(inputs_path)}: documented omissions require exact_full_form_parity=false")
-                omission_records_valid = False
+        if has_file_uploads:
+            self.error(f"{self.rel(html_path)}: file upload controls are prohibited in POC candidates")
         unresolved_field = requirements.get("unresolved_field")
         if (
             isinstance(unresolved_field, dict)
@@ -297,7 +317,10 @@ class Audit:
                 "unidentifiable_controls with source position, evidence, and OMITTED_UNIDENTIFIABLE"
             )
         if source_status == "PRESENT":
-            matches_source = has_form and (has_fields or (bool(omissions) and omission_records_valid))
+            matches_source = (
+                has_form and not has_file_uploads
+                and (has_fields or (bool(omissions or policy_exclusions) and omission_records_valid))
+            )
             expected_form_status = "PASS" if matches_source else "FAIL"
             disclosure = " ".join(" ".join(parser.contact_text).lower().split())
             has_disclosure = "nothing is sent or stored" in disclosure
@@ -324,6 +347,7 @@ class Audit:
         expected = {
             "contact_form_matches_source": expected_form_status,
             "contact_form_send_cta_present": expected_send_status,
+            "no_file_upload_controls": "FAIL" if has_file_uploads else "PASS",
         }
         for check_id, expected_status in expected.items():
             check = checks.get(check_id)

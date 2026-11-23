@@ -116,6 +116,7 @@ def make_package(root: Path) -> None:
                     {"id": "fragment_links_resolve", "status": "PASS", "blocking": True, "summary": "Fragments resolve.", "evidence_paths": []},
                     {"id": "contact_form_matches_source", "status": "PASS", "blocking": True, "summary": "No form was sourced or generated.", "evidence_paths": []},
                     {"id": "contact_form_send_cta_present", "status": "NOT_REQUIRED", "blocking": False, "summary": "No source form fields were reproduced.", "evidence_paths": []},
+                    {"id": "no_file_upload_controls", "status": "PASS", "blocking": True, "summary": "No upload controls are present.", "evidence_paths": []},
                 ] if filename == "static-qa.json" else []),
                 "blocking_failures": [], "advisories": [],
             }
@@ -313,6 +314,7 @@ class ValidateEvidenceTests(unittest.TestCase):
             qa = {"checks": [
                 {"id": "contact_form_matches_source", "status": "PASS"},
                 {"id": "contact_form_send_cta_present", "status": "PASS"},
+                {"id": "no_file_upload_controls", "status": "PASS"},
             ]}
             audit = Audit(root)
             audit.validate_contact_form_alignment(Path("static-qa.json"), qa, inputs_path, inputs, html_path)
@@ -333,6 +335,7 @@ class ValidateEvidenceTests(unittest.TestCase):
             qa = {"checks": [
                 {"id": "contact_form_matches_source", "status": "FAIL"},
                 {"id": "contact_form_send_cta_present", "status": "PASS"},
+                {"id": "no_file_upload_controls", "status": "PASS"},
             ]}
             audit = Audit(root)
             audit.validate_contact_form_alignment(Path("static-qa.json"), qa, Path("candidate-inputs.json"), inputs, html_path)
@@ -414,12 +417,37 @@ class ValidateEvidenceTests(unittest.TestCase):
                 "checks": [
                     {"id": "contact_form_matches_source", "status": "PASS"},
                     {"id": "contact_form_send_cta_present", "status": "PASS"},
+                    {"id": "no_file_upload_controls", "status": "PASS"},
                 ]
             }
             inputs = {"contact_and_form_requirements": {"source_contact_form_status": "PRESENT"}}
             audit = Audit(root)
             audit.validate_contact_form_alignment(qa_path, qa, inputs_path, inputs, html_path)
             self.assertEqual([], audit.errors)
+
+    def test_file_upload_control_is_rejected_even_when_source_has_a_form(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            html_path = root / "candidate.html"
+            html_path.write_text(
+                '<!doctype html><html><body><section id="contact"><form>'
+                '<label>Email<input type="email"></label><input type="file">'
+                '<button type="button">Send inquiry</button>'
+                '<p>Nothing is sent or stored.</p></form></section></body></html>',
+                encoding="utf-8",
+            )
+            qa = {"checks": [
+                {"id": "contact_form_matches_source", "status": "PASS"},
+                {"id": "contact_form_send_cta_present", "status": "PASS"},
+                {"id": "no_file_upload_controls", "status": "PASS"},
+            ]}
+            inputs = {"contact_and_form_requirements": {"source_contact_form_status": "PRESENT"}}
+            audit = Audit(root)
+            audit.validate_contact_form_alignment(
+                Path("static-qa.json"), qa, Path("candidate-inputs.json"), inputs, html_path
+            )
+            self.assertTrue(any("file upload controls are prohibited" in e for e in audit.errors), audit.errors)
+            self.assertTrue(any("no_file_upload_controls must be FAIL" in e for e in audit.errors), audit.errors)
 
     def test_ledger_batch_attempts_must_be_two_integer_counts(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

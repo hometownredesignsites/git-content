@@ -71,6 +71,13 @@ class ContactSendButtonTests(unittest.TestCase):
         issues = self.validate(html)
         self.assertFalse(any("no-op CTA" in issue for issue in issues), issues)
 
+    def test_file_upload_control_is_always_rejected(self) -> None:
+        html = BASE.replace(
+            '</section>', '<input type="file" name="project-photo"></section>'
+        )
+        issues = self.validate(html)
+        self.assertTrue(any("File upload controls are prohibited" in issue for issue in issues), issues)
+
 
 if __name__ == "__main__":
     unittest.main()

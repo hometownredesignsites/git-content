@@ -36,6 +36,7 @@ class DocumentCheck(HTMLParser):
         self.stack = []
         self.contact_depth = 0
         self.contact_fields = 0
+        self.file_upload_controls = 0
         self.contact_text = []
         self.contact_buttons = []
         self._button_stack = []
@@ -60,6 +61,8 @@ class DocumentCheck(HTMLParser):
             self.anchors.append(attrs["href"][1:])
         if tag == "img":
             self.images.append(attrs.get("src", ""))
+        if tag == "input" and attrs.get("type", "text").lower() == "file":
+            self.file_upload_controls += 1
         if in_contact and tag in {"input", "select", "textarea"}:
             input_type = attrs.get("type", "text").lower() if tag == "input" else "text"
             if input_type not in {"hidden", "submit", "reset", "button", "image"}:
@@ -146,6 +149,10 @@ def check(path: Path) -> list[str]:
             issues.append(f"Expected exactly one <{tag}>; found {parser.tags[tag]}")
     if parser.styles < 1:
         issues.append("No embedded <style> block found")
+    if parser.file_upload_controls:
+        issues.append(
+            f"File upload controls are prohibited in POC candidates; found {parser.file_upload_controls}"
+        )
     if parser.external_styles:
         issues.append("External stylesheet link(s): " + ", ".join(parser.external_styles))
     if not parser.viewport:

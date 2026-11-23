@@ -1250,6 +1250,9 @@ def assess_website(prompt, session_dir):
             )
             for field in parser.form_fields
         ),
+        "no_file_upload_controls": not any(
+            str(field.get("type", "")).lower() == "file" for field in parser.form_fields
+        ),
         "document_closed": bool(
             re.search(r"</body\s*>[\s\S]*?</html\s*>\s*(?:<!--[\s\S]*?-->\s*)*$", html, re.IGNORECASE)
         ),
@@ -1422,19 +1425,19 @@ def assess_website(prompt, session_dir):
             source_forms = source_form_assessment.get("fields", [])
             if source_form_assessment.get("status") == "captured" and source_forms:
                 expected_file_fields = [field for field in source_forms if str(field.get("type", "")).lower() == "file"]
-                actual_file_fields = [field for field in parser.form_fields if str(field.get("type", "")).lower() == "file"]
                 expected_fields = {normalize_form_field(field) for field in source_forms} - {"", "text", "file"}
                 actual_fields = {normalize_form_field(field) for field in parser.form_fields} - {"", "text", "file"}
                 missing_form_fields = sorted(expected_fields - actual_fields)
-                missing_form_fields.extend(["file"] * max(0, len(expected_file_fields) - len(actual_file_fields)))
                 checks["source_contact_form_present"] = parser.forms > 0
-                checks["source_contact_form_fields_preserved"] = parser.forms > 0 and not missing_form_fields
+                checks["source_contact_form_fields_preserved"] = (
+                    parser.forms > 0 and not missing_form_fields and checks["no_file_upload_controls"]
+                )
                 expected_required = {
                     normalize_form_field(field) for field in source_forms if field.get("required") is True
-                } - {"", "text"}
+                } - {"", "text", "file"}
                 actual_required = {
                     normalize_form_field(field) for field in parser.form_fields if field.get("required") is True
-                } - {"", "text"}
+                } - {"", "text", "file"}
                 missing_required_fields = sorted(expected_required - actual_required)
                 actual_by_key = {}
                 for field in parser.form_fields:
@@ -1456,19 +1459,10 @@ def assess_website(prompt, session_dir):
                             "expected_required": expected_state,
                             "actual_required_states": actual_states,
                         })
-                for index, field in enumerate(expected_file_fields[:len(actual_file_fields)]):
-                    expected_state = field.get("required") is True
-                    actual_state = actual_file_fields[index].get("required") is True
-                    if expected_state != actual_state:
-                        required_status_mismatches.append({
-                            "field": "file",
-                            "index": index,
-                            "expected_required": expected_state,
-                            "actual_required_states": [actual_state],
-                        })
                 checks["source_contact_form_required_fields_preserved"] = (
                     not missing_required_fields and not required_status_mismatches
                 )
+                source_form_assessment["policy_excluded_file_fields"] = expected_file_fields
             else:
                 source_form_assessment["status"] = "not_found"
                 if parser.forms:

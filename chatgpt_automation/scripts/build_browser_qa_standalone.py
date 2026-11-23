@@ -138,7 +138,13 @@ def _run_chatgpt_candidates_sync(candidates, request, output_dir, source_url="",
     if (not isinstance(candidates, list) or len(candidates) != 3
             or {item.get("candidate_id") for item in candidates if isinstance(item, dict)} != required):
         raise ValueError("Provide exactly one candidate each for forty, landed, and story.")
-    summary = {"status": "pass", "runner": "browser_qa_standalone.py", "candidates": {}}
+    summary = {
+        "status": "pass",
+        "status_scope": "chatgpt_runtime_supported_browser_checks",
+        "full_workflow_27_check_suite_status": "UNVERIFIED",
+        "runner": "browser_qa_standalone.py",
+        "candidates": {},
+    }
     with tempfile.TemporaryDirectory(prefix="website-poc-chatgpt-run-") as staging:
         for item in candidates:
             candidate_id = item["candidate_id"]
@@ -164,7 +170,7 @@ def _run_chatgpt_candidates_sync(candidates, request, output_dir, source_url="",
             }), encoding="utf-8")
             evidence_dir = output_root / "evidence" / candidate_id
             (debug / "screenshots").mkdir(parents=True, exist_ok=True)
-            qa_args = [str(run_dir), request, "--offline-no-network"]
+            qa_args = [str(run_dir), request, "--offline-no-network", "--chatgpt-runtime-supported-checks"]
             if image_assets_manifest is not None:
                 qa_args.extend(["--image-assets-manifest", str(image_assets_manifest)])
             main(qa_args, emit=False)
@@ -181,10 +187,13 @@ def _run_chatgpt_candidates_sync(candidates, request, output_dir, source_url="",
             candidate_record = {
                 "status": report.get("status", "blocked"),
                 "html_sha256": hashlib.sha256(html_bytes).hexdigest(),
+                "check_suite": report.get("check_suite", {}),
                 "html_path": str(final_html),
                 "report_path": str(evidence_dir / "browser_qa.json"),
                 "screenshots": [str(path) for path in sorted(screenshot_dest.glob("*.png"))],
                 "image_gate": report.get("image_gate", {}),
+                "external_only_checks": report.get("external_only_checks", {}),
+                "screenshots_visual_qa_eligible": report.get("screenshots_visual_qa_eligible", False),
                 "checks": report.get("checks", {}),
             }
             summary["candidates"][candidate_id] = candidate_record

@@ -1349,6 +1349,10 @@ def main(argv: list[str] | None = None, emit: bool = True) -> int:
     parser.add_argument("request", help="Original website request used to determine required sections")
     parser.add_argument("--image-assets-manifest", type=Path, help="Offline image bundle manifest; exact URLs and hashes must match")
     parser.add_argument("--offline-no-network", action="store_true", help="Abort all HTTP(S) requests during rendering")
+    parser.add_argument(
+        "--chatgpt-runtime-supported-checks", action="store_true",
+        help="Use the ChatGPT runtime pass gate and report external image/font checks separately",
+    )
     args = parser.parse_args(argv)
 
     run_dir = args.run_folder.resolve()
@@ -1389,10 +1393,21 @@ def main(argv: list[str] | None = None, emit: bool = True) -> int:
                 source_url = ""
         temporary_dir = tempfile.TemporaryDirectory(prefix="website-poc-screenshot-")
         embedded_file = Path(temporary_dir.name) / "candidate-embedded-images.html"
-        image_manifest = build_embedded_screenshot_html(
-            saved_html_bytes, source_url, embedded_file,
-            asset_manifest_path=args.image_assets_manifest,
-        )
+        if args.chatgpt_runtime_supported_checks and args.image_assets_manifest is None:
+            def skip_external_image_fetch(*_args, **_kwargs):
+                raise RuntimeError("Not attempted: remote image retrieval is outside the ChatGPT runtime-supported check scope")
+
+            image_manifest = build_embedded_screenshot_html(
+                saved_html_bytes, source_url, embedded_file,
+                opener=skip_external_image_fetch,
+            )
+            image_manifest["asset_source"] = "chatgpt_runtime_no_fetch"
+            image_manifest["runtime_network_retrieval"] = "not_attempted_outside_runtime_scope"
+        else:
+            image_manifest = build_embedded_screenshot_html(
+                saved_html_bytes, source_url, embedded_file,
+                asset_manifest_path=args.image_assets_manifest,
+            )
         image_url_to_uri = image_manifest.pop("_url_to_data_uri", {})
         report["image_gate"] = {
             "status": "blocked" if image_manifest["status"] != "pass" else "pending_browser_decode",
@@ -1644,7 +1659,7 @@ def main(argv: list[str] | None = None, emit: bool = True) -> int:
         mobile = report["viewports"].get("mobile", {})
         mobile_menu = report["mobile_menu"]
         _enforce_story_full_bleed_hero(template_profile, report)
-        report["checks"] = {
+        all_checks = {
             "desktop_navigation_has_single_visible_menu": bool(
                 desktop.get("header_navigation", {}).get("visible_nav_count") == 1
                 and desktop.get("header_navigation", {}).get("controlled_menu_hidden")
@@ -1707,6 +1722,30 @@ def main(argv: list[str] | None = None, emit: bool = True) -> int:
             "images_load_in_browser": bool(desktop.get("images_loaded") and mobile.get("images_loaded")),
             "template_layout_signature_matches": bool(report["template_layout"].get("pass")),
         }
+        external_only_checks = {
+            "hero_image_loads_desktop_and_mobile": "Requires successful remote image retrieval and decode.",
+            "visible_content_images_load_in_browser": "Requires successful remote image retrieval and decode.",
+            "images_load_in_browser": "Requires successful remote image retrieval and decode.",
+            "fonts_load_in_browser": "Requires successful remote font retrieval.",
+        }
+        if args.chatgpt_runtime_supported_checks:
+            report["checks"] = {
+                name: value for name, value in all_checks.items()
+                if name not in external_only_checks
+            }
+            report["external_only_checks"] = {
+                name: {"status": "EXTERNAL_PENDING", "reason": reason}
+                for name, reason in external_only_checks.items()
+            }
+            report["check_suite"] = {
+                "name": "chatgpt_runtime_supported_browser_checks",
+                "required_check_count": len(report["checks"]),
+                "excluded_external_check_count": len(external_only_checks),
+                "full_workflow_27_check_suite_status": "UNVERIFIED",
+                "scope": "Exact-candidate layout, geometry, contrast, and interaction checks that do not require remote images or fonts.",
+            }
+        else:
+            report["checks"] = all_checks
         image_viewports_pass = len(report["image_gate"]["viewports"]) == 2 and all(
             item.get("status") == "pass" for item in report["image_gate"]["viewports"].values()
         )
@@ -1727,7 +1766,16 @@ def main(argv: list[str] | None = None, emit: bool = True) -> int:
         }, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         if report.get("status") != "blocked":
             source_verified = report.get("candidate_source_sha256_verified") is True
-            report["status"] = "pass" if all(report["checks"].values()) and source_verified and report["image_gate"]["status"] == "pass" else ("blocked" if report["image_gate"]["status"] != "pass" else "fail")
+            if args.chatgpt_runtime_supported_checks:
+                runtime_checks_pass = all(report["checks"].values()) and source_verified
+                report["status"] = "pass" if runtime_checks_pass else "fail"
+                report["check_suite"]["status"] = "PASS" if runtime_checks_pass else "FAIL"
+                report["check_suite"]["passed_check_count"] = sum(bool(value) for value in report["checks"].values())
+                report["check_suite"]["external_image_gate_status"] = (
+                    "PASS" if report["image_gate"]["status"] == "pass" else "EXTERNAL_PENDING"
+                )
+            else:
+                report["status"] = "pass" if all(report["checks"].values()) and source_verified and report["image_gate"]["status"] == "pass" else ("blocked" if report["image_gate"]["status"] != "pass" else "fail")
         temporary_dir.cleanup()
 
     output = debug_dir / "browser_qa.json"
@@ -1753,7 +1801,13 @@ def _run_chatgpt_candidates_sync(candidates, request, output_dir, source_url="",
     if (not isinstance(candidates, list) or len(candidates) != 3
             or {item.get("candidate_id") for item in candidates if isinstance(item, dict)} != required):
         raise ValueError("Provide exactly one candidate each for forty, landed, and story.")
-    summary = {"status": "pass", "runner": "browser_qa_standalone.py", "candidates": {}}
+    summary = {
+        "status": "pass",
+        "status_scope": "chatgpt_runtime_supported_browser_checks",
+        "full_workflow_27_check_suite_status": "UNVERIFIED",
+        "runner": "browser_qa_standalone.py",
+        "candidates": {},
+    }
     with tempfile.TemporaryDirectory(prefix="website-poc-chatgpt-run-") as staging:
         for item in candidates:
             candidate_id = item["candidate_id"]
@@ -1779,7 +1833,7 @@ def _run_chatgpt_candidates_sync(candidates, request, output_dir, source_url="",
             }), encoding="utf-8")
             evidence_dir = output_root / "evidence" / candidate_id
             (debug / "screenshots").mkdir(parents=True, exist_ok=True)
-            qa_args = [str(run_dir), request, "--offline-no-network"]
+            qa_args = [str(run_dir), request, "--offline-no-network", "--chatgpt-runtime-supported-checks"]
             if image_assets_manifest is not None:
                 qa_args.extend(["--image-assets-manifest", str(image_assets_manifest)])
             main(qa_args, emit=False)
@@ -1796,10 +1850,13 @@ def _run_chatgpt_candidates_sync(candidates, request, output_dir, source_url="",
             candidate_record = {
                 "status": report.get("status", "blocked"),
                 "html_sha256": hashlib.sha256(html_bytes).hexdigest(),
+                "check_suite": report.get("check_suite", {}),
                 "html_path": str(final_html),
                 "report_path": str(evidence_dir / "browser_qa.json"),
                 "screenshots": [str(path) for path in sorted(screenshot_dest.glob("*.png"))],
                 "image_gate": report.get("image_gate", {}),
+                "external_only_checks": report.get("external_only_checks", {}),
+                "screenshots_visual_qa_eligible": report.get("screenshots_visual_qa_eligible", False),
                 "checks": report.get("checks", {}),
             }
             summary["candidates"][candidate_id] = candidate_record
