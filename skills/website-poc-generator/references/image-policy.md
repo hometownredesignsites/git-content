@@ -8,6 +8,44 @@
 7. Browser screenshot QA uses a disposable HTML copy in which every exact image URL used by the production candidate is replaced with a data URI made from the fetched bytes. Include `src`, `srcset`, `picture/source`, lazy-image attributes, posters, inline styles, and embedded CSS backgrounds. Require successful HTTP responses, recognized image signatures, nonempty bounded data, byte digests, and browser-decoded natural dimensions. Keep the production HTML's original URLs and digest unchanged. Keep the embedded copy and image bytes in a temporary directory outside the deliverable and commit package. Any unresolved or unavailable image blocks image-aware screenshots and visual QA; captures can be retained only as layout diagnostics. Do not substitute a category fallback or unrelated image to make the screenshot gate pass.
 7. **Fallback behavior must match the current preparer; do not claim dynamic discovery.** The workflow uses fixed Unsplash pools rather than web/stock search. The exact 59 pools and 116 category mappings are bundled in `references/fallback-image-pools.json`, synchronized from `prepare_candidate_context.py` (source commit recorded in the file). Match a business category to its specific pool before a broad category; unmatched/suppressed categories receive no fallback. These are category-level mappings, not proof that any individual image is visually suitable. When GitHub is connected, compare the JSON against the current `prepare_candidate_context.py`; if it changed, use the current version only when the mapping and URLs can be read and recorded accurately.
 
+**ChatGPT-session image availability gate — run before candidate HTML generation:**
+
+The workflow preparer's source-image fetch happens during source evaluation, but ChatGPT skill runs must independently establish that the same Python/Playwright runtime used for screenshots can obtain the bytes. A URL visible in source markup, a rendered Web page, search results, or GitHub evidence is not proof that the Python session can retrieve it.
+
+1. After discovering and ranking source images, select the exact assets intended for the candidate set (normally up to three verified source photos). Before generating HTML, issue a bounded live GET for each selected asset from the same ChatGPT Python Run session. Prefer Playwright `APIRequestContext` when that is the available in-session network API; record the method and runtime. A small probe against one selected URL can reject an unreachable image host early, but do not mark the remaining selected assets acquired until each exact URL has returned valid bytes.
+2. Validate each response: successful HTTP status, safe final redirect on the source host or approved image CDN, nonempty bounded bytes, recognized image signature, compatible image MIME, byte count, SHA-256, and decodable natural dimensions. Keep visual relevance, crop suitability, licensing, and resolution suitability as separate findings.
+3. Store successfully fetched bytes in a session-local temporary cache available to the later rendering cells. Write a manifest mapping each exact original/canonical URL to its relative cache path, request method, requested/final URL, status, MIME, byte count, SHA-256, and decoded dimensions. Keep the production HTML URLs unchanged. Keep the cache outside the final deliverables and do not transfer it from Codex or another app.
+4. During candidate generation, select only cached source images when the design relies on those photographs. If a candidate adds an image URL not already in the cache, fetch and verify it in this same session before screenshot QA. Pass the same-session cache manifest to the browser runner when supported; the runner must embed those validated bytes in disposable HTML copies and record that network retrieval occurred earlier in this same runtime. Never label an earlier-session or externally supplied cache as current-runtime retrieval.
+5. If the initial probe or any selected image fetch fails (including DNS errors), record the early gate as BLOCKED before building candidates. The skill may still produce useful HTML drafts with explicit image limitations, but it must not promise image-aware screenshots or report image-byte validation as passed. Do not retry the same unreachable host for every candidate. A later successful fetch may clear the gate only for the exact URLs whose bytes were then validated.
+
+The cache manifest passed to the runner uses the following minimum structure (`network_retrieval` should also retain the request/response evidence shown here):
+
+```json
+{
+  "network_retrieval_status": "completed_current_runtime_before_generation",
+  "assets": [
+    {
+      "url": "https://approved-image-host.example/photo.jpg",
+      "path": "assets/photo.jpg",
+      "mime_type": "image/jpeg",
+      "bytes": 123456,
+      "sha256": "<64 lowercase hex characters>",
+      "network_retrieval": {
+        "request_method": "Playwright APIRequestContext GET",
+        "requested_url": "https://approved-image-host.example/photo.jpg",
+        "final_url": "https://approved-image-host.example/photo.jpg",
+        "http_status": 200,
+        "signature_mime": "image/jpeg",
+        "width": 1600,
+        "height": 900
+      }
+    }
+  ]
+}
+```
+
+Use a real cache-relative path and measured values, never the example placeholders. Preserve this manifest and its preflight evidence in the same ChatGPT session; the evidence package should separately record its own pre-generation results. If no image was fetched and verified, leave the runner argument as `None` and let the image gate report the retrieval failure.
+
 **Known image-relevance gaps and suppressed fallbacks:** The selector intentionally provides no fixed fallback for aquarium maintenance, bakeries, donut shops, ice cream shops, candy shops, record stores, RV repair, small engine repair, automotive upholstery, farriers, shoe repair, dance studios, martial-arts schools, fishing guides, kayak/canoe rental, DJs, bounce-house rental, pool/spa stores, mattress stores, fireplace/stove shops, hobby/model shops, tent rental, photo booths, mini golf, go-kart tracks, indoor playgrounds, HVAC companies, plumbers, electricians, roofers, pest control, septic services, well services, garage-door companies, locksmiths, tree services, lawn-care companies, irrigation companies, performance shops, car audio installers, towing companies, mobile mechanics, custom farming, orchards, Christmas tree farms, pumpkin farms, agritourism businesses, limousine companies, tractor repair, agricultural-equipment repair, and hunting preserves. These categories were removed from misleading broad pools; use relevant source-site imagery where available and disclose when no fallback is available. Do not reintroduce a generic fallback until appropriate specialist assets are curated. Each pool is a curated static list, not a dynamically discovered result. The workflow does not open asset landing pages, resolve creators, inspect licenses/reuse terms, or visually observe the image. Its fallback check is a live image-byte/load check only; this is not proof of licensing, visual relevance, or suitability. Do not describe these assets as searched, license-verified, or visually reviewed.
 
 The preparer currently checks and may pass up to 3 category-pool fallbacks **even when 3 source photos have been selected**. Preserve this behavior in the skill: source photos and fallback options are supplied together, and the generator chooses only assets appropriate to the section. Do not describe fallback selection as conditional on having fewer than three source photos. Do not infer that a fallback is needed simply because it is present.

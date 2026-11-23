@@ -246,6 +246,7 @@ def build_embedded_screenshot_html(source_html: bytes, base_url: str, output_pat
     bundle_assets: dict[str, dict] = {}
     bundle_root: Path | None = None
     bundle_meta: dict = {}
+    same_session_cache = False
     bundle_load_error = ""
     if asset_manifest_path is not None:
         try:
@@ -254,6 +255,7 @@ def build_embedded_screenshot_html(source_html: bytes, base_url: str, output_pat
             bundle_meta = json.loads(manifest_path.read_text(encoding="utf-8"))
             if not isinstance(bundle_meta, dict) or not isinstance(bundle_meta.get("assets"), list):
                 raise ValueError("image asset manifest must contain an assets array")
+            same_session_cache = bundle_meta.get("network_retrieval_status") == "completed_current_runtime_before_generation"
             bundle_assets = {
                 str(item.get("url", "")): item for item in bundle_meta["assets"] if isinstance(item, dict)
             }
@@ -281,7 +283,7 @@ def build_embedded_screenshot_html(source_html: bytes, base_url: str, output_pat
                 if len(data) != int(asset.get("bytes", -1)) or digest != str(asset.get("sha256", "")):
                     raise ValueError("provided image bytes do not match the asset manifest size/SHA-256")
                 response = {
-                    "runtime_network_fetch": "not_attempted_using_bundle",
+                    "runtime_network_fetch": "completed_before_generation_same_session" if same_session_cache else "not_attempted_using_bundle",
                     "bundle_path": str(asset_path.relative_to(bundle_root).as_posix()),
                     "bundle_network_retrieval": asset.get("network_retrieval", {}),
                     "bundle_digest_verified": True,
@@ -310,8 +312,8 @@ def build_embedded_screenshot_html(source_html: bytes, base_url: str, output_pat
         "embedded_count": len(replacements),
         "failed_urls": failed,
         "images": records,
-        "asset_source": "provided_bundle" if asset_manifest_path is not None else "live_network",
-        "runtime_network_retrieval": "not_attempted" if asset_manifest_path is not None else "attempted",
+        "asset_source": "same_session_cache" if same_session_cache else "provided_bundle" if asset_manifest_path is not None else "live_network",
+        "runtime_network_retrieval": "completed_before_generation_same_session" if same_session_cache else "not_attempted_using_bundle" if asset_manifest_path is not None else "attempted",
         "bundle_capture_network_status": bundle_meta.get("network_retrieval_status") if bundle_meta else None,
         "temporary_only": True,
         "_url_to_data_uri": replacements,

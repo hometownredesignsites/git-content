@@ -124,7 +124,7 @@ def selection_is_supported(references):
     body = body.replace('''if __name__ == "__main__":
     raise SystemExit(main())''', "")
     integration = '''
-def _run_chatgpt_candidates_sync(candidates, request, output_dir, source_url=""):
+def _run_chatgpt_candidates_sync(candidates, request, output_dir, source_url="", image_assets_manifest=None):
     """Run all three exact candidate strings in this Python session.
 
     candidates: [{"candidate_id": "forty|landed|story", "html": str | bytes}]
@@ -164,7 +164,10 @@ def _run_chatgpt_candidates_sync(candidates, request, output_dir, source_url="")
             }), encoding="utf-8")
             evidence_dir = output_root / "evidence" / candidate_id
             (debug / "screenshots").mkdir(parents=True, exist_ok=True)
-            main([str(run_dir), request, "--offline-no-network"], emit=False)
+            qa_args = [str(run_dir), request, "--offline-no-network"]
+            if image_assets_manifest is not None:
+                qa_args.extend(["--image-assets-manifest", str(image_assets_manifest)])
+            main(qa_args, emit=False)
             report_path = debug / "browser_qa.json"
             report = json.loads(report_path.read_text(encoding="utf-8"))
             evidence_dir.mkdir(parents=True, exist_ok=True)
@@ -192,15 +195,15 @@ def _run_chatgpt_candidates_sync(candidates, request, output_dir, source_url="")
     summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False) + chr(10), encoding="utf-8")
     return summary
 
-def run_chatgpt_candidates(candidates, request, output_dir, source_url=""):
+def run_chatgpt_candidates(candidates, request, output_dir, source_url="", image_assets_manifest=None):
     """Notebook-safe entry point; isolates synchronous Playwright in a worker thread."""
     try:
         asyncio.get_running_loop()
     except RuntimeError:
-        return _run_chatgpt_candidates_sync(candidates, request, output_dir, source_url)
+        return _run_chatgpt_candidates_sync(candidates, request, output_dir, source_url, image_assets_manifest)
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
         return pool.submit(
-            _run_chatgpt_candidates_sync, candidates, request, output_dir, source_url
+            _run_chatgpt_candidates_sync, candidates, request, output_dir, source_url, image_assets_manifest
         ).result()
 
 '''
