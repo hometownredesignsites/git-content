@@ -1,0 +1,59 @@
+{
+  "format": "base85(zlib(utf8(browser_qa_standalone.py)))",
+  "chunk_size_chars": 4000,
+  "chunk_count": 8,
+  "payload_chars": 30157,
+  "payload_sha256": "889cf62794fedcfaf1b2b584dc982eb4095024c543db606a0a0cc002ad8f7c39",
+  "runner_source_sha256": "d61accc6d644f48301e14228fd6dd8006fe13b1a395856d4c0e693246baa870b",
+  "runner_source_bytes": 105296,
+  "chunks": [
+    {
+      "index": 0,
+      "path": "chatgpt_automation/scripts/browser_qa_payload_chunks/part-01.py",
+      "chars": 4000,
+      "sha256": "1121190f6e86f5932229028b237d612b9e7307c25f943cfabc9fc3fd57738036"
+    },
+    {
+      "index": 1,
+      "path": "chatgpt_automation/scripts/browser_qa_payload_chunks/part-02.py",
+      "chars": 4000,
+      "sha256": "1d879149104a9a738985ad15e3a56cff9417467387c296525b04251da2a0704a"
+    },
+    {
+      "index": 2,
+      "path": "chatgpt_automation/scripts/browser_qa_payload_chunks/part-03.py",
+      "chars": 4000,
+      "sha256": "675737bd46d2eacfc67511b51ced2c3b89dc098dcf2080e4f45272ae4d01d54b"
+    },
+    {
+      "index": 3,
+      "path": "chatgpt_automation/scripts/browser_qa_payload_chunks/part-04.py",
+      "chars": 4000,
+      "sha256": "57043a7e59d2370ef7f918bcb27e5560de3873635d14a0fa35eac5bca0334fd7"
+    },
+    {
+      "index": 4,
+      "path": "chatgpt_automation/scripts/browser_qa_payload_chunks/part-05.py",
+      "chars": 4000,
+      "sha256": "7eeda8b377f709b4e591f813aaf97e8fe2aef77abe597aa8b654f4d5fdc19c1d"
+    },
+    {
+      "index": 5,
+      "path": "chatgpt_automation/scripts/browser_qa_payload_chunks/part-06.py",
+      "chars": 4000,
+      "sha256": "6e4a6a85b7fe875aeec8f2d99845f2dc125448509426dcb3e3544678098d4237"
+    },
+    {
+      "index": 6,
+      "path": "chatgpt_automation/scripts/browser_qa_payload_chunks/part-07.py",
+      "chars": 4000,
+      "sha256": "3b4216065b5ee55f11ee36f88c71faa52a4ae6d755f109c667cd304c42377795"
+    },
+    {
+      "index": 7,
+      "path": "chatgpt_automation/scripts/browser_qa_payload_chunks/part-08.py",
+      "chars": 2157,
+      "sha256": "ebee709cd882d668559f23d2e238198e3f787cf7ae222587a4393b01fcb247e2"
+    }
+  ]
+}

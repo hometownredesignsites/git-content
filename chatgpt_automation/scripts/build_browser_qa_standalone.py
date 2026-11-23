@@ -6,6 +6,7 @@ from __future__ import annotations
 import ast
 import base64
 import hashlib
+import json
 from pathlib import Path
 import zlib
 
@@ -13,6 +14,9 @@ import zlib
 SCRIPTS = Path(__file__).resolve().parent
 OUTPUT = SCRIPTS / "browser_qa_standalone.py"
 COMPACT_OUTPUT = SCRIPTS / "browser_qa_standalone_compact.py"
+CHUNKS_DIR = SCRIPTS / "browser_qa_payload_chunks"
+CHUNK_MANIFEST = SCRIPTS / "browser_qa_payload_manifest.json"
+PAYLOAD_CHUNK_SIZE = 4000
 
 
 def _nodes(path: Path, names: set[str]) -> list[str]:
@@ -229,6 +233,31 @@ exec(compile(_source, "browser_qa_standalone.py", "exec"), globals())
 del _base64, _hashlib, _zlib, _source, _COMPRESSED_SOURCE_B85
 '''
     COMPACT_OUTPUT.write_text(compact_source, encoding="utf-8")
+    CHUNKS_DIR.mkdir(exist_ok=True)
+    payload_manifest = {
+        "format": "base85(zlib(utf8(browser_qa_standalone.py)))",
+        "chunk_size_chars": PAYLOAD_CHUNK_SIZE,
+        "chunk_count": (len(compressed_payload) + PAYLOAD_CHUNK_SIZE - 1) // PAYLOAD_CHUNK_SIZE,
+        "payload_chars": len(compressed_payload),
+        "payload_sha256": hashlib.sha256(compressed_payload.encode("ascii")).hexdigest(),
+        "runner_source_sha256": hashlib.sha256(standalone_bytes).hexdigest(),
+        "runner_source_bytes": len(standalone_bytes),
+        "chunks": [],
+    }
+    for index in range(payload_manifest["chunk_count"]):
+        chunk = compressed_payload[index * PAYLOAD_CHUNK_SIZE:(index + 1) * PAYLOAD_CHUNK_SIZE]
+        chunk_source = f"runner_payload_parts[{index}] = {chunk!r}\n"
+        chunk_path = CHUNKS_DIR / f"part-{index + 1:02d}.py"
+        chunk_path.write_text(chunk_source, encoding="utf-8")
+        payload_manifest["chunks"].append({
+            "index": index,
+            "path": f"chatgpt_automation/scripts/browser_qa_payload_chunks/{chunk_path.name}",
+            "chars": len(chunk),
+            "sha256": hashlib.sha256(chunk.encode("ascii")).hexdigest(),
+        })
+    CHUNK_MANIFEST.write_text(
+        json.dumps(payload_manifest, indent=2) + "\n", encoding="utf-8"
+    )
 
 
 if __name__ == "__main__":
