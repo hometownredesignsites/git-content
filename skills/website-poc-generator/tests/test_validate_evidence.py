@@ -91,7 +91,11 @@ def make_package(root: Path) -> None:
             qa = {
                 "record_type": "qa_result", "html_path": relative_html,
                 "html_sha256": digest, "status": "PASS", "tool": tool,
-                "checks": [], "blocking_failures": [], "advisories": [],
+                "checks": ([
+                    {"id": "ids_unique", "status": "PASS", "blocking": True},
+                    {"id": "fragment_links_resolve", "status": "PASS", "blocking": True},
+                ] if filename == "static-qa.json" else []),
+                "blocking_failures": [], "advisories": [],
             }
             if filename == "browser-qa.json":
                 qa["viewports"] = {
@@ -117,6 +121,7 @@ def make_package(root: Path) -> None:
         })
         scorecard = {
             "is_advisory": True,
+            "not_scored": False,
             "weighted_total": 100,
             "scores": {
                 key: {"score": 5, "weight": weight, "finding": "Meets criterion."}
@@ -222,6 +227,21 @@ class ValidateEvidenceTests(unittest.TestCase):
             write_json(review_path, review)
             self.assertTrue(any("weighted_total does not match" in e for e in self.run_audit(root).errors))
 
+    def test_unscored_scorecard_allows_null_scores_without_zero_placeholders(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            audit = Audit(Path(directory))
+            scorecard = {
+                "is_advisory": True,
+                "not_scored": True,
+                "weighted_total": None,
+                "scores": {
+                    key: {"score": None, "weight": weight, "finding": "UNVERIFIED; no rendered review."}
+                    for key, weight in WEIGHTS.items()
+                },
+            }
+            audit.validate_design_scorecard(Path("visual-review.json"), scorecard, "UNVERIFIED")
+            self.assertEqual([], audit.errors)
+
     def test_slot_template_mapping_is_enforced(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -231,6 +251,26 @@ class ValidateEvidenceTests(unittest.TestCase):
             inputs["template"] = "Landed"
             write_json(inputs_path, inputs)
             self.assertTrue(any("slot 1 must use Forty" in e for e in self.run_audit(root).errors))
+
+    def test_static_qa_pass_requires_anchor_and_unique_id_checks(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            make_package(root)
+            qa_path = root / "evidence" / "forty-attempt-1" / "static-qa.json"
+            qa = json.loads(qa_path.read_text(encoding="utf-8"))
+            qa["checks"] = [{"id": "ids_unique", "status": "PASS", "blocking": True}]
+            write_json(qa_path, qa)
+            self.assertTrue(any("omits required checks: fragment_links_resolve" in e for e in self.run_audit(root).errors))
+
+    def test_ledger_batch_attempts_must_be_two_integer_counts(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            make_package(root)
+            ledger_path = root / "evidence" / "candidate-ledger.json"
+            ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+            ledger["batch_attempts"] = {"initial": 3, "retry": 0}
+            write_json(ledger_path, ledger)
+            self.assertTrue(any("batch_attempts must be [initial_count, retry_count]" in e for e in self.run_audit(root).errors))
 
     def test_skill_pass_rejects_undersized_hero_image(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

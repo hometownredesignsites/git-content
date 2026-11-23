@@ -40,6 +40,7 @@ SCORE_WEIGHTS = {
     "mobile_experience": 10,
     "conversion_clarity": 5,
 }
+MINIMUM_SKILL_STATIC_CHECKS = {"ids_unique", "fragment_links_resolve"}
 SCHEMA_DEFINITIONS = {
     "run": "run",
     "source_facts": "source_facts",
@@ -138,6 +139,53 @@ class Audit:
                 where = ".".join(map(str, issue.absolute_path)) or "$"
                 self.error(f"{self.rel(path)}:{where}: {issue.message}")
 
+    def validate_design_scorecard(self, path: Path, scorecard: Any, review_status: Any) -> None:
+        label = self.rel(path)
+        if not isinstance(scorecard, dict):
+            self.error(f"{label}: skill visual review is missing design_scorecard")
+            return
+        if scorecard.get("is_advisory") is not True:
+            self.error(f"{label}: design scorecard must be explicitly advisory")
+        not_scored = scorecard.get("not_scored")
+        if not isinstance(not_scored, bool):
+            self.error(f"{label}: design_scorecard.not_scored must be boolean")
+            return
+        if review_status in {"BLOCKED", "UNVERIFIED"} and not_scored is not True:
+            self.error(f"{label}: an unverified/blocked visual review must use not_scored=true")
+        if review_status == "PASS" and not_scored is not False:
+            self.error(f"{label}: a passing visual review must contain a scored design scorecard")
+        scores = scorecard.get("scores")
+        if not isinstance(scores, dict):
+            self.error(f"{label}: design_scorecard.scores must be an object")
+            return
+        if set(scores) != set(SCORE_WEIGHTS):
+            self.error(f"{label}: design_scorecard.scores must contain exactly the seven canonical criterion keys")
+        if not_scored:
+            if scorecard.get("weighted_total") is not None:
+                self.error(f"{label}: unscored design_scorecard.weighted_total must be null")
+        points = 0.0
+        for key, weight in SCORE_WEIGHTS.items():
+            entry = scores.get(key)
+            if not isinstance(entry, dict):
+                self.error(f"{label}: missing score {key}")
+                continue
+            score = entry.get("score")
+            if entry.get("weight") != weight:
+                self.error(f"{label}: {key}.weight must be {weight}")
+            if not isinstance(entry.get("finding"), str) or not entry["finding"].strip():
+                self.error(f"{label}: {key}.finding must be nonempty")
+            if not_scored:
+                if score is not None:
+                    self.error(f"{label}: unscored {key}.score must be null")
+            elif not isinstance(score, (int, float)) or isinstance(score, bool) or not 0 <= score <= 5:
+                self.error(f"{label}: {key}.score must be from 0 to 5")
+            else:
+                points += weight * score / 5
+        if not not_scored:
+            total = scorecard.get("weighted_total")
+            if not isinstance(total, (int, float)) or isinstance(total, bool) or abs(total - points) > 0.02:
+                self.error(f"{label}: weighted_total does not match component scores ({points:.2f})")
+
     def records_of(self, record_type: str) -> list[tuple[Path, dict[str, Any]]]:
         return [(p, r) for p, r in self.records if r.get("record_type") == record_type]
 
@@ -198,8 +246,23 @@ class Audit:
                 self.error(f"Expected exactly one {label} record; found {len(matches)}")
         if run.get("evidence_index"):
             self.resolve_record_path(run.get("evidence_index"), "run evidence_index")
+            if run.get("execution_mode") == "skill" and run.get("evidence_index") != "evidence/index.md":
+                self.error("evidence/run.json: skill evidence_index must be evidence/index.md")
         else:
             self.error("evidence/run.json: missing evidence_index")
+
+        for source_path, source_facts in self.records_of("source_facts"):
+            supplied = source_facts.get("user_supplied_facts", [])
+            if not isinstance(supplied, list):
+                self.error(f"{self.rel(source_path)}: user_supplied_facts must be an array of objects")
+                continue
+            for index, fact in enumerate(supplied):
+                if not isinstance(fact, dict):
+                    self.error(f"{self.rel(source_path)}: user_supplied_facts[{index}] must be an object; put comparison context in generation-context.json")
+                    continue
+                for key in ("fact", "provided_by", "evidence_path"):
+                    if not isinstance(fact.get(key), str) or not fact[key].strip():
+                        self.error(f"{self.rel(source_path)}: user_supplied_facts[{index}].{key} must be a nonempty string")
 
         deliverables = run.get("deliverables")
         if not isinstance(deliverables, dict):
@@ -243,6 +306,18 @@ class Audit:
                 by_candidate.setdefault(cid, {}).setdefault(str(record.get("record_type")), []).append((path, record))
             self.evidence_paths_exist(record.get("evidence_paths"), f"{self.rel(path)}.evidence_paths")
             self.inspect_path_fields(record, self.rel(path))
+
+        for candidate_records in by_candidate.values():
+            for qa_path, qa_record in candidate_records.get("qa_result", []):
+                if qa_path.name != "static-qa.json" or qa_record.get("status") != "PASS":
+                    continue
+                check_ids = {item.get("id") for item in qa_record.get("checks", []) if isinstance(item, dict)}
+                missing = MINIMUM_SKILL_STATIC_CHECKS - check_ids
+                if missing:
+                    self.error(f"{self.rel(qa_path)}: PASS skill static QA omits required checks: {', '.join(sorted(missing))}")
+                for check in qa_record.get("checks", []):
+                    if isinstance(check, dict) and check.get("blocking") and check.get("status") != "PASS":
+                        self.error(f"{self.rel(qa_path)}: PASS skill static QA has non-passing blocking check {check.get('id')!r}")
 
         final_passes: dict[str, dict[str, Any]] = {}
         final_files = self.records_of("final_status")
@@ -392,31 +467,7 @@ class Audit:
             if run.get("execution_mode") == "skill":
                 reviews = by_candidate.get(cid, {}).get("visual_review", [])
                 for rp, review in reviews:
-                    scorecard = review.get("design_scorecard")
-                    if not isinstance(scorecard, dict):
-                        self.error(f"{self.rel(rp)}: skill visual review is missing design_scorecard")
-                        continue
-                    scores = scorecard.get("scores")
-                    if not isinstance(scores, dict):
-                        self.error(f"{self.rel(rp)}: design_scorecard.scores must be an object")
-                        continue
-                    points = 0.0
-                    for key, weight in SCORE_WEIGHTS.items():
-                        entry = scores.get(key)
-                        if not isinstance(entry, dict):
-                            self.error(f"{self.rel(rp)}: missing score {key}")
-                            continue
-                        score = entry.get("score")
-                        if not isinstance(score, (int, float)) or isinstance(score, bool) or not 0 <= score <= 5:
-                            self.error(f"{self.rel(rp)}: {key}.score must be from 0 to 5")
-                            continue
-                        if entry.get("weight") != weight:
-                            self.error(f"{self.rel(rp)}: {key}.weight must be {weight}")
-                        points += weight * score / 5
-                    if abs(float(scorecard.get("weighted_total", -999)) - points) > 0.02:
-                        self.error(f"{self.rel(rp)}: weighted_total does not match component scores ({points:.2f})")
-                    if scorecard.get("is_advisory") is not True:
-                        self.error(f"{self.rel(rp)}: design scorecard must be explicitly advisory")
+                    self.validate_design_scorecard(rp, review.get("design_scorecard"), review.get("status"))
 
         ledger_records = self.records_of("candidate_ledger")
         if len(ledger_records) != 1:
@@ -431,6 +482,12 @@ class Audit:
                 if observed != expected:
                     self.error(f"{self.rel(ledger_path)}: skill attempt limits must be 3+3 (max 6); found {observed}")
                 attempts = ledger.get("attempts", [])
+                batch_counts = [
+                    sum(1 for item in attempts if isinstance(item, dict) and item.get("batch_number") == batch)
+                    for batch in (1, 2)
+                ]
+                if ledger.get("batch_attempts") != batch_counts:
+                    self.error(f"{self.rel(ledger_path)}: batch_attempts must be [initial_count, retry_count] {batch_counts}")
                 numbers = [x.get("attempt_number") for x in attempts if isinstance(x, dict)]
                 if len(numbers) != len(set(numbers)):
                     self.error(f"{self.rel(ledger_path)}: attempt_number values must be unique")

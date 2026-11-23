@@ -38,7 +38,7 @@ Create exactly one candidate per fixed slot in order: Forty, Landed, Story. Read
 
 ### 3. Validate, review, and repair
 
-Apply [QA requirements](references/qa-requirements.md) to each candidate and exact final bytes. Apply only safe, bounded repairs and slot-specific retries as defined in [recovery procedures](references/recovery-procedures.md). A changed HTML file invalidates its prior digest-bound checks and reviews; rerun all affected gates.
+Apply [QA requirements](references/qa-requirements.md) to each candidate and exact final bytes. Repair every safe, independently verifiable static failure before packaging, even when unrelated browser or image gates remain blocked. Apply only bounded repairs and slot-specific retries as defined in [recovery procedures](references/recovery-procedures.md). A changed HTML file invalidates its prior digest-bound checks and reviews; rerun all affected gates.
 
 ### 4. Package and decide completion
 

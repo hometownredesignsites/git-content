@@ -299,8 +299,12 @@
           "type": "array",
           "items": {
             "type": "object",
-            "properties": {},
-            "required": [],
+            "properties": {
+              "fact": {"type": "string", "minLength": 1},
+              "provided_by": {"type": "string", "minLength": 1},
+              "evidence_path": {"type": "string", "minLength": 1}
+            },
+            "required": ["fact", "provided_by", "evidence_path"],
             "additionalProperties": true
           }
         },
@@ -933,7 +937,7 @@
               "type": "object",
               "properties": {
                 "passed": {
-                  "type": "boolean"
+                  "type": ["boolean", "null"]
                 },
                 "finding": {
                   "type": "string"
@@ -946,7 +950,7 @@
               "type": "object",
               "properties": {
                 "passed": {
-                  "type": "boolean"
+                  "type": ["boolean", "null"]
                 },
                 "finding": {
                   "type": "string"
@@ -959,7 +963,7 @@
               "type": "object",
               "properties": {
                 "passed": {
-                  "type": "boolean"
+                  "type": ["boolean", "null"]
                 },
                 "finding": {
                   "type": "string"
@@ -972,7 +976,7 @@
               "type": "object",
               "properties": {
                 "passed": {
-                  "type": "boolean"
+                  "type": ["boolean", "null"]
                 },
                 "finding": {
                   "type": "string"
@@ -985,7 +989,7 @@
               "type": "object",
               "properties": {
                 "passed": {
-                  "type": "boolean"
+                  "type": ["boolean", "null"]
                 },
                 "finding": {
                   "type": "string"
@@ -1043,7 +1047,8 @@
           "type": "object",
           "properties": {
             "is_advisory": {"type": "boolean", "const": true},
-            "weighted_total": {"type": "number", "minimum": 0, "maximum": 100},
+            "not_scored": {"type": "boolean"},
+            "weighted_total": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
             "scores": {
               "type": "object",
               "properties": {
@@ -1059,7 +1064,7 @@
               "additionalProperties": false
             }
           },
-          "required": ["is_advisory", "weighted_total", "scores"],
+          "required": ["is_advisory", "not_scored", "weighted_total", "scores"],
           "additionalProperties": false
         },
         "reviewer_or_method": {
@@ -1270,7 +1275,7 @@
     "design_score": {
       "type": "object",
       "properties": {
-        "score": {"type": "number", "minimum": 0, "maximum": 5},
+        "score": {"type": ["number", "null"], "minimum": 0, "maximum": 5},
         "weight": {"type": "integer", "enum": [5, 10, 15, 20]},
         "finding": {"type": "string", "minLength": 1}
       },
