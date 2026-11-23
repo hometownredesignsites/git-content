@@ -84,7 +84,7 @@ def make_package(root: Path) -> None:
             "source_facts_path": "evidence/source-facts.json",
             "generation_context_path": "evidence/generation-context.json",
             "selected_source_assets": [], "selected_fallback_assets": [],
-            "contact_and_form_requirements": {}, "required_sections": [],
+            "contact_and_form_requirements": {"source_contact_form_status": "ABSENT"}, "required_sections": [],
             "output_html_path": relative_html, "input_sha256": "a" * 64,
         })
         for filename, tool in (("static-qa.json", "static"), ("browser-qa.json", "browser")):
@@ -92,8 +92,10 @@ def make_package(root: Path) -> None:
                 "record_type": "qa_result", "html_path": relative_html,
                 "html_sha256": digest, "status": "PASS", "tool": tool,
                 "checks": ([
-                    {"id": "ids_unique", "status": "PASS", "blocking": True},
-                    {"id": "fragment_links_resolve", "status": "PASS", "blocking": True},
+                    {"id": "ids_unique", "status": "PASS", "blocking": True, "summary": "IDs are unique.", "evidence_paths": []},
+                    {"id": "fragment_links_resolve", "status": "PASS", "blocking": True, "summary": "Fragments resolve.", "evidence_paths": []},
+                    {"id": "contact_form_matches_source", "status": "PASS", "blocking": True, "summary": "No form was sourced or generated.", "evidence_paths": []},
+                    {"id": "contact_form_send_cta_present", "status": "NOT_REQUIRED", "blocking": False, "summary": "No source form fields were reproduced.", "evidence_paths": []},
                 ] if filename == "static-qa.json" else []),
                 "blocking_failures": [], "advisories": [],
             }
@@ -258,9 +260,50 @@ class ValidateEvidenceTests(unittest.TestCase):
             make_package(root)
             qa_path = root / "evidence" / "forty-attempt-1" / "static-qa.json"
             qa = json.loads(qa_path.read_text(encoding="utf-8"))
-            qa["checks"] = [{"id": "ids_unique", "status": "PASS", "blocking": True}]
+            qa["checks"] = [{
+                "id": "ids_unique", "status": "PASS", "blocking": True,
+                "summary": "IDs are unique.", "evidence_paths": [],
+            }]
             write_json(qa_path, qa)
-            self.assertTrue(any("omits required checks: fragment_links_resolve" in e for e in self.run_audit(root).errors))
+            errors = self.run_audit(root).errors
+            self.assertTrue(any("omits required checks:" in e and "fragment_links_resolve" in e for e in errors), errors)
+
+    def test_source_without_form_rejects_contact_form_markup(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            make_package(root)
+            html_path = root / "candidate-forty.html"
+            html = html_path.read_text(encoding="utf-8")
+            html_path.write_text(
+                html.replace("</main>", '<section id="contact"><form><label for="email">Email</label>'
+                             '<input id="email" type="email"></form></section></main>'),
+                encoding="utf-8",
+            )
+            errors = self.run_audit(root).errors
+            self.assertTrue(any("contact_form_matches_source must be FAIL" in error for error in errors), errors)
+
+    def test_source_form_requires_semantic_form_and_visible_noop_send(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            html_path = root / "candidate.html"
+            html_path.write_text(
+                '<!doctype html><html><body><section id="contact"><form>'
+                '<label for="email">Email</label><input id="email" type="email">'
+                '<button type="button">Send inquiry</button></form></section></body></html>',
+                encoding="utf-8",
+            )
+            qa_path = root / "static-qa.json"
+            inputs_path = root / "candidate-inputs.json"
+            qa = {
+                "checks": [
+                    {"id": "contact_form_matches_source", "status": "PASS"},
+                    {"id": "contact_form_send_cta_present", "status": "PASS"},
+                ]
+            }
+            inputs = {"contact_and_form_requirements": {"source_contact_form_status": "PRESENT"}}
+            audit = Audit(root)
+            audit.validate_contact_form_alignment(qa_path, qa, inputs_path, inputs, html_path)
+            self.assertEqual([], audit.errors)
 
     def test_ledger_batch_attempts_must_be_two_integer_counts(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

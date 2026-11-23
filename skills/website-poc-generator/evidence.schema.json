@@ -496,7 +496,12 @@
         },
         "contact_and_form_requirements": {
           "type": "object",
-          "properties": {},
+          "properties": {
+            "source_contact_form_status": {
+              "type": "string",
+              "enum": ["PRESENT", "ABSENT", "UNVERIFIED"]
+            }
+          },
           "required": [],
           "additionalProperties": true
         },

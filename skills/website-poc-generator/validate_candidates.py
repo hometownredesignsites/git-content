@@ -6,9 +6,12 @@ Usage:
 
 Uses only the Python standard library. These checks are structural heuristics,
 not a substitute for browser rendering, accessibility testing, or visual QA.
+Source-derived contact fields also require an enabled, named ``<button
+type="button">`` send CTA; rendered visibility remains a browser check.
 """
 from __future__ import annotations
 
+import re
 import sys
 from collections import Counter
 from html.parser import HTMLParser
@@ -31,11 +34,19 @@ class DocumentCheck(HTMLParser):
         self.focus_css = False
         self.viewport = False
         self.stack = []
+        self.contact_depth = 0
+        self.contact_fields = 0
+        self.contact_buttons = []
+        self._button_stack = []
+        self._contact_stack = []
         self.errors = []
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
         self.tags[tag] += 1
+        contact_markers = [attrs.get("id", ""), attrs.get("class", ""), attrs.get("aria-label", "")]
+        opens_contact = any("contact" in marker.lower() for marker in contact_markers)
+        in_contact = self.contact_depth > 0 or opens_contact
         if tag == "style":
             self.styles += 1
         if tag == "link" and "stylesheet" in attrs.get("rel", "").lower():
@@ -48,8 +59,27 @@ class DocumentCheck(HTMLParser):
             self.anchors.append(attrs["href"][1:])
         if tag == "img":
             self.images.append(attrs.get("src", ""))
+        if in_contact and tag in {"input", "select", "textarea"}:
+            input_type = attrs.get("type", "text").lower() if tag == "input" else "text"
+            if input_type not in {"hidden", "submit", "reset", "button", "image"}:
+                self.contact_fields += 1
+        if in_contact and tag == "button":
+            button = {
+                "type": attrs.get("type", "submit").lower(),
+                "disabled": "disabled" in attrs,
+                "hidden": "hidden" in attrs,
+                "aria_hidden": attrs.get("aria-hidden", "").lower() == "true",
+                "style": attrs.get("style", "").lower(),
+                "aria_label": attrs.get("aria-label", "").strip(),
+                "text": "",
+            }
+            self.contact_buttons.append(button)
+            self._button_stack.append(button)
         if tag not in self.VOID:
             self.stack.append(tag)
+            self._contact_stack.append(opens_contact)
+            if opens_contact:
+                self.contact_depth += 1
 
     def handle_endtag(self, tag):
         if tag in self.VOID:
@@ -59,13 +89,37 @@ class DocumentCheck(HTMLParser):
             idx = len(self.stack) - 1 - self.stack[::-1].index(tag)
             if idx != len(self.stack) - 1:
                 self.errors.append(f"Unexpected closing tag </{tag}>")
+            removed_contact = self._contact_stack[idx:]
+            self.contact_depth -= sum(removed_contact)
             del self.stack[idx:]
+            del self._contact_stack[idx:]
+            if tag == "button" and self._button_stack:
+                self._button_stack.pop()
         else:
             self.errors.append(f"Closing tag without open tag: </{tag}>")
 
     def handle_data(self, data):
         if "focus-visible" in data or ":focus" in data:
             self.focus_css = True
+        for button in self._button_stack:
+            button["text"] += data
+
+
+def has_valid_contact_send_cta(parser: DocumentCheck) -> bool:
+    send_labels = re.compile(
+        r"\b(send(?:\s+(?:inquiry|message|request))?|submit|request\s+(?:a\s+)?quote)\b",
+        re.I,
+    )
+    return any(
+        button["type"] == "button"
+        and not button["disabled"]
+        and not button["hidden"]
+        and not button["aria_hidden"]
+        and "display:none" not in button["style"].replace(" ", "")
+        and "visibility:hidden" not in button["style"].replace(" ", "")
+        and send_labels.search(button["text"])
+        for button in parser.contact_buttons
+    )
 
 
 def check(path: Path) -> list[str]:
@@ -106,6 +160,13 @@ def check(path: Path) -> list[str]:
         issues.append("No visible-focus CSS selector detected (manual review required)")
     if parser.stack:
         issues.append("Unclosed element(s): " + ", ".join(parser.stack[-8:]))
+
+    if parser.contact_fields:
+        if not has_valid_contact_send_cta(parser):
+            issues.append(
+                "Contact inquiry fields need an enabled, named no-op CTA such as "
+                '<button type="button">Send inquiry</button>'
+            )
 
     # Heuristic only: catches a few common sources of horizontal overflow.
     if "width: 100vw" in text.lower() and "box-sizing: border-box" not in text.lower():

@@ -16,6 +16,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from validate_candidates import DocumentCheck, has_valid_contact_send_cta
+
 
 RECORD_TYPES = {
     "run", "source_facts", "generation_context", "candidate_inputs",
@@ -40,7 +42,10 @@ SCORE_WEIGHTS = {
     "mobile_experience": 10,
     "conversion_clarity": 5,
 }
-MINIMUM_SKILL_STATIC_CHECKS = {"ids_unique", "fragment_links_resolve"}
+MINIMUM_SKILL_STATIC_CHECKS = {
+    "ids_unique", "fragment_links_resolve", "contact_form_matches_source",
+    "contact_form_send_cta_present",
+}
 SCHEMA_DEFINITIONS = {
     "run": "run",
     "source_facts": "source_facts",
@@ -224,6 +229,72 @@ class Audit:
                 h.update(chunk)
         return h.hexdigest()
 
+    def validate_contact_form_alignment(
+        self,
+        qa_path: Path,
+        qa_record: dict[str, Any],
+        inputs_path: Path,
+        inputs_record: dict[str, Any],
+        html_path: Path,
+    ) -> None:
+        """Cross-check source form observation, saved markup, and QA statuses."""
+        requirements = inputs_record.get("contact_and_form_requirements")
+        requirements = requirements if isinstance(requirements, dict) else {}
+        source_status = requirements.get("source_contact_form_status")
+        if source_status not in {"PRESENT", "ABSENT", "UNVERIFIED"}:
+            self.error(
+                f"{self.rel(inputs_path)}: contact_and_form_requirements.source_contact_form_status "
+                "must be PRESENT, ABSENT, or UNVERIFIED"
+            )
+            return
+        try:
+            parser = DocumentCheck()
+            parser.feed(html_path.read_text(encoding="utf-8"))
+            parser.close()
+        except (OSError, UnicodeError, ValueError) as exc:
+            self.error(f"{self.rel(html_path)}: cannot inspect contact markup: {exc}")
+            return
+
+        has_form = parser.tags["form"] > 0
+        has_fields = parser.contact_fields > 0
+        has_send = has_valid_contact_send_cta(parser)
+        if source_status == "PRESENT":
+            matches_source = has_form and has_fields
+            expected_form_status = "PASS" if matches_source else "FAIL"
+            expected_send_status = "PASS" if has_send else "FAIL"
+        elif source_status == "ABSENT":
+            matches_source = not has_form and not has_fields
+            expected_form_status = "PASS" if matches_source else "FAIL"
+            expected_send_status = "NOT_REQUIRED"
+        else:
+            # Unknown source behavior never authorizes inventing a contact form.
+            matches_source = not has_form and not has_fields
+            expected_form_status = "UNVERIFIED"
+            expected_send_status = "UNVERIFIED"
+            if not matches_source:
+                self.error(
+                    f"{self.rel(html_path)}: contains a form/contact fields while the source form is UNVERIFIED"
+                )
+
+        checks = {
+            item.get("id"): item
+            for item in qa_record.get("checks", [])
+            if isinstance(item, dict)
+        }
+        expected = {
+            "contact_form_matches_source": expected_form_status,
+            "contact_form_send_cta_present": expected_send_status,
+        }
+        for check_id, expected_status in expected.items():
+            check = checks.get(check_id)
+            if not isinstance(check, dict):
+                self.error(f"{self.rel(qa_path)}: missing required check {check_id!r}")
+            elif check.get("status") != expected_status:
+                self.error(
+                    f"{self.rel(qa_path)}: {check_id} must be {expected_status} for "
+                    f"source_contact_form_status={source_status}, found {check.get('status')!r}"
+                )
+
     def validate(self) -> None:
         self.load_records()
         self.check_json_schema()
@@ -309,15 +380,29 @@ class Audit:
 
         for candidate_records in by_candidate.values():
             for qa_path, qa_record in candidate_records.get("qa_result", []):
-                if qa_path.name != "static-qa.json" or qa_record.get("status") != "PASS":
+                if qa_path.name != "static-qa.json":
                     continue
                 check_ids = {item.get("id") for item in qa_record.get("checks", []) if isinstance(item, dict)}
-                missing = MINIMUM_SKILL_STATIC_CHECKS - check_ids
-                if missing:
-                    self.error(f"{self.rel(qa_path)}: PASS skill static QA omits required checks: {', '.join(sorted(missing))}")
+                if qa_record.get("status") == "PASS":
+                    missing = MINIMUM_SKILL_STATIC_CHECKS - check_ids
+                    if missing:
+                        self.error(f"{self.rel(qa_path)}: PASS skill static QA omits required checks: {', '.join(sorted(missing))}")
                 for check in qa_record.get("checks", []):
                     if isinstance(check, dict) and check.get("blocking") and check.get("status") != "PASS":
-                        self.error(f"{self.rel(qa_path)}: PASS skill static QA has non-passing blocking check {check.get('id')!r}")
+                        if qa_record.get("status") == "PASS":
+                            self.error(f"{self.rel(qa_path)}: PASS skill static QA has non-passing blocking check {check.get('id')!r}")
+                if qa_record.get("status") == "PASS":
+                    candidate_id = qa_record.get("candidate_id")
+                    candidate_records_for_id = by_candidate.get(str(candidate_id), {})
+                    input_records = [
+                        (p, rec) for p, rec in candidate_records_for_id.get("candidate_inputs", [])
+                        if p.name == "candidate-inputs.json"
+                    ]
+                    html_path = self.resolve_record_path(qa_record.get("html_path"), f"{self.rel(qa_path)}.html_path")
+                    if len(input_records) == 1 and html_path is not None:
+                        self.validate_contact_form_alignment(
+                            qa_path, qa_record, input_records[0][0], input_records[0][1], html_path
+                        )
 
         final_passes: dict[str, dict[str, Any]] = {}
         final_files = self.records_of("final_status")

@@ -34,6 +34,8 @@ The Action checks its separate authoring files before CSS inlining. For a skill 
 - `styles_css_linked`: the workflow source document links to `styles.css` before inlining; `NOT_REQUIRED` for the skill's direct standalone authoring path. Verify instead that the single embedded style block is present and complete.
 - `interactive_buttons_named`: every button has visible text, an accessible name, or valid `aria-labelledby` references.
 - `form_controls_labeled`: every non-hidden/non-submit/non-reset form control has a label, `aria-label`, or valid `aria-labelledby`.
+- `contact_form_matches_source`: compare the explicit `source_contact_form_status` in candidate inputs with final markup. When `ABSENT`, require no `<form>` element and no inquiry controls in the contact section. When `PRESENT`, require a source-based form and its captured fields. When `UNVERIFIED`, do not generate a form or inquiry controls and keep this check UNVERIFIED. This check is blocking.
+- `contact_form_send_cta_present`: when source-derived inquiry fields are reproduced, the contact group includes a visibly rendered, enabled, accessibly named Send/Send inquiry/Send message/Submit control. For a preview without a working endpoint, use an explicit `<button type="button">` so it cannot accidentally submit; place the clear “nothing is sent or stored” disclosure beside the form. The bundled static validator checks markup presence/name/type/disabled and inline-hidden states; actual rendered visibility is still a browser gate.
 
 **Required section structure and substance**
 
@@ -75,7 +77,8 @@ When a template was selected, require all three:
 - `hero_uses_source_or_category_asset`: when approved assets are provided, the hero must use one of them.
 - When verified source images were extracted, additionally report `source_site_hero_photo_used`, `source_site_photos_used` (at least `min(2, available verified source images)` distinct source photos used), and `source_site_photos_load_ok`. These three are advisory, not blocking, in the workflow's classification; do not misstate them as mandatory when the source has no usable photos.
 - `source_contact_channels_preserved`: every verified source email and phone number has a corresponding `mailto:` or `tel:` link, normalized for phone punctuation and optional leading country code 1.
-- If source form fields were captured, require `source_contact_form_present`, `source_contact_form_fields_preserved`, and `source_contact_form_required_fields_preserved`. Preserve the captured field identities/types, file-field count, and required/optional state. File fields are counted separately; do not add excluded upload fields if the source brief explicitly excludes them.
+- Record `source_contact_form_status` as PRESENT, ABSENT, or UNVERIFIED in each candidate's `contact_and_form_requirements`. If PRESENT, require `source_contact_form_present`, `source_contact_form_fields_preserved`, and `source_contact_form_required_fields_preserved`. Preserve the captured field identities/types, file-field count, and required/optional state. File fields are counted separately; do not add excluded upload fields if the source brief explicitly excludes them. If ABSENT, require no generated form or inquiry fields.
+- When those source fields are reproduced as a no-endpoint demo, also require `contact_form_send_cta_present`; a field-only contact mockup is incomplete even if its field schema is preserved.
 - `generated_contact_form_has_source_basis`: if a form is generated, captured source form fields must provide its basis; a fabricated form with no source form evidence fails.
 
 #### 6.2 Blocking rendered Chromium checks — `browser_qa.py`
