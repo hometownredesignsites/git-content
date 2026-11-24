@@ -18,6 +18,14 @@ from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urlparse
 
+UPLOAD_OPTION_TEXT = re.compile(
+    r"\b(?:upload|attach(?:ment)?|drop\s+(?:a\s+)?files?|"
+    r"(?:choose|browse|select)\s+(?:a\s+)?(?:files?|photos?|images?)|"
+    r"add\s+(?:a\s+)?(?:files?|photos?|images?))\b",
+    re.IGNORECASE,
+)
+UPLOAD_OPTION_MARKER = re.compile(r"(?:upload|attachment|drop[-_ ]?zone|file[-_ ]?picker)", re.IGNORECASE)
+
 
 class DocumentCheck(HTMLParser):
     VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input",
@@ -37,6 +45,8 @@ class DocumentCheck(HTMLParser):
         self.contact_depth = 0
         self.contact_fields = 0
         self.file_upload_controls = 0
+        self.upload_option_issues = []
+        self._upload_text_stack = []
         self.mobile_menu_buttons = []
         self._active_mobile_menu_button = None
         self.contact_text = []
@@ -48,6 +58,17 @@ class DocumentCheck(HTMLParser):
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
         self.tags[tag] += 1
+        attributes = " ".join(
+            str(attrs.get(key, "")) for key in ("id", "class", "aria-label", "title", "value")
+        )
+        if UPLOAD_OPTION_MARKER.search(" ".join(str(attrs.get(key, "")) for key in ("id", "class"))):
+            self.upload_option_issues.append(f"<{tag}> upload-related UI marker")
+        upload_text_target = tag in {"label", "button", "a", "summary"} or attrs.get("role", "").lower() == "button"
+        if upload_text_target:
+            target = {"tag": tag, "parts": [attributes]}
+            self._upload_text_stack.append(target)
+            if UPLOAD_OPTION_TEXT.search(attributes):
+                self.upload_option_issues.append(f"<{tag}> upload option label")
         contact_markers = [attrs.get("id", ""), attrs.get("class", ""), attrs.get("aria-label", "")]
         opens_contact = any("contact" in marker.lower() for marker in contact_markers)
         in_contact = self.contact_depth > 0 or opens_contact
@@ -126,12 +147,20 @@ class DocumentCheck(HTMLParser):
                 self._active_mobile_menu_button = None
         else:
             self.errors.append(f"Closing tag without open tag: </{tag}>")
+        for index in range(len(self._upload_text_stack) - 1, -1, -1):
+            if self._upload_text_stack[index]["tag"] == tag:
+                target = self._upload_text_stack.pop(index)
+                if UPLOAD_OPTION_TEXT.search(" ".join(target["parts"])):
+                    self.upload_option_issues.append(f"<{tag}> upload option label")
+                break
 
     def handle_data(self, data):
         if "focus-visible" in data or ":focus" in data:
             self.focus_css = True
         if self.contact_depth:
             self.contact_text.append(data)
+        for target in self._upload_text_stack:
+            target["parts"].append(data)
         for button in self._button_stack:
             button["text"] += data
         if self._active_mobile_menu_button is not None:
@@ -194,9 +223,11 @@ def check(path: Path) -> list[str]:
             issues.append(f"Expected exactly one <{tag}>; found {parser.tags[tag]}")
     if parser.styles < 1:
         issues.append("No embedded <style> block found")
-    if parser.file_upload_controls:
+    if parser.file_upload_controls or parser.upload_option_issues:
         issues.append(
-            f"File upload controls are prohibited in POC candidates; found {parser.file_upload_controls}"
+            "File upload options and controls are prohibited in POC candidates; "
+            f"found {parser.file_upload_controls} file input(s) and "
+            f"{len(parser.upload_option_issues)} upload label/control marker(s)"
         )
     if not parser.has_accessible_mobile_hamburger():
         issues.append(

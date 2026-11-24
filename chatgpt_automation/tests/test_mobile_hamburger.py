@@ -18,6 +18,18 @@ class AccessibleMobileHamburgerTests(unittest.TestCase):
         parser.close()
         return parser.has_accessible_mobile_hamburger()
 
+    def test_upload_option_label_is_recorded_as_prohibited_ui(self) -> None:
+        parser = _PageInventory()
+        parser.feed('<form><label for="photo">Upload project photos</label></form>')
+        parser.close()
+        self.assertTrue(parser.upload_option_issues)
+
+    def test_non_upload_contact_labels_are_not_flagged(self) -> None:
+        parser = _PageInventory()
+        parser.feed('<form><label for="email">Email address</label><button>Send inquiry</button></form>')
+        parser.close()
+        self.assertEqual([], parser.upload_option_issues)
+
     def test_three_direct_aria_hidden_bars_pass(self) -> None:
         self.assertTrue(self.has_hamburger(GOOD_MENU))
 

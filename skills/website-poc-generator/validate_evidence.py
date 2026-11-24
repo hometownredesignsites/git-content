@@ -259,6 +259,7 @@ class Audit:
         has_form = parser.tags["form"] > 0
         has_fields = parser.contact_fields > 0
         has_file_uploads = parser.file_upload_controls > 0
+        has_upload_options = has_file_uploads or bool(parser.upload_option_issues)
         has_send = has_valid_contact_send_cta(parser)
         omissions = requirements.get("unidentifiable_controls", [])
         omission_records_valid = isinstance(omissions, list)
@@ -304,8 +305,10 @@ class Audit:
                 self.error(f"{self.rel(inputs_path)}: documented omissions require identifiable_fields_preserved=true")
             if requirements.get("exact_full_form_parity") is not False:
                 self.error(f"{self.rel(inputs_path)}: documented omissions require exact_full_form_parity=false")
-        if has_file_uploads:
-            self.error(f"{self.rel(html_path)}: file upload controls are prohibited in POC candidates")
+        if has_upload_options:
+            self.error(
+                f"{self.rel(html_path)}: file upload options and controls are prohibited in POC candidates"
+            )
         unresolved_field = requirements.get("unresolved_field")
         if (
             isinstance(unresolved_field, dict)
@@ -318,7 +321,7 @@ class Audit:
             )
         if source_status == "PRESENT":
             matches_source = (
-                has_form and not has_file_uploads
+                has_form and not has_upload_options
                 and (has_fields or (bool(omissions or policy_exclusions) and omission_records_valid))
             )
             expected_form_status = "PASS" if matches_source else "FAIL"
@@ -347,7 +350,7 @@ class Audit:
         expected = {
             "contact_form_matches_source": expected_form_status,
             "contact_form_send_cta_present": expected_send_status,
-            "no_file_upload_controls": "FAIL" if has_file_uploads else "PASS",
+            "no_file_upload_controls": "FAIL" if has_upload_options else "PASS",
             "accessible_mobile_hamburger": "PASS" if parser.has_accessible_mobile_hamburger() else "FAIL",
         }
         for check_id, expected_status in expected.items():

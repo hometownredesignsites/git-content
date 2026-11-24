@@ -81,7 +81,26 @@ class ContactSendButtonTests(unittest.TestCase):
             '</section>', '<input type="file" name="project-photo"></section>'
         )
         issues = self.validate(html)
-        self.assertTrue(any("File upload controls are prohibited" in issue for issue in issues), issues)
+        self.assertTrue(any("File upload options and controls are prohibited" in issue for issue in issues), issues)
+
+    def test_upload_label_without_file_input_is_rejected(self) -> None:
+        html = BASE.replace(
+            '</section>', '<label for="project-photo">Upload project photos</label></section>'
+        )
+        issues = self.validate(html)
+        self.assertTrue(any("upload options and controls are prohibited" in issue for issue in issues), issues)
+
+    def test_upload_button_without_file_input_is_rejected(self) -> None:
+        html = BASE.replace('</section>', '<button type="button">Attach a photo</button></section>')
+        issues = self.validate(html)
+        self.assertTrue(any("upload options and controls are prohibited" in issue for issue in issues), issues)
+
+    def test_source_form_without_upload_ui_keeps_other_fields_valid(self) -> None:
+        html = BASE.replace(
+            '</section>', '<label for="phone">Phone</label><input id="phone" type="tel"></section>'
+        )
+        issues = self.validate(html)
+        self.assertFalse(any("upload options and controls are prohibited" in issue for issue in issues), issues)
 
     def test_mobile_menu_matches_browser_runner_selector(self) -> None:
         html = BASE.replace("<body>", f"<body>{MENU}")

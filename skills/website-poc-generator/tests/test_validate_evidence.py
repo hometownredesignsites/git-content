@@ -457,7 +457,33 @@ class ValidateEvidenceTests(unittest.TestCase):
             audit.validate_contact_form_alignment(
                 Path("static-qa.json"), qa, Path("candidate-inputs.json"), inputs, html_path
             )
-            self.assertTrue(any("file upload controls are prohibited" in e for e in audit.errors), audit.errors)
+            self.assertTrue(any("file upload options and controls are prohibited" in e for e in audit.errors), audit.errors)
+            self.assertTrue(any("no_file_upload_controls must be FAIL" in e for e in audit.errors), audit.errors)
+
+    def test_upload_label_fails_evidence_check_without_file_input(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            html_path = root / "candidate.html"
+            html_path.write_text(
+                '<!doctype html><html><body><section id="contact"><form>'
+                '<label>Email<input type="email"></label>'
+                '<label for="photo">Upload project photos</label>'
+                '<button type="button">Send inquiry</button>'
+                '<p>Nothing is sent or stored.</p></form></section></body></html>',
+                encoding="utf-8",
+            )
+            qa = {"checks": [
+                {"id": "contact_form_matches_source", "status": "PASS"},
+                {"id": "contact_form_send_cta_present", "status": "PASS"},
+                {"id": "no_file_upload_controls", "status": "PASS"},
+                {"id": "accessible_mobile_hamburger", "status": "FAIL"},
+            ]}
+            inputs = {"contact_and_form_requirements": {"source_contact_form_status": "PRESENT"}}
+            audit = Audit(root)
+            audit.validate_contact_form_alignment(
+                Path("static-qa.json"), qa, Path("candidate-inputs.json"), inputs, html_path
+            )
+            self.assertTrue(any("file upload options and controls are prohibited" in e for e in audit.errors), audit.errors)
             self.assertTrue(any("no_file_upload_controls must be FAIL" in e for e in audit.errors), audit.errors)
 
     def test_ledger_batch_attempts_must_be_two_integer_counts(self) -> None:

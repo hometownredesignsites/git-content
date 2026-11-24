@@ -39,6 +39,13 @@ VOID_ELEMENTS = {
 }
 CTA_ARROW_GLYPHS = re.compile(r"[←↑→↓↗↘↙↖↩↪⇢⇨⟶⟹➔➜➝➞➟➠➡➢➤⮕⮞❯❱›»]")
 PHONE_INTENT = re.compile(r"\b(call|phone|dial|talk|speak)\b", re.IGNORECASE)
+UPLOAD_OPTION_TEXT = re.compile(
+    r"\b(?:upload|attach(?:ment)?|drop\s+(?:a\s+)?files?|"
+    r"(?:choose|browse|select)\s+(?:a\s+)?(?:files?|photos?|images?)|"
+    r"add\s+(?:a\s+)?(?:files?|photos?|images?))\b",
+    re.IGNORECASE,
+)
+UPLOAD_OPTION_MARKER = re.compile(r"(?:upload|attachment|drop[-_ ]?zone|file[-_ ]?picker)", re.IGNORECASE)
 
 
 def _telephone_cta_label_issues(source):
@@ -592,6 +599,8 @@ class _PageInventory(HTMLParser):
         self._labels = {}
         self._label_for = ""
         self._label_stack = []
+        self._upload_text_stack = []
+        self.upload_option_issues = []
         self.hero_image_present = False
         self.hero_image_urls = []
         self.all_image_urls = []
@@ -604,6 +613,16 @@ class _PageInventory(HTMLParser):
         self.tags.add(tag)
         self.tag_counts[tag] = self.tag_counts.get(tag, 0) + 1
         values = dict(attrs)
+        marker_text = " ".join(str(values.get(key, "")) for key in ("id", "class"))
+        if UPLOAD_OPTION_MARKER.search(marker_text):
+            self.upload_option_issues.append(f"<{tag}> upload-related UI marker")
+        attributes = " ".join(
+            str(values.get(key, "")) for key in ("id", "class", "aria-label", "title", "value")
+        )
+        if tag in {"label", "button", "a", "summary"} or values.get("role", "").lower() == "button":
+            self._upload_text_stack.append({"tag": tag, "parts": [attributes]})
+            if UPLOAD_OPTION_TEXT.search(attributes):
+                self.upload_option_issues.append(f"<{tag}> upload option label")
         if tag == "header":
             self._header_depth += 1
         if tag == "nav" and self._header_depth:
@@ -818,6 +837,12 @@ class _PageInventory(HTMLParser):
                     field = self.form_fields[label["field_index"]]
                     field["label"] = field["label"] or label_text
             self._label_for = ""
+        for index in range(len(self._upload_text_stack) - 1, -1, -1):
+            if self._upload_text_stack[index]["tag"] == tag:
+                target = self._upload_text_stack.pop(index)
+                if UPLOAD_OPTION_TEXT.search(" ".join(target["parts"])):
+                    self.upload_option_issues.append(f"<{tag}> upload option label")
+                break
         for index in range(len(self._hero_stack) - 1, -1, -1):
             if self._hero_stack[index][0] == tag:
                 del self._hero_stack[index:]
@@ -847,6 +872,8 @@ class _PageInventory(HTMLParser):
                 self._labels[self._label_for] = " ".join(filter(None, (self._labels.get(self._label_for, ""), clean)))
             for label in self._label_stack:
                 label["text"].append(clean)
+            for target in self._upload_text_stack:
+                target["parts"].append(clean)
         if self._heading is not None:
             self._heading.append(data.strip())
 
@@ -1272,7 +1299,7 @@ def assess_website(prompt, session_dir):
         ),
         "no_file_upload_controls": not any(
             str(field.get("type", "")).lower() == "file" for field in parser.form_fields
-        ),
+        ) and not parser.upload_option_issues,
         "document_closed": bool(
             re.search(r"</body\s*>[\s\S]*?</html\s*>\s*(?:<!--[\s\S]*?-->\s*)*$", html, re.IGNORECASE)
         ),
