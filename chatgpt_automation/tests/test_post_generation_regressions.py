@@ -496,6 +496,64 @@ class PostGenerationRegressionTest(unittest.TestCase):
                 finally:
                     browser.close()
 
+    def test_contact_navigation_cta_must_meet_measured_contrast(self):
+        html = """
+            <style>
+              body { margin: 0; }
+              header nav a { display: inline-block; padding: 12px; color: #fff; background: #f8f7f3; }
+            </style>
+            <header><nav><a href="#contact">Contact</a></nav></header>
+            <section id="contact"><h1>Get in touch</h1></section>
+        """
+        executable_path = str(CHROME_PATH) if CHROME_PATH.is_file() else None
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True, executable_path=executable_path)
+            try:
+                page = browser.new_page(viewport={"width": 1440, "height": 900})
+                page.set_content(html)
+                before = page.evaluate(VIEWPORT_CHECKS_JS)
+                issues = before["primary_cta_contrast"]["issues"]
+                contact_issue = next(issue for issue in issues if issue.get("text") == "Contact")
+                self.assertLess(contact_issue["contrast_ratio"], 4.5)
+
+                page.add_style_tag(content="header nav a { color: #17221d; }")
+                after = page.evaluate(VIEWPORT_CHECKS_JS)
+                self.assertTrue(after["primary_cta_contrast"]["pass"])
+            finally:
+                browser.close()
+
+    def test_landed_hero_media_must_cover_both_viewports(self):
+        html = """
+            <style>
+              html, body { margin: 0; }
+              #banner { position: relative; width: 100vw; height: 80vh; min-height: 400px; overflow: hidden; }
+              #banner .hero-media { position: absolute; inset: 0 0 0 auto; width: 80%; height: 100%; object-fit: cover; }
+              #banner h1 { position: relative; z-index: 1; }
+            </style>
+            <section id="banner"><img class="hero-media" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt=""><h1>Outdoor living</h1></section>
+        """
+        executable_path = str(CHROME_PATH) if CHROME_PATH.is_file() else None
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True, executable_path=executable_path)
+            try:
+                page = browser.new_page(viewport={"width": 1440, "height": 900})
+                page.set_content(html)
+                desktop_before = page.evaluate(VIEWPORT_CHECKS_JS)
+                self.assertFalse(desktop_before["hero"]["media_covers_hero"])
+
+                page.set_viewport_size({"width": 390, "height": 844})
+                mobile_before = page.evaluate(VIEWPORT_CHECKS_JS)
+                self.assertFalse(mobile_before["hero"]["media_covers_hero"])
+
+                page.add_style_tag(content="#banner .hero-media { left: 0; right: auto; width: 100%; }")
+                desktop_after = page.evaluate(VIEWPORT_CHECKS_JS)
+                self.assertTrue(desktop_after["hero"]["media_covers_hero"])
+                page.set_viewport_size({"width": 390, "height": 844})
+                mobile_after = page.evaluate(VIEWPORT_CHECKS_JS)
+                self.assertTrue(mobile_after["hero"]["media_covers_hero"])
+            finally:
+                browser.close()
+
     def test_browser_qa_detects_clipped_heading_dark_hero_cta_and_email_alignment(self):
         html = """
             <style>

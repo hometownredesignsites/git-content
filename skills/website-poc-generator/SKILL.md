@@ -53,6 +53,13 @@ Every candidate with responsive navigation must use one real `<button type="butt
 
 The click handler must keep `aria-expanded` and mobile-nav visibility in sync, open on Enter/Space, close on Escape, and return focus to the menu button after Escape. Give the button a visible `:focus-visible` indicator and make the bars at least 10px wide and 1px high. Do not use two bars, nested bar spans, or CSS pseudo-elements in place of the three measured spans. Run both the static hamburger check and browser interaction checks on the exact final HTML.
 
+### CTA contrast and hero coverage
+
+Treat both requirements as hard, blocking rules on the exact final HTML at desktop and mobile viewports:
+
+- Every visible CTA must have measured text contrast of at least **4.5:1** against its rendered background. This includes the **Contact** CTA in the header/navigation, even when it is styled as a nav link rather than a button. On a light surface use dark text; use white text only on a sufficiently dark fill. Do not infer contrast from the assigned palette—use the browser's computed colors and fail when the background cannot be measured reliably.
+- The **Landed** `#banner` hero media layer must cover the complete hero rectangle at both desktop and mobile sizes, within the runner's 2 CSS pixel edge tolerance. Size and position the media layer to fill the hero and use an intentional `cover` crop. A partial-width image or uncovered band fails. Rerun the geometry check after any repair.
+
 ### Contact-form controls
 
 Mirror whether the source site has a contact form: if the source has none, do not add a form or inquiry fields; if it has one, include a source-grounded form and preserve its identifiable non-upload fields. **No candidate may offer file upload in any form.** Never include a file picker (`<input type="file">`), upload/attachment button, drop zone, or upload label; remove both the source file input and its associated visible label/control. Keep the source-based contact form and all other identifiable non-upload fields. Record each omitted source upload in candidate evidence (`reason: "POLICY_NO_FILE_UPLOAD"`, with source position and evidence locator); exclude it from required field parity and set `exact_full_form_parity: false` when any source control is excluded. Keep the form's no-op CTA and “nothing is sent or stored” disclosure. The blocking static check `no_file_upload_controls` must fail for any file input or remaining upload/attachment option or label anywhere in the candidate.
