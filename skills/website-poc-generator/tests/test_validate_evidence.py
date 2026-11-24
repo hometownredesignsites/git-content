@@ -61,8 +61,12 @@ def make_package(root: Path) -> None:
         html_path.write_text(
             f'<!doctype html><html lang="en"><head><title>{slug}</title>'
             '<meta name="viewport" content="width=device-width">'
-            '<style>:focus-visible { outline: 2px solid; }</style></head>'
-            '<body><main><h1>Fixture</h1></main></body></html>',
+            '<style>:focus-visible { outline: 2px solid; }</style></head><body>'
+            '<header><button type="button" class="menu-toggle" aria-controls="mobile-nav" '
+            'aria-expanded="false" aria-label="Open navigation">'
+            '<span aria-hidden="true"></span><span aria-hidden="true"></span>'
+            '<span aria-hidden="true"></span></button><nav id="mobile-nav" hidden></nav></header>'
+            '<main><h1>Fixture</h1></main></body></html>',
             encoding="utf-8",
         )
         raw = html_path.read_bytes()
@@ -117,6 +121,7 @@ def make_package(root: Path) -> None:
                     {"id": "contact_form_matches_source", "status": "PASS", "blocking": True, "summary": "No form was sourced or generated.", "evidence_paths": []},
                     {"id": "contact_form_send_cta_present", "status": "NOT_REQUIRED", "blocking": False, "summary": "No source form fields were reproduced.", "evidence_paths": []},
                     {"id": "no_file_upload_controls", "status": "PASS", "blocking": True, "summary": "No upload controls are present.", "evidence_paths": []},
+                    {"id": "accessible_mobile_hamburger", "status": "PASS", "blocking": True, "summary": "Three accessible menu bars are present.", "evidence_paths": []},
                 ] if filename == "static-qa.json" else []),
                 "blocking_failures": [], "advisories": [],
             }
@@ -315,6 +320,7 @@ class ValidateEvidenceTests(unittest.TestCase):
                 {"id": "contact_form_matches_source", "status": "PASS"},
                 {"id": "contact_form_send_cta_present", "status": "PASS"},
                 {"id": "no_file_upload_controls", "status": "PASS"},
+                {"id": "accessible_mobile_hamburger", "status": "FAIL"},
             ]}
             audit = Audit(root)
             audit.validate_contact_form_alignment(Path("static-qa.json"), qa, inputs_path, inputs, html_path)
@@ -336,6 +342,7 @@ class ValidateEvidenceTests(unittest.TestCase):
                 {"id": "contact_form_matches_source", "status": "FAIL"},
                 {"id": "contact_form_send_cta_present", "status": "PASS"},
                 {"id": "no_file_upload_controls", "status": "PASS"},
+                {"id": "accessible_mobile_hamburger", "status": "FAIL"},
             ]}
             audit = Audit(root)
             audit.validate_contact_form_alignment(Path("static-qa.json"), qa, Path("candidate-inputs.json"), inputs, html_path)
@@ -357,6 +364,8 @@ class ValidateEvidenceTests(unittest.TestCase):
             qa = {"checks": [
                 {"id": "contact_form_matches_source", "status": "PASS"},
                 {"id": "contact_form_send_cta_present", "status": "PASS"},
+                {"id": "no_file_upload_controls", "status": "PASS"},
+                {"id": "accessible_mobile_hamburger", "status": "FAIL"},
             ]}
             audit = Audit(root)
             audit.validate_contact_form_alignment(Path("static-qa.json"), qa, Path("candidate-inputs.json"), inputs, html_path)
@@ -418,6 +427,7 @@ class ValidateEvidenceTests(unittest.TestCase):
                     {"id": "contact_form_matches_source", "status": "PASS"},
                     {"id": "contact_form_send_cta_present", "status": "PASS"},
                     {"id": "no_file_upload_controls", "status": "PASS"},
+                    {"id": "accessible_mobile_hamburger", "status": "FAIL"},
                 ]
             }
             inputs = {"contact_and_form_requirements": {"source_contact_form_status": "PRESENT"}}
@@ -440,6 +450,7 @@ class ValidateEvidenceTests(unittest.TestCase):
                 {"id": "contact_form_matches_source", "status": "PASS"},
                 {"id": "contact_form_send_cta_present", "status": "PASS"},
                 {"id": "no_file_upload_controls", "status": "PASS"},
+                {"id": "accessible_mobile_hamburger", "status": "FAIL"},
             ]}
             inputs = {"contact_and_form_requirements": {"source_contact_form_status": "PRESENT"}}
             audit = Audit(root)

@@ -37,6 +37,8 @@ class DocumentCheck(HTMLParser):
         self.contact_depth = 0
         self.contact_fields = 0
         self.file_upload_controls = 0
+        self.mobile_menu_buttons = []
+        self._active_mobile_menu_button = None
         self.contact_text = []
         self.contact_buttons = []
         self._button_stack = []
@@ -63,6 +65,27 @@ class DocumentCheck(HTMLParser):
             self.images.append(attrs.get("src", ""))
         if tag == "input" and attrs.get("type", "text").lower() == "file":
             self.file_upload_controls += 1
+        if tag == "button" and attrs.get("aria-controls"):
+            self._active_mobile_menu_button = {
+                "in_header": "header" in self.stack,
+                "type": attrs.get("type", "").lower(),
+                "class": attrs.get("class", "").lower(),
+                "controls": attrs.get("aria-controls", "").strip(),
+                "expanded": attrs.get("aria-expanded", "").lower(),
+                "aria_label": attrs.get("aria-label", "").strip(),
+                "labelledby": attrs.get("aria-labelledby", "").split(),
+                "visible_text": "",
+                "bars": [],
+            }
+            self.mobile_menu_buttons.append(self._active_mobile_menu_button)
+        if (
+            tag == "span"
+            and self._active_mobile_menu_button is not None
+            and self.stack
+            and self.stack[-1] == "button"
+            and attrs.get("aria-hidden", "").lower() == "true"
+        ):
+            self._active_mobile_menu_button["bars"].append(attrs)
         if in_contact and tag in {"input", "select", "textarea"}:
             input_type = attrs.get("type", "text").lower() if tag == "input" else "text"
             if input_type not in {"hidden", "submit", "reset", "button", "image"}:
@@ -99,6 +122,8 @@ class DocumentCheck(HTMLParser):
             del self._contact_stack[idx:]
             if tag == "button" and self._button_stack:
                 self._button_stack.pop()
+            if tag == "button":
+                self._active_mobile_menu_button = None
         else:
             self.errors.append(f"Closing tag without open tag: </{tag}>")
 
@@ -109,6 +134,26 @@ class DocumentCheck(HTMLParser):
             self.contact_text.append(data)
         for button in self._button_stack:
             button["text"] += data
+        if self._active_mobile_menu_button is not None:
+            self._active_mobile_menu_button["visible_text"] += data
+
+    def has_accessible_mobile_hamburger(self) -> bool:
+        known_ids = set(self.ids)
+        menu_buttons = [button for button in self.mobile_menu_buttons if button["in_header"]]
+        return len(menu_buttons) == 1 and any(
+            button["in_header"]
+            and button["type"] == "button"
+            and button["controls"] in known_ids
+            and button["expanded"] in {"true", "false"}
+            and (
+                button["aria_label"]
+                or (button["labelledby"] and all(label_id in known_ids for label_id in button["labelledby"]))
+            )
+            and re.search(r"(?:^|[\s_-])(?:menu|nav)(?:$|[\s_-])", button["class"]) is not None
+            and len(button["bars"]) == 3
+            and " ".join(button["visible_text"].split()).lower() != "menu"
+            for button in self.mobile_menu_buttons
+        )
 
 
 def has_valid_contact_send_cta(parser: DocumentCheck) -> bool:
@@ -152,6 +197,11 @@ def check(path: Path) -> list[str]:
     if parser.file_upload_controls:
         issues.append(
             f"File upload controls are prohibited in POC candidates; found {parser.file_upload_controls}"
+        )
+    if not parser.has_accessible_mobile_hamburger():
+        issues.append(
+            'Mobile menu must use one accessible header button with aria-controls, aria-expanded, '
+            'type="button", and exactly three direct <span aria-hidden="true"> bars'
         )
     if parser.external_styles:
         issues.append("External stylesheet link(s): " + ", ".join(parser.external_styles))

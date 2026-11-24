@@ -44,7 +44,7 @@ SCORE_WEIGHTS = {
 }
 MINIMUM_SKILL_STATIC_CHECKS = {
     "ids_unique", "fragment_links_resolve", "contact_form_matches_source",
-    "contact_form_send_cta_present", "no_file_upload_controls",
+    "contact_form_send_cta_present", "no_file_upload_controls", "accessible_mobile_hamburger",
 }
 SCHEMA_DEFINITIONS = {
     "renderer_preflight": "renderer_preflight",
@@ -348,6 +348,7 @@ class Audit:
             "contact_form_matches_source": expected_form_status,
             "contact_form_send_cta_present": expected_send_status,
             "no_file_upload_controls": "FAIL" if has_file_uploads else "PASS",
+            "accessible_mobile_hamburger": "PASS" if parser.has_accessible_mobile_hamburger() else "FAIL",
         }
         for check_id, expected_status in expected.items():
             check = checks.get(check_id)

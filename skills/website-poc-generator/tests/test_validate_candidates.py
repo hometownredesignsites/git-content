@@ -14,6 +14,11 @@ BASE = '''<!doctype html><html lang="en"><head><title>Demo</title>
 <body><main><h1>Demo</h1><section id="contact"><h2>Contact</h2>
 <label for="email">Email</label><input id="email" type="email"></section></main></body></html>'''
 
+MENU = '''<header><button type="button" class="menu-toggle" aria-controls="mobile-nav"
+aria-expanded="false" aria-label="Open navigation"><span aria-hidden="true"></span>
+<span aria-hidden="true"></span><span aria-hidden="true"></span></button>
+<nav id="mobile-nav" hidden></nav></header>'''
+
 
 class ContactSendButtonTests(unittest.TestCase):
     def validate(self, html: str) -> list[str]:
@@ -77,6 +82,23 @@ class ContactSendButtonTests(unittest.TestCase):
         )
         issues = self.validate(html)
         self.assertTrue(any("File upload controls are prohibited" in issue for issue in issues), issues)
+
+    def test_mobile_menu_matches_browser_runner_selector(self) -> None:
+        html = BASE.replace("<body>", f"<body>{MENU}")
+        issues = self.validate(html)
+        self.assertFalse(any("Mobile menu must use" in issue for issue in issues), issues)
+
+    def test_mobile_menu_with_two_bars_is_rejected(self) -> None:
+        two_bars = MENU.replace('<span aria-hidden="true"></span>', '', 1)
+        html = BASE.replace("<body>", f"<body>{two_bars}")
+        issues = self.validate(html)
+        self.assertTrue(any("exactly three direct" in issue for issue in issues), issues)
+
+    def test_mobile_menu_bars_without_aria_hidden_are_rejected(self) -> None:
+        unlabeled_bars = MENU.replace(' aria-hidden="true"', '')
+        html = BASE.replace("<body>", f"<body>{unlabeled_bars}")
+        issues = self.validate(html)
+        self.assertTrue(any("exactly three direct" in issue for issue in issues), issues)
 
 
 if __name__ == "__main__":

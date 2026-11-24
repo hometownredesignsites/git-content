@@ -38,6 +38,21 @@ Follow [source research and contact rules](references/source-research.md) and [i
 
 Create exactly one candidate per fixed slot in order: Forty, Landed, Story. Read [template specifications](references/template-specifications.md) and [candidate design/generation guidance](references/design-system.md). Preserve each template's signature, use complete bundled assets as references, and do not carry demo filler into business output.
 
+### Mobile navigation control
+
+Every candidate with responsive navigation must use one real `<button type="button">` menu control with a valid `aria-controls` reference to the mobile `<nav>`, `aria-expanded="false"` initially, and an accessible name such as `aria-label="Open navigation"`. Its three visible hamburger bars must be three direct child spans, each marked `aria-hidden="true"`; use this structure because the browser runner locates and measures exactly those three spans:
+
+```html
+<button type="button" class="menu-toggle" aria-controls="primary-menu"
+        aria-expanded="false" aria-label="Open navigation">
+  <span aria-hidden="true"></span>
+  <span aria-hidden="true"></span>
+  <span aria-hidden="true"></span>
+</button>
+```
+
+The click handler must keep `aria-expanded` and mobile-nav visibility in sync, open on Enter/Space, close on Escape, and return focus to the menu button after Escape. Give the button a visible `:focus-visible` indicator and make the bars at least 10px wide and 1px high. Do not use two bars, nested bar spans, or CSS pseudo-elements in place of the three measured spans. Run both the static hamburger check and browser interaction checks on the exact final HTML.
+
 ### Contact-form controls
 
 Mirror whether the source site has a contact form: if the source has none, do not add a form or inquiry fields; if it has one, include a source-grounded form and preserve its identifiable non-upload fields. Never include a file upload control (`<input type="file">`) in a POC, even when the source form offers uploads. Record source upload controls as policy-excluded in the candidate evidence (`reason: "POLICY_NO_FILE_UPLOAD"`, with source position and evidence locator); exclude them from required field parity and set `exact_full_form_parity: false` when any source control is excluded. Keep the form's no-op CTA and “nothing is sent or stored” disclosure. Add a blocking static check `no_file_upload_controls` and fail if any file input appears anywhere in the candidate.

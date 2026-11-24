@@ -63,7 +63,7 @@ The section matcher uses the alias dictionary in `site_quality.py`; use its alia
 - `template_attribution_comment` and `template_attribution_css_comment`: when a scaffold is selected, both the HTML comment and CSS comment must contain the selected template name, official template URL, license URL, and an “adapted”/“adaptation” statement; selected slot must match the maintained reference plan. If no template is selected, these checks are not required.
 - `cta_buttons_no_arrows`: CTA labels/icons contain no arrow glyphs or arrow/chevron icons.
 - `telephone_cta_labels_identify_call`: a telephone link with alphabetic text must use a call-specific label (for example, “Call” or “Call us”), not a vague CTA label.
-- `accessible_mobile_hamburger`: a button has an accessible name, references an existing controlled navigation ID, has `aria-expanded=true|false`, a menu/nav class, and exactly three direct visual bars; its visible label must not be a redundant “menu”.
+- `accessible_mobile_hamburger`: exactly one menu control is a `<button type="button">` with an accessible name, a valid `aria-controls` reference to the mobile nav, `aria-expanded="true|false"`, and a menu/nav class. The three visible bars must be exactly three direct child `<span aria-hidden="true">` elements, matching the browser runner's selector; no nested spans or pseudo-elements may stand in for them. Its visible label must not be a redundant “menu”. The native limited checks and official browser runner must both validate this same structure.
 - `header_navigation_link_limit`: at least one header navigation exists and every header nav contains no more than five links.
 - `footer_has_substance`: footer visible text is at least 45 characters and contains at least two useful links.
 

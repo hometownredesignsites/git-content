@@ -582,6 +582,7 @@ class _PageInventory(HTMLParser):
         self._in_footer = 0
         self._buttons = []
         self._button_stack = []
+        self._tag_stack = []
         self.cta_arrow_issues = []
         self._cta_stack = []
         self.forms = 0
@@ -646,15 +647,19 @@ class _PageInventory(HTMLParser):
                 "labelledby": (values.get("aria-labelledby") or "").strip(),
                 "expanded": (values.get("aria-expanded") or "").strip().lower(),
                 "controls": (values.get("aria-controls") or "").strip(),
+                "type": (values.get("type") or "").strip().lower(),
                 "classes": (values.get("class") or "").lower(),
+                "in_header": self._header_depth > 0,
+                "depth": len(self._tag_stack),
                 "bars": 0,
                 "text": [],
             })
         elif tag == "span":
-            # Ignore a decorative wrapper such as <span class="menu-toggle__bars">
-            # and count its three visual bar children instead.
-            if "bars" not in (values.get("class") or "").lower():
-                for control in self._button_stack:
+            for control in self._button_stack:
+                if (
+                    len(self._tag_stack) == control["depth"] + 1
+                    and values.get("aria-hidden", "").lower() == "true"
+                ):
                     control["bars"] += 1
         if not self._hidden_elements and tag == "a" and values.get("href"):
             self.visible_links.append(values["href"].strip())
@@ -774,6 +779,7 @@ class _PageInventory(HTMLParser):
                 self.hero_image_present = True
 
         if tag not in VOID_ELEMENTS:
+            self._tag_stack.append(tag)
             self._hero_stack.append((tag, node_is_hero))
 
     def handle_startendtag(self, tag, attrs):
@@ -819,6 +825,10 @@ class _PageInventory(HTMLParser):
         if self._heading is not None and re.fullmatch(r"h[1-6]", tag.lower()):
             self.headings.append(" ".join(self._heading))
             self._heading = None
+        for index in range(len(self._tag_stack) - 1, -1, -1):
+            if self._tag_stack[index] == tag:
+                del self._tag_stack[index:]
+                break
 
     def handle_data(self, data):
         if self._hidden_elements:
@@ -843,14 +853,24 @@ class _PageInventory(HTMLParser):
 
     def has_accessible_mobile_hamburger(self):
         known_ids = set(self.ids)
-        for control in self._buttons:
-            has_accessible_name = bool(control["label"] or control["labelledby"])
+        menu_controls = [
+            control for control in self._buttons
+            if control["in_header"] and control["controls"]
+        ]
+        if len(menu_controls) != 1:
+            return False
+        for control in menu_controls:
+            label_ids = control["labelledby"].split()
+            has_accessible_name = bool(
+                control["label"] or (label_ids and all(reference in known_ids for reference in label_ids))
+            )
             controls_navigation = bool(control["controls"] and control["controls"] in known_ids)
             has_three_bars = control["bars"] == 3
             has_menu_class = bool(re.search(r"(?:^|[\s_-])(?:menu|nav)(?:$|[\s_-])", control["classes"]))
             is_expanded_control = control["expanded"] in {"true", "false"}
             has_visible_menu_label = bool(re.search(r"\bmenu\b", " ".join(control["text"]), re.IGNORECASE))
-            if (has_accessible_name and controls_navigation and has_three_bars
+            if (control["in_header"] and control["type"] == "button"
+                    and has_accessible_name and controls_navigation and has_three_bars
                     and has_menu_class and is_expanded_control and not has_visible_menu_label):
                 return True
         return False
