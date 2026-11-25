@@ -6,14 +6,14 @@ This skill runs entirely in the active ChatGPT session. Its required QA is limit
 
 Before generation, check only the capabilities this run needs:
 
-1. Can this session save the three HTML files and evidence to a downloadable output location? Choose a fresh, run-specific directory rather than reusing an earlier run's folder. Create the directory and perform a canary write, read-back, and delete before research or generation. If that path is denied, try one fresh directory under the same approved downloadable root. If the second canary fails, stop before generating candidates and report `output_storage: BLOCKED`; do not keep writing evidence to a path that already denied access or switch silently to an arbitrary non-downloadable location.
+1. Can this session save the three HTML files and evidence to a downloadable output location? In a dedicated preflight cell, check the established downloadable root, create a fresh run-specific child directory and its `evidence/` subdirectory, then create, read back, compare, and delete a canary file inside `evidence/`. Catch `OSError`/`PermissionError` and report the path and error as `output_storage: BLOCKED`; do not let directory setup become an uncaught Python exception. Do not reuse earlier run folders, and do not try multiple sibling paths when the same root is denied. Use another path only if the runtime documents it as downloadable; never assume `/tmp` or the working directory is downloadable. If the exact artifact directory is not writable, stop before source research or candidate generation because the deliverables cannot be saved.
 2. Is Python Run available, and can it read the exact saved bytes and calculate SHA-256?
 3. Is Playwright importable, and can it launch an installed Chromium? If the managed browser is missing, try an existing system Chromium executable once. Do not install packages or browsers.
 4. Can Chromium accept the exact HTML using `page.set_content()`, set 1440×900 and 390×844 viewports for the full check set, measure contact layout at 768×900, and save screenshots?
 
 Use the active notebook event loop correctly: `await main()` when it is already running; do not call `asyncio.run()` in a running loop. Prefer `async with async_playwright() as p:` so the Playwright manager is cleaned up by its context manager. Close the browser in a `finally` block, but do not additionally call `p.stop()` from that pattern. Read `browser.version` as the documented string property, without calling or awaiting it. Do not wait for network idle. Record the observed capabilities once in `evidence/native-qa.json`; do not repeat a failed preflight during the same run.
 
-If Python or Chromium is unavailable, continue generation. Run whatever exact-byte static checks the session supports and report browser checks as BLOCKED. Never infer a browser pass from HTML source or screenshots from another session.
+If Python or Chromium is unavailable, continue generation when output storage is available. Run whatever exact-byte static checks the session supports and report browser checks as BLOCKED. If output storage is blocked, stop before source research and generation. Never infer a browser pass from HTML source or screenshots from another session.
 
 ## Native QA implementation
 
