@@ -11,7 +11,7 @@ Before generation, check only the capabilities this run needs:
 3. Is Playwright importable, and can it launch an installed Chromium? If the managed browser is missing, try an existing system Chromium executable once. Do not install packages or browsers.
 4. Can Chromium accept the exact HTML using `page.set_content()`, set 1440×900 and 390×844 viewports for the full check set, measure contact layout at 768×900, and save screenshots?
 
-Use the active notebook event loop correctly: `await main()` when it is already running; do not call `asyncio.run()` in a running loop. Do not wait for network idle. Record the observed capabilities once in `evidence/native-qa.json`; do not repeat a failed preflight during the same run.
+Use the active notebook event loop correctly: `await main()` when it is already running; do not call `asyncio.run()` in a running loop. Prefer `async with async_playwright() as p:` so the Playwright manager is cleaned up by its context manager. Close the browser in a `finally` block, but do not additionally call `p.stop()` from that pattern. Read `browser.version` as the documented string property, without calling or awaiting it. Do not wait for network idle. Record the observed capabilities once in `evidence/native-qa.json`; do not repeat a failed preflight during the same run.
 
 If Python or Chromium is unavailable, continue generation. Run whatever exact-byte static checks the session supports and report browser checks as BLOCKED. Never infer a browser pass from HTML source or screenshots from another session.
 
