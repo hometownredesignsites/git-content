@@ -34,11 +34,13 @@ def main() -> int:
     parser.add_argument("--generation-jobs", type=Path, required=True, help="Private generation job directory")
     parser.add_argument("--apply", action="store_true", help="Write new idempotent job records; default is dry-run")
     args = parser.parse_args()
-    if not args.source_jobs.is_dir() or not args.generation_jobs.is_dir():
-        raise SystemExit("Both source and generation job directories must already exist")
+    if not args.source_jobs.is_dir():
+        raise SystemExit("The private source job directory must exist")
+    if args.generation_jobs.exists() and not args.generation_jobs.is_dir():
+        raise SystemExit("The private generation job path must be a directory")
 
     existing = {}
-    for path in sorted(args.generation_jobs.glob("*.json")):
+    for path in sorted(args.generation_jobs.glob("*.json")) if args.generation_jobs.exists() else []:
         value = json.loads(path.read_text(encoding="utf-8"))
         if isinstance(value, dict) and isinstance(value.get("job_id"), str):
             existing[value["job_id"]] = value
@@ -47,6 +49,7 @@ def main() -> int:
     updated, stats = reconcile_sources(read_jobs(args.source_jobs), existing, datetime.now(timezone.utc))
     created_ids = sorted(set(updated) - set(existing))
     if args.apply:
+        args.generation_jobs.mkdir(parents=True, exist_ok=True)
         for job_id in created_ids:
             path = args.generation_jobs / f"{job_id}.json"
             if path.exists():
