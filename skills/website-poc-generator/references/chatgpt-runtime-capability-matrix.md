@@ -19,6 +19,15 @@ If Python or Chromium is unavailable, continue generation. Run whatever exact-by
 
 Write a compact Python cell in the active session using standard-library HTML parsing and installed Playwright. The cell must consume the exact saved HTML bytes, verify their hash before and after QA, and emit per-candidate results. It must not import repository scripts or require files from Codex. The complete required check set is in [QA requirements](qa-requirements.md).
 
+### Cell construction and harness failure rules
+
+- Do not apply Python `str.format()` or an f-string to raw CSS or JavaScript templates containing braces. CSS/JS braces are interpreted as formatting fields and can raise `KeyError` or silently corrupt the source. Prefer plain string literals plus explicit, narrowly scoped sentinel replacement (for example, replace a unique `__PALETTE__` token), or build CSS/JS with a safe dedicated serializer. Assert each sentinel occurs exactly once before replacement and none remain afterward.
+- Build and validate all three candidate strings before writing any candidate file. If generation raises, stop dependent cells; do not continue with stale notebook variables or partial files. After fixing the failing cell, rerun generation from a clean state and confirm all three candidates were created in the current run before QA.
+- Treat the QA harness as code that must be validated too. Construct the browser evaluator as one complete JavaScript expression, run a syntax smoke check (for example, `new Function("return (" + expression + ")")`) before the viewport loop, and test its measurement helpers on a minimal fixture. Only then run the full candidate matrix.
+- Make computed-style parsing defensive. Color parsing, luminance, and contrast helpers must return an explicit unavailable result for unsupported, transparent, or malformed colors; never dereference a null parse result. An unmeasurable required contrast check is a check failure, but it must be reported as such rather than crashing the evaluator.
+- Catch and record errors per candidate and viewport so one bad evaluation does not erase earlier results. Distinguish `harness_error` (Python/JavaScript construction, syntax, or evaluator exception) from `candidate_check_failure` (a successfully executed check that found a violation). A harness error is not evidence that a candidate failed or passed. Repair the harness and rerun every affected candidate/viewport check before assigning the final QA status.
+- If a cell fails, stop the dependent workflow at that point. Never present output from a later cell that relied on missing, stale, or partially initialized variables as current-run evidence.
+
 Use `page.set_content(exact_html)` when it works. If the environment cannot render the exact bytes, report rendered checks unavailable; do not silently test a reconstructed or different file. Capture and save one desktop and one mobile screenshot for every candidate when supported. Inspect screenshot pixels only when the session actually exposes them. Missing-remote-image screenshots are layout evidence only.
 
 ## Known Wix image limitation

@@ -16,6 +16,8 @@ Run against each final saved HTML file and retain its byte count and SHA-256:
 
 A failed static check is a candidate failure. Never mark an unchecked static condition as PASS.
 
+Validate the QA harness before using it for candidate decisions. A Python exception during candidate construction, JavaScript syntax error, or exception in the evaluator is a `harness_error`, not a candidate pass or candidate failure. Stop dependent cells, fix the harness, and rerun every affected check against the exact saved bytes. Make evaluator helpers tolerate unavailable computed colors; report contrast as unmeasurable (which fails that required check) instead of allowing a null-value exception to abort the run. Keep errors/results isolated by candidate and viewport.
+
 ## In-session Chromium checks
 
 Preflight Chromium once, then render the exact final HTML bytes at **1440×900** and **390×844**. Use `page.set_content()` when supported and do not wait for network idle.
