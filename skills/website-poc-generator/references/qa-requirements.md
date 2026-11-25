@@ -20,6 +20,12 @@ Validate the QA harness before using it for candidate decisions. A Python except
 
 Keep static-check construction simple: store template markers in a separate mapping, compute `template_signature_ok` for the current slot, then add that boolean to the checks dictionary. Avoid deeply nested inline dictionaries and generator expressions inside the main check dictionary; an unbalanced grouping delimiter can prevent the entire cell from running.
 
+When building the static result, calculate each value before creating the result mapping. For example, select the current slot's marker list, compute `signature_ok = all(marker in html for marker in markers[slot])`, then use the plain `"template_signature": signature_ok` entry. Do not embed the three-slot signature mapping inside a large dict literal. If a Python syntax error occurs, that cell did not execute and none of its intended outputs are valid.
+
+Before candidate rendering, both compile and execute the complete JavaScript measurement expression on a minimal fixture. A JavaScript syntax check alone does not catch runtime mistakes such as returning an undefined shorthand property (`cta` when only `ctas` exists). Assert that the returned object has the expected keys and that optional/missing elements and unparseable colors yield explicit missing/unavailable values instead of exceptions. Any evaluator exception is a harness error; repair it and rerun all affected candidate/viewport checks.
+
+An `asyncio.CancelledError` or notebook-level cancellation means the QA matrix was interrupted. Record it as incomplete, not as a candidate pass/failure. Close browser resources in `finally`, do not present partial outputs as complete evidence, and resume only with a bounded clean rerun after addressing the interruption cause.
+
 ## In-session Chromium checks
 
 Preflight Chromium once, then run the full browser check set on the exact final HTML bytes at **1440×900** and **390×844**. Also render at **768×900** for the contact/form fit measurements below, near a common layout breakpoint. Use `page.set_content()` when supported and do not wait for network idle.
