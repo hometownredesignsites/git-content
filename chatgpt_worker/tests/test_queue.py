@@ -2,9 +2,14 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import datetime, timezone
+import json
+from pathlib import Path
+import subprocess
+import tempfile
 import threading
 import unittest
 
+from chatgpt_worker.git_store import GitJobStore
 from chatgpt_worker.queue import (
     QueueConflict,
     claim,
@@ -102,6 +107,67 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(completed["status"], "completed")
         self.assertEqual(completed["handoff"]["status"], "pending")
         self.assertIsNone(completed["claim"])
+
+
+class GitStoreTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="chatgpt-worker-git-test-")
+        root = Path(self.temp.name)
+        self.remote = root / "private.git"
+        self.seed = root / "seed"
+        subprocess.run(["git", "init", "--bare", str(self.remote)], check=True, capture_output=True)
+        subprocess.run(["git", "init", "-b", "chatgpt-worker", str(self.seed)], check=True, capture_output=True)
+        subprocess.run(["git", "-C", str(self.seed), "config", "user.name", "Queue Test"], check=True)
+        subprocess.run(["git", "-C", str(self.seed), "config", "user.email", "queue-test@example.invalid"], check=True)
+        self.job = queued_job()
+        job_path = self.seed / "private_automation" / "queue" / "generation" / "jobs" / (self.job["job_id"] + ".json")
+        job_path.parent.mkdir(parents=True)
+        job_path.write_text(json.dumps(self.job), encoding="utf-8")
+        subprocess.run(["git", "-C", str(self.seed), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(self.seed), "commit", "-m", "seed"], check=True, capture_output=True)
+        subprocess.run(["git", "-C", str(self.seed), "remote", "add", "origin", str(self.remote)], check=True)
+        subprocess.run(["git", "-C", str(self.seed), "push", "-u", "origin", "chatgpt-worker"], check=True, capture_output=True)
+        self.store = GitJobStore(str(self.remote), retries=5)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def test_remote_compare_and_swap_allows_only_one_claim(self):
+        barrier = threading.Barrier(2)
+        winners = []
+        errors = []
+
+        def contender(worker):
+            first_read = True
+
+            def transition(job):
+                nonlocal first_read
+                if first_read:
+                    first_read = False
+                    barrier.wait(timeout=10)
+                return claim(job, worker, f"token-{worker}", NOW)
+            try:
+                winners.append(self.store.update_job(self.job["job_id"], transition)["claim"]["worker_id"])
+            except QueueConflict as error:
+                errors.append(error)
+
+        threads = [threading.Thread(target=contender, args=(worker,)) for worker in ("worker-a", "worker-b")]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=20)
+        self.assertTrue(all(not thread.is_alive() for thread in threads))
+        self.assertEqual(len(winners), 1)
+        self.assertEqual(len(errors), 1)
+        stored = self.store.read_job(self.job["job_id"])
+        self.assertEqual(stored["claim"]["worker_id"], winners[0])
+
+    def test_remote_transition_retry_is_idempotent_for_same_claim(self):
+        transform = lambda job: claim(job, "worker-a", "stable-token", NOW)
+        first = self.store.update_job(self.job["job_id"], transform)
+        second = self.store.update_job(self.job["job_id"], transform)
+        self.assertEqual(first, second)
+        self.assertEqual(len(second["attempts"]), 1)
 
 
 if __name__ == "__main__":

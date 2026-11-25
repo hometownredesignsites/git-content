@@ -121,6 +121,12 @@ def claim(job: dict[str, Any], worker_id: str, token: str, now: datetime) -> dic
     if not worker_id.strip() or not token:
         raise ValueError("worker_id and claim token are required")
     result = expire_claim(job, now)
+    token_digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    current_claim = result.get("claim")
+    if (current_claim and current_claim.get("worker_id") == worker_id
+            and current_claim.get("claim_token_sha256") == token_digest
+            and parse_time(current_claim["lease_expires_at_utc"]) > now):
+        return result
     if result.get("status") != "queued" or result.get("claim") is not None:
         raise QueueConflict("Job is not claimable")
     epoch = int(result.get("claim_epoch", 0)) + 1
@@ -129,7 +135,7 @@ def claim(job: dict[str, Any], worker_id: str, token: str, now: datetime) -> dic
     result["status"] = "claimed"
     result["claim"] = {
         "worker_id": worker_id,
-        "claim_token_sha256": hashlib.sha256(token.encode("utf-8")).hexdigest(),
+        "claim_token_sha256": token_digest,
         "claimed_at_utc": stamp,
         "heartbeat_at_utc": stamp,
         "lease_expires_at_utc": timestamp(now + LEASE),
