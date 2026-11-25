@@ -6,7 +6,36 @@ This skill runs entirely in the active ChatGPT session. Its required QA is limit
 
 Before generation, check only the capabilities this run needs:
 
-1. Can this session save the three HTML files and evidence to a downloadable output location? In a dedicated preflight cell, check the established downloadable root, create a fresh run-specific child directory and its `evidence/` subdirectory, then create, read back, compare, and delete a canary file inside `evidence/`. Catch `OSError`/`PermissionError` and report the path and error as `output_storage: BLOCKED`; do not let directory setup become an uncaught Python exception. Do not reuse earlier run folders, and do not try multiple sibling paths when the same root is denied. Use another path only if the runtime documents it as downloadable; never assume `/tmp` or the working directory is downloadable. If the exact artifact directory is not writable, stop before source research or candidate generation because the deliverables cannot be saved.
+1. Can this session save the three HTML files and evidence to a downloadable output location? The first Python cell must be an isolated output preflight only; do not combine directory creation with imports or candidate-generation logic that could continue after a failure. Check the established downloadable root, create a fresh run-specific child directory and its `evidence/` subdirectory inside `try`, then create, read back, compare, and delete a canary file inside `evidence/`. Catch `OSError`/`PermissionError` from both `mkdir` and canary operations and print the blocked status to the chat; never try to write an error JSON into the denied directory. Do not reuse earlier run folders or try multiple sibling paths when the same root is denied. Use another path only if the runtime documents it as downloadable; never assume `/tmp` or the working directory is downloadable. If the exact artifact directory is not writable, stop before source research or candidate generation because the deliverables cannot be saved.
+
+Use this shape, substituting only the runtime's documented downloadable root:
+
+```python
+from pathlib import Path
+from uuid import uuid4
+
+download_root = Path(DOCUMENTED_DOWNLOAD_ROOT)
+run_dir = download_root / f"website-poc-{uuid4().hex[:12]}"
+evidence_dir = run_dir / "evidence"
+try:
+    if not download_root.is_dir():
+        raise OSError(f"Download root is unavailable: {download_root}")
+    evidence_dir.mkdir(parents=True, exist_ok=False)
+    canary = evidence_dir / ".write-canary"
+    canary.write_bytes(b"website-poc-output-preflight")
+    if canary.read_bytes() != b"website-poc-output-preflight":
+        raise OSError("Output canary read-back mismatch")
+    canary.unlink()
+except OSError as exc:
+    output_storage_ok = False
+    print({"output_storage": "BLOCKED", "path": str(evidence_dir),
+           "error_type": type(exc).__name__, "error": str(exc)})
+else:
+    output_storage_ok = True
+    print({"output_storage": "PASS", "path": str(run_dir)})
+```
+
+Do not execute the source-research or generation cells unless `output_storage_ok` is `True`.
 2. Is Python Run available, and can it read the exact saved bytes and calculate SHA-256?
 3. Is Playwright importable, and can it launch an installed Chromium? If the managed browser is missing, try an existing system Chromium executable once. Do not install packages or browsers.
 4. Can Chromium accept the exact HTML using `page.set_content()`, set 1440×900 and 390×844 viewports for the full check set, measure contact layout at 768×900, and save screenshots?
