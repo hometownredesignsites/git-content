@@ -9,6 +9,7 @@ Run against each final saved HTML file and retain its byte count and SHA-256:
 - Complete HTML5 document with doctype, `html`, `head`, `body`, closing tags, language, nonempty title, viewport metadata, exactly one `main`, exactly one nonempty `h1`, and a nonempty embedded stylesheet.
 - No required external stylesheet, script, build step, sibling asset, or unresolved local file reference. IDs are unique and same-page fragments resolve.
 - Required Forty, Landed, or Story template structure is present. Candidate CSS uses its assigned palette tokens. No visible template demo copy remains.
+- HTML5 UP/template and CC BY 3.0 credit is present in source comments in the HTML document and embedded stylesheet, but absent from visible page text/UI. Do not use a visible attribution footer.
 - All buttons have an accessible name. Every form field has a label or accessible name. The mobile menu uses one real `type="button"`, valid `aria-controls`/`aria-expanded`, and three direct `span[aria-hidden="true"]` bars.
 - Contact-form presence and identifiable fields match captured source evidence. A source-absent form remains absent. A source-present form preserves identifiable non-upload fields and uses a clearly disclosed non-submitting demo Send control.
 - No candidate offers file upload: reject file inputs, upload/attachment labels or controls, drop zones, and file-picker UI. Record each omitted source upload as `POLICY_NO_FILE_UPLOAD` with source position and evidence.
