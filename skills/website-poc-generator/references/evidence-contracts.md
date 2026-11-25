@@ -36,7 +36,7 @@ website-poc-output/
     story/contact-mobile.png
 ```
 
-Only list files that were actually written and verified. Use the user's requested output folder when specified; otherwise use the session's downloadable output location.
+Only list files that were actually written and verified. Use the user's requested output folder when specified; otherwise use a fresh run-specific directory in the session's downloadable output location. Verify write/read/delete access there before generation. If output storage is denied, record that status in the response and stop without claiming that an evidence package was created.
 
 ## `native-qa.json`
 
