@@ -12,6 +12,8 @@ Save these independent files at the output root:
 
 Include `evidence/native-qa.json`, `evidence/index.md`, and candidate-specific QA artifacts. A ZIP may package these deliverables for download. Do not include temporary HTML copies, image payloads, debug transfer chunks, or unverified runner source.
 
+Also maintain `evidence/run-state.json` as a resumable checkpoint. Update it after each completed phase and each candidate write/QA batch with the run ID, phase statuses, last completed candidate/viewport, artifact paths, and verified SHA-256 values. On a transient Python/analysis-service interruption, resume in the same output directory from this checkpoint after re-hashing referenced artifacts. This checkpoint records progress only; interrupted or unrun checks must never be represented as passing.
+
 For source-present forms, also include focused `contact-desktop.png` and `contact-mobile.png` screenshots under each candidate's evidence directory. Omit these two files when the source has no contact form.
 
 ```text
