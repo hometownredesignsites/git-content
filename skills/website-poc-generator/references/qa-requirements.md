@@ -18,6 +18,8 @@ A failed static check is a candidate failure. Never mark an unchecked static con
 
 Validate the QA harness before using it for candidate decisions. A Python exception during candidate construction, JavaScript syntax error, or exception in the evaluator is a `harness_error`, not a candidate pass or candidate failure. Stop dependent cells, fix the harness, and rerun every affected check against the exact saved bytes. Make evaluator helpers tolerate unavailable computed colors and missing element rectangles; report an explicit unmeasurable or missing result instead of dereferencing `None` and aborting the run. A missing required page element is a candidate failure only after the evaluator returns that result cleanly. Keep errors/results isolated by candidate and viewport. Do not rerun a deterministic harness exception unchanged; correct and smoke-test the harness first.
 
+Keep static-check construction simple: store template markers in a separate mapping, compute `template_signature_ok` for the current slot, then add that boolean to the checks dictionary. Avoid deeply nested inline dictionaries and generator expressions inside the main check dictionary; an unbalanced grouping delimiter can prevent the entire cell from running.
+
 ## In-session Chromium checks
 
 Preflight Chromium once, then run the full browser check set on the exact final HTML bytes at **1440×900** and **390×844**. Also render at **768×900** for the contact/form fit measurements below, near a common layout breakpoint. Use `page.set_content()` when supported and do not wait for network idle.
