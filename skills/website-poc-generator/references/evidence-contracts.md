@@ -12,6 +12,8 @@ Save these independent files at the output root:
 
 Include `evidence/native-qa.json`, `evidence/index.md`, and candidate-specific QA artifacts. A ZIP may package these deliverables for download. Do not include temporary HTML copies, image payloads, debug transfer chunks, or unverified runner source.
 
+For source-present forms, also include focused `contact-desktop.png` and `contact-mobile.png` screenshots under each candidate's evidence directory. Omit these two files when the source has no contact form.
+
 ```text
 website-poc-output/
   candidate-forty.html
@@ -22,10 +24,16 @@ website-poc-output/
     native-qa.json
     forty/desktop.png
     forty/mobile.png
+    forty/contact-desktop.png
+    forty/contact-mobile.png
     landed/desktop.png
     landed/mobile.png
+    landed/contact-desktop.png
+    landed/contact-mobile.png
     story/desktop.png
     story/mobile.png
+    story/contact-desktop.png
+    story/contact-mobile.png
 ```
 
 Only list files that were actually written and verified. Use the user's requested output folder when specified; otherwise use the session's downloadable output location.
@@ -35,7 +43,7 @@ Only list files that were actually written and verified. Use the user's requeste
 Record:
 
 - `schema_version`, `run_id`, `created_at`, `source_url`, `runtime_profile: "chatgpt_native"`, and `native_qa_status` (`PASS`, `FAIL`, `PARTIAL`, or `BLOCKED`).
-- One candidate entry per template with final path, byte count, SHA-256, static check results, browser/version when available, desktop/mobile measurements, interaction results, screenshot paths/classifications, failures, and repairs.
+- One candidate entry per template with final path, byte count, SHA-256, static check results, browser/version when available, desktop/tablet/mobile measurements, interaction results, desktop/mobile viewport screenshots, focused contact-section screenshots when a source form exists, failures, and repairs.
 - Session capability results for Python, Playwright, Chromium, exact-byte rendering, viewport control, screenshot capture, and screenshot pixel inspection.
 - `image_content_status: "UNVERIFIED"` with a short reason when images could not be inspected. This is informational and not a candidate blocking check.
 

@@ -28,6 +28,7 @@ Use these signatures as minimum structural and rendered-layout requirements. Pre
    - Source marker tags: `id="one" class="spotlight style1 bottom"`, `id="two" class="spotlight style2 right"`, `id="three" class="spotlight style3 left"`, and `id="four" class="wrapper style1 special fade-up"`.
    - Source sequence: `<section id="banner">` → spotlight `#one` (`style1 bottom`) → spotlight `#two` (`style2 right`) → spotlight `#three` (`style3 left`) → `#four.wrapper.style1.special.fade-up` → `#five.wrapper.style2.special.fade` → footer.
    - Preserve at least three substantial, wide split feature bands with image and copy columns, alternating image sides left/right/left (or the reverse), followed by a compact feature grid and a distinct contact band. Keep the `.spotlight`, `.spotlight .content`, `.spotlight .image`, `.style1/.style2/.style3`, `.left/.right`, and `.wrapper` patterns. A stack of generic cards is not equivalent.
+   - The `#five.wrapper.style2.special.fade` is the contact band. Avoid nesting a second horizontally padded `.section-pad` section inside it: that applies the template wrapper gutters twice and can squeeze the contact form. Keep one horizontal gutter per viewport edge while preserving the `#five` signature.
    - Source CSS selectors used by the scaffold: `.spotlight`, `.spotlight .content`, `.spotlight .image`, `.wrapper`.
 
 3. **Story — slot 3; signature ID `story-fullbleed-divided-panels-gallery`.**

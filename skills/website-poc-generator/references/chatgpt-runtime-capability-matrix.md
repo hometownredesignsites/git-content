@@ -9,7 +9,7 @@ Before generation, check only the capabilities this run needs:
 1. Can this session save the three HTML files and evidence to a downloadable output location?
 2. Is Python Run available, and can it read the exact saved bytes and calculate SHA-256?
 3. Is Playwright importable, and can it launch an installed Chromium? If the managed browser is missing, try an existing system Chromium executable once. Do not install packages or browsers.
-4. Can Chromium accept the exact HTML using `page.set_content()`, set 1440×900 and 390×844 viewports, return measurements, and save screenshots?
+4. Can Chromium accept the exact HTML using `page.set_content()`, set 1440×900 and 390×844 viewports for the full check set, measure contact layout at 768×900, and save screenshots?
 
 Use the active notebook event loop correctly: `await main()` when it is already running; do not call `asyncio.run()` in a running loop. Do not wait for network idle. Record the observed capabilities once in `evidence/native-qa.json`; do not repeat a failed preflight during the same run.
 
@@ -28,7 +28,7 @@ Write a compact Python cell in the active session using standard-library HTML pa
 - Catch and record errors per candidate and viewport so one bad evaluation does not erase earlier results. Distinguish `harness_error` (Python/JavaScript construction, syntax, or evaluator exception) from `candidate_check_failure` (a successfully executed check that found a violation). A harness error is not evidence that a candidate failed or passed. Repair the harness and rerun every affected candidate/viewport check before assigning the final QA status.
 - If a cell fails, stop the dependent workflow at that point. Never present output from a later cell that relied on missing, stale, or partially initialized variables as current-run evidence.
 
-Use `page.set_content(exact_html)` when it works. If the environment cannot render the exact bytes, report rendered checks unavailable; do not silently test a reconstructed or different file. Capture and save one desktop and one mobile screenshot for every candidate when supported. Inspect screenshot pixels only when the session actually exposes them. Missing-remote-image screenshots are layout evidence only.
+Use `page.set_content(exact_html)` when it works. If the environment cannot render the exact bytes, report rendered checks unavailable; do not silently test a reconstructed or different file. Capture and save one desktop and one mobile viewport screenshot for every candidate when supported, plus focused contact-section screenshots when a source form exists. Inspect screenshot pixels only when the session actually exposes them. Missing-remote-image screenshots are layout evidence only.
 
 ## Known Wix image limitation
 
@@ -36,7 +36,7 @@ This ChatGPT runtime has previously discovered Wix image URLs but failed to disp
 
 ## Result vocabulary
 
-- `native_qa_status: PASS`: all required exact-byte static checks and all available required desktop/mobile browser checks pass for all three final files.
+- `native_qa_status: PASS`: all required exact-byte static checks and all available required desktop, tablet contact-layout, and mobile browser checks pass for all three final files.
 - `native_qa_status: FAIL`: an executed required check fails after the allowed repair/retest cycle.
 - `native_qa_status: PARTIAL`: generation and static checks pass, but a required browser capability is unavailable.
 - `native_qa_status: BLOCKED`: exact candidate bytes cannot be read or the required checks cannot be run at all.

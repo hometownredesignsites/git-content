@@ -20,9 +20,9 @@ Validate the QA harness before using it for candidate decisions. A Python except
 
 ## In-session Chromium checks
 
-Preflight Chromium once, then render the exact final HTML bytes at **1440×900** and **390×844**. Use `page.set_content()` when supported and do not wait for network idle.
+Preflight Chromium once, then run the full browser check set on the exact final HTML bytes at **1440×900** and **390×844**. Also render at **768×900** for the contact/form fit measurements below, near a common layout breakpoint. Use `page.set_content()` when supported and do not wait for network idle.
 
-At each viewport, measure and record:
+At desktop and mobile viewports, measure and record:
 
 - Hero, main, and required section geometry; viewport-edge hero width; and horizontal overflow.
 - Hero media coverage. Landed `#banner` media must cover the full hero rectangle within 2 CSS pixels on all edges at both viewports. A partial-width image or uncovered band fails.
@@ -30,8 +30,9 @@ At each viewport, measure and record:
 - Computed text/background contrast for every detected visible CTA, including the header/navigation **Contact** link, at **4.5:1 or higher**. Unmeasurable contrast fails. Dark text on a light surface or white text on a sufficiently dark fill are acceptable.
 - Header navigation counts and link limit; mobile menu initial hidden state, open/close by click, Enter and Space, Escape close, focus return, and visible focus indicator.
 - CTA arrow absence, form non-submission behavior, and console/runtime errors relevant to the candidate.
+- Contact layout at all three widths: measure the contact container, form, labels, and controls; confirm no horizontal clipping, overlap, or unexpected narrow columns. If a two-column form grid is active, each input must be at least 160 CSS pixels wide; otherwise the form fields must stack. Do not allow nested section/container padding to collapse the form's usable width. Record the form and field-grid dimensions in evidence.
 
-Capture a desktop and mobile PNG per candidate when supported. Record browser/version, viewport size, screenshot path, and candidate digest. If the session cannot expose saved PNG pixels, say screenshot pixel inspection was unavailable; geometry and interaction measurements may still pass independently.
+Capture a desktop and mobile viewport PNG per candidate when supported, plus a focused contact-section screenshot at desktop and mobile sizes whenever the source has a contact form. Record browser/version, viewport size, screenshot path, and candidate digest. Inspect the contact screenshots for cramped controls, doubled gutters, clipped labels, and awkward stacking. If the session cannot expose saved PNG pixels, say screenshot pixel inspection was unavailable; geometry and interaction measurements may still pass independently.
 
 ## Remote images and screenshots
 
