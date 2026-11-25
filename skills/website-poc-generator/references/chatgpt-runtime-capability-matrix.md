@@ -65,7 +65,19 @@ Write a compact Python cell in the active session using standard-library HTML pa
 - Do not interpolate raw CSS or JavaScript with Python `str.format()`, f-strings, or the `%` operator. CSS braces collide with brace formatting, and CSS percentages/media-query values such as `100%`, `50%`, or `6vw` collide with percent formatting (for example, `%(ink)s`), causing `KeyError`, `TypeError`, or corrupted output. Prefer plain triple-quoted strings with narrowly scoped sentinel replacement (for example, replace a unique `__INK__` token), or a safe dedicated serializer. Assert every sentinel occurs exactly once before replacement and none remain afterward.
 - Smoke-test each shared CSS builder with a representative palette before assembling candidate documents. Confirm it returns a string, all palette sentinels were replaced, and literal CSS percentage values and responsive declarations remain intact.
 - Build long HTML fragments with triple-quoted templates or small functions that return complete fragments; avoid giant single-quoted concatenations where ordinary apostrophes in business copy can terminate a string. When source code itself is assembled as text for `exec`, call `compile(source, filename, "exec")` before executing it. On a `SyntaxError`, stop before writing candidate files and repair the quoting in the generator.
-- If a Python helper is held inside an outer triple-quoted source string for `compile()`, write the quotes intended for the generated source literally; do not leave escaped quote sequences such as `\\\"` in the compiled text. Prefer defining helpers directly in a normal Python cell when source-string compilation is unnecessary. Smoke-test compiled helper source before using it in candidate QA.
+- When building Python source text for `compile()`, ensure the string contains real newline characters between source lines. Do not write doubled escapes such as `"\\n"` when you intend a line break; that produces literal backslash-plus-`n` in the source and can raise `SyntaxError: unexpected character after line continuation character`. Prefer a triple-quoted source literal:
+
+  ```python
+  smoke_source = """def compile_probe(value):
+      return value.strip()
+  """
+  compiled = compile(smoke_source, "<generator-smoke>", "exec")
+  namespace = {}
+  exec(compiled, namespace)
+  assert namespace["compile_probe"](" ok ") == "ok"
+  ```
+
+  Also write quotes intended for generated source literally; do not leave escaped quote sequences such as `\\\"` in compiled text. Prefer defining helpers directly in the notebook cell when source-string compilation is unnecessary. Compile and execute the small helper smoke fixture before candidate generation or QA.
 - Build and validate all three candidate strings before writing any candidate file. If generation raises, stop dependent cells; do not continue with stale notebook variables or partial files. After fixing the failing cell, rerun generation from a clean state and confirm all three candidates were created in the current run before QA.
 - Keep Python QA checks syntactically simple. Define per-template marker lists separately, compute values such as `template_signature_ok` in named variables, then assemble the `checks` dictionary from those variables. Avoid deeply nested dict literals, inline conditional expressions, or parentheses around dictionary lookups inside a large dictionary; these are easy to leave unbalanced. Use multiline expressions with one check per entry. If a cell raises `SyntaxError`, none of that cell executed, so do not consume or report variables it was supposed to create.
 - Keep the candidate QA cell readable enough to audit before execution. Build the per-template signature mapping separately, then compute `signature_ok = all(marker in html for marker in template_markers[slot])`; do not inline a three-template dictionary lookup inside the large `stat`/`checks` literal. Call `compile()` on generated Python source before `exec()` where source is assembled dynamically. A syntax error means that cell did not run.
