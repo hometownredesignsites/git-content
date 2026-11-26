@@ -50,48 +50,59 @@ prove the GitHub poller or the future production artifact push.
 
 ## Production result publication
 
-Before claiming, confirm this invocation can run the skill and publisher in the
-same non-Windows container, keep one output directory readable by both, run the
-heartbeat process, and authenticate Git writes to both private repositories.
-Do not acquire a lease if these prerequisites are unavailable. For a
-production job, use the returned `job_id`, `claim_epoch`, and `worker_id` only
-in the current scheduled invocation. The private job record and successful
-fast-forward Git push hold the claim state; no token or local checkpoint is
-used. Treat `worker_id` as an audit label, not a credential. Start
-`queue_manager.py heartbeat-loop --job-id <job-id> --claim-epoch <epoch> --worker-id <invocation-id>`
-before invoking the skill and keep it running while generation and QA are in
-progress. It renews the lease every 15 minutes by default. Use one
-run-specific output directory that the skill writes and the publisher reads;
-do not rebuild or edit the HTML between QA and publication. If the container
-ends or the claim response is lost, do not recover an old claim from Git. Let
-the lease expire; the next invocation must recover the expired claim and
-claim a new epoch. The epoch fences writes from stale invocations. After the
-skill has a `PASS` result, stop the heartbeat loop and run
-`chatgpt_worker/scripts/publish_result.py` with the skill output folder, using
-`--job-id`, `--claim-epoch`, and `--worker-id` from the current invocation. The
-skill must write the exact `job_id` and integer `claim_epoch` it received into
-`evidence/native-qa.json`. The publisher rejects missing or mismatched values
-before accessing the private store. The publisher also requires
-`native_qa_status: PASS`,
-three candidate records identified as Forty, Landed, and Story (a mapping keyed
-by `forty`/`landed`/`story` or an array with a `template`, `slot`, or `slot_id`
-field), and matching filenames, byte counts, and SHA-256 values. It accepts the
-skill's detailed `candidate_results` array when `candidates` is absent, but
-requires `finished_checks: true`, PASS status for all three candidates, empty
-static error and failure lists, passing desktop/tablet/mobile viewport checks,
-and passing exact-byte/static, browser interaction, and rendered-credit checks.
-Each entry may call its path `filename`, `final_path`, or `path`, and its byte
-count `bytes` or `byte_count`. If candidate entries include `qa_status` or
-`status`, each must be `PASS`. The publisher rereads the
-exact candidate bytes, commits all files in `evidence/` and the three HTML files
-under `results/<result_slug>/run-<job-id>-epoch-<claim-epoch>/` on the private
-`chatgpt-worker` branch, and then completes the queue job. The current worker ID, epoch, and lease are checked against the branch head before artifacts are written. If the publisher loses its response after completion, rerun it in the same invocation with the same output and epoch; it confirms the recorded digests and returns without rewriting the job. A new invocation without the original claim context must wait for expiry and use a new epoch.
+The production ChatGPT scheduled worker publishes with its GitHub integration,
+not the local Git-clone publisher CLI. Before claiming, confirm the integration
+can read and write `git-content-private:chatgpt-worker`, read files back from
+that branch, and make conflict-checked branch updates. Confirm the skill output
+directory remains accessible to the worker after QA. Do not acquire a lease if
+these prerequisites are unavailable.
+
+Use the returned `job_id`, `claim_epoch`, and `worker_id` only in the current
+scheduled invocation. The private job record is the durable claim state; no
+token or local checkpoint is used. Treat `worker_id` as an audit label, not a
+credential. Start lease heartbeats before invoking the skill and renew at least
+every 15 minutes through a fenced update using the GitHub integration. Each
+heartbeat must re-read the latest job and confirm the same worker ID and epoch
+and an unexpired lease; write with the latest file/branch version so a
+concurrent update is detected. Do not keep working after a heartbeat conflict
+or expired lease. If the container or claim response is lost, do not recover
+an old claim from Git. Let the lease expire; the next invocation must recover
+the expired claim and claim a new epoch. The epoch fences writes from stale
+invocations.
+
+The skill writes one run-specific output directory. Pass the exact
+`job_id`, integer `claim_epoch`, source row, and output directory into the
+skill; do not rebuild or edit candidate HTML after QA. The skill must write
+the exact `job_id` and `claim_epoch` into `evidence/native-qa.json`. Publish
+only if `native_qa_status` is `PASS`, the source host matches the claimed job,
+and all candidate digests match the saved bytes. The report must contain three
+candidate records identified as Forty, Landed, and Story, with
+`finished_checks: true`, passing static checks, empty static error and failure
+lists, desktop/tablet/mobile viewport results, and the required exact-byte,
+browser-interaction, and rendered-credit check names. See the skill's
+publisher-compatible evidence contract for the exact JSON shape.
+
+Using the GitHub integration, re-read the latest job immediately before
+publishing and verify its status, worker ID, epoch, and unexpired lease. Write
+the three HTML files and all evidence under
+`results/<result_slug>/run-<job-id>-epoch-<claim-epoch>/` on the private
+`chatgpt-worker` branch without changing their bytes. Read the remote files
+back and verify their byte counts and SHA-256 values. Then conditionally update
+the job JSON with the artifact commit, result digests, and completed status,
+using the latest job-file or branch version so concurrent claim changes fail
+closed. Prefer one multi-file commit against the expected branch head. If the
+integration only supports per-file commits, use the epoch-specific path, make
+each write idempotent, and update the job record last. On a conflict, re-read
+the latest branch and retry only if the same claim is still current. Never
+force-push, mark the job completed after a partial upload, or replace a result
+from another epoch. The existing `publish_result.py` remains a local Git
+publisher/validator; it is not the production scheduled-runner write path.
 
 The persisted result record is built from exact bytes:
 
 ```json
 {
-  "run_path": "results/<result_slug>/<run-id>",
+  "run_path": "results/<result_slug>/run-<job-id>-epoch-<claim-epoch>",
   "qa_status": "PASS",
   "artifact_commit": "<40-character private branch commit>",
   "qa_evidence": {"filename": "evidence/native-qa.json", "bytes": 1, "sha256": "<64 lowercase hex>"},
@@ -109,14 +120,16 @@ screenshots in public logs or the public repository.
 
 ## Existing content-post handoff
 
-After publication completes, run
-`chatgpt_worker/scripts/handoff_content_post.py --job-id <job-id>`. It reserves
-one stable numeric-numeric batch ID in the private job before pushing any slot.
-It writes the established paths and metadata shape on the three private
-`content-post` slot branches, preserving immutable queue snapshots. Only after
-all three branches are verified does it change the generation job's handoff
-state from `pending` to `handed_off`. It does not write the content-post ledger,
-assign a worker, or change the existing orchestrator or repair workflow.
-For downstream compatibility, `site_slug` is derived from the website host by
-the same rule used by the legacy publisher; it is not copied from the private
+After publication completes, hand off the candidates to the three private
+`content-post` slot branches using the GitHub integration or a separately
+available Git-backed adapter. The current
+`chatgpt_worker/scripts/handoff_content_post.py` uses local Git subprocesses;
+it cannot be assumed to work in a scheduled runner that exposes only the
+GitHub integration. Reserve one stable numeric-numeric batch ID in the private
+job before writing slots, preserve the established paths and metadata, and
+verify all three immutable queue snapshots before marking the generation job
+`handed_off`. This handoff does not write the content-post ledger, assign a
+worker, or change the existing orchestrator or repair workflow. For
+downstream compatibility, `site_slug` is derived from the website host by the
+same rule used by the legacy publisher; it is not copied from the private
 results folder's `result_slug`.

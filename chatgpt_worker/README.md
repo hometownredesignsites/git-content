@@ -18,7 +18,7 @@ The command is dry-run by default. Add `--apply` to write new per-job JSON recor
 
 `queue.py` provides idempotent import, claim, heartbeat, expiry/requeue, and completion functions. A 60-minute lease can be renewed while active. Expiry preserves the job and attempt history, clears the old claim, and allows a new claim with a higher `claim_epoch`. New claims contain no token material. Completion requires a `PASS` record for exactly the three named candidates with byte counts and SHA-256 values.
 
-`git_store.py` adds the Git-backed persistence adapter. Each update uses a fresh clone of the private branch, changes only the target job record, and pushes a fast-forward commit. Git rejects a stale competing push; the store rereads the newest branch and recomputes the transition with bounded retries. A rejected push with no remote-head change is treated as an operational error. Credentials are supplied by the Git credential helper or runner environment, not stored in job data. Workers may treat a claim as owned only after `update_job()` returns successfully.
+`git_store.py` adds the local Git-backed persistence adapter. Each update uses a fresh clone of the private branch, changes only the target job record, and pushes a fast-forward commit. Git rejects a stale competing push; the store rereads the newest branch and recomputes the transition with bounded retries. A rejected push with no remote-head change is treated as an operational error. This implementation supports local operation and tests; the production ChatGPT scheduled worker must use its GitHub integration with equivalent conflict detection and claim fencing, not assume a local Git credential helper is available.
 
 ## Manual coordinator
 
@@ -42,11 +42,15 @@ python chatgpt_worker/scripts/queue_manager.py recover-expired
 `heartbeat-loop` renews the lease every 15 minutes by default; stop it when the
 work completes or is abandoned. It requires the job ID, epoch, and worker ID
 from the current invocation. If those values are unavailable after a restart,
-wait for lease expiry and claim a new epoch.
+wait for lease expiry and claim a new epoch. If the scheduled task cannot run
+this local command, its GitHub integration must provide equivalent fenced
+heartbeat updates.
 
-Completion reads the three candidate files from `results/<site-slug>/...` on the private branch and verifies exact byte counts and SHA-256 values before recording the result. `scripts/publish_result.py` is the worker-side publisher: it accepts only a `native_qa_status: PASS` package whose `job_id` and `claim_epoch` match the current claim and whose three candidate digests match, commits candidate HTML and all evidence to private `chatgpt-worker`, then completes the fenced job. It never writes artifacts to public `git-content`.
+Completion verifies exact byte counts and SHA-256 values before recording the result. `scripts/publish_result.py` is the local Git publisher and validator. The production ChatGPT scheduled worker must use its GitHub integration to perform equivalent fenced writes, verify the remote bytes, and complete the queue job only after a matching `native_qa_status: PASS`. It never writes artifacts to public `git-content`.
 
-After completion, `scripts/handoff_content_post.py --job-id JOB_UUID` reserves a stable numeric-numeric content-post batch ID in the private job, stages the three HTML files and matching metadata on the existing private `content-post` branches `chatgpt-slot1`, `chatgpt-slot2`, and `chatgpt-slot3`, then marks the private handoff `handed_off`. The adapter does not write `content-post/main` or its ledger. The existing hourly orchestrator discovers the complete immutable queue snapshots and continues to assign the slots and update its ledger. If a push stops part-way through, rerunning the handoff command reuses the reserved batch ID and verifies already-pushed snapshots before continuing. Git credentials for private `git-content-private` and `content-post` must be available through the worker's Git credential helper.
+After completion, the local `scripts/handoff_content_post.py` adapter can reserve a stable numeric-numeric content-post batch ID and stage the three snapshots on private slot branches. If the scheduled task cannot run local Git, a GitHub-integration handoff must preserve the same paths, metadata, immutable snapshots, and idempotent retry behavior before marking the job `handed_off`. Neither handoff path writes `content-post/main` or its ledger; the existing hourly orchestrator discovers the complete snapshots and updates the ledger.
+
+For local/manual Git environments only:
 
 ```sh
 python chatgpt_worker/scripts/publish_result.py --job-id JOB_UUID --claim-epoch EPOCH_NUMBER --worker-id INVOCATION_ID --skill-output <skill-output-folder>
