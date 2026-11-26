@@ -54,7 +54,7 @@ Each check reports `PASS`, `FAIL`, `BLOCKED`, or `UNVERIFIED`, a short result, a
 
 ### Queue publisher compatibility
 
-When the output will be consumed by `chatgpt_worker/scripts/publish_result.py`, use this exact top-level and per-candidate shape in `native-qa.json`; retain the fuller measurements and evidence alongside these fields:
+For every queue-worker run, use this exact top-level and per-candidate shape in `native-qa.json`; the scheduled worker's GitHub publisher validates this record before writing, and the local publisher validator uses the same contract. Retain the fuller measurements and evidence alongside these fields:
 
 ```json
 {
