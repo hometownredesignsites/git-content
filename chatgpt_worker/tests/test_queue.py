@@ -24,7 +24,7 @@ from chatgpt_worker.queue import (
     stable_job_id,
 )
 from chatgpt_worker.scripts.handoff_content_post import stage_all
-from chatgpt_worker.scripts.publish_result import collect_output
+from chatgpt_worker.scripts.publish_result import assert_claim_provenance, collect_output
 
 
 NOW = datetime(2026, 11, 25, 17, 0, tzinfo=timezone.utc)
@@ -217,6 +217,23 @@ class QueueTests(unittest.TestCase):
             report_path.write_text(json.dumps(report), encoding="utf-8")
             with self.assertRaises(QueueConflict):
                 collect_output(root)
+
+    def test_publisher_claim_provenance_requires_exact_job_and_epoch(self):
+        job_id = "504ead70-c80e-5efe-b815-4c60ef3ada54"
+        valid = {"job_id": job_id, "claim_epoch": 4}
+        assert_claim_provenance(valid, job_id, 4)
+
+        invalid_reports = [
+            ({"claim_epoch": 4}, job_id, 4),
+            ({"job_id": "different-job", "claim_epoch": 4}, job_id, 4),
+            ({"job_id": job_id}, job_id, 4),
+            ({"job_id": job_id, "claim_epoch": 3}, job_id, 4),
+            ({"job_id": job_id, "claim_epoch": True}, job_id, 1),
+        ]
+        for report, expected_job_id, expected_epoch in invalid_reports:
+            with self.subTest(report=report, expected_epoch=expected_epoch):
+                with self.assertRaises(QueueConflict):
+                    assert_claim_provenance(report, expected_job_id, expected_epoch)
 
 
 class GitStoreTests(unittest.TestCase):

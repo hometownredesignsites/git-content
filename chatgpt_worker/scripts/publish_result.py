@@ -199,6 +199,17 @@ def source_host(value: str) -> str:
     return parsed.hostname.lower().removeprefix("www.")
 
 
+def assert_claim_provenance(report: dict, job_id: str, claim_epoch: int) -> None:
+    """Bind QA evidence to the exact queue job and claim that produced it."""
+    if report.get("job_id") != job_id:
+        raise QueueConflict("QA evidence job_id does not match the requested generation job.")
+    reported_epoch = report.get("claim_epoch")
+    if isinstance(reported_epoch, bool) or not isinstance(reported_epoch, int):
+        raise QueueConflict("QA evidence claim_epoch must be an integer.")
+    if reported_epoch != claim_epoch:
+        raise QueueConflict("QA evidence claim_epoch does not match the active claim.")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--remote-url", default=os.environ.get(
@@ -216,6 +227,7 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         files, report, measured = collect_output(args.skill_output)
+        assert_claim_provenance(report, args.job_id, args.claim_epoch)
         store = GitJobStore(args.remote_url, args.branch)
         current = store.read_job(args.job_id)
         row = current.get("row", {})

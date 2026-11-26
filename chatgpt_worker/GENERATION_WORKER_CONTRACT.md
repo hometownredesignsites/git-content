@@ -62,7 +62,10 @@ claim and claim a new epoch. The epoch fences writes from stale invocations.
 After the skill has a `PASS` result, run
 `chatgpt_worker/scripts/publish_result.py` with the skill output folder, using
 `--job-id`, `--claim-epoch`, and `--worker-id` from the current invocation. The
-publisher requires `evidence/native-qa.json` to report `native_qa_status: PASS`,
+skill must write the exact `job_id` and integer `claim_epoch` it received into
+`evidence/native-qa.json`. The publisher rejects missing or mismatched values
+before accessing the private store. The publisher also requires
+`native_qa_status: PASS`,
 three candidate records identified as Forty, Landed, and Story (a mapping keyed
 by `forty`/`landed`/`story` or an array with a `template`, `slot`, or `slot_id`
 field), and matching filenames, byte counts, and SHA-256 values. It accepts the
