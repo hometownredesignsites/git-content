@@ -30,24 +30,34 @@ python chatgpt_worker/scripts/queue_manager.py list
 python chatgpt_worker/scripts/queue_manager.py claim-next --worker-id operator-1
 ```
 
-`claim-next` returns the job and one-time claim token only after the private branch commit succeeds. Treat its output as private because it includes the customer row and claim token. Store the token securely in `CHATGPT_WORKER_CLAIM_TOKEN` for later transitions; do not place it in shell history or public logs.
+`claim-next` first stores the one-time token in an encrypted Windows DPAPI checkpoint under the current user's Local AppData, then attempts the private branch claim. This ordering lets the worker resume if the Git push succeeds but the command response is lost. The command returns the job and a non-secret `checkpoint_id`; it never prints the token. Claiming fails before the remote transition if DPAPI storage is unavailable. Treat the returned job as private because it includes customer details. Checkpoints are bound to the Windows user and machine; another worker must wait for expiry and claim a new epoch.
 
 ```powershell
-$env:CHATGPT_WORKER_CLAIM_TOKEN = "CLAIM_TOKEN_FROM_OUTPUT"
 python chatgpt_worker/scripts/queue_manager.py heartbeat --job-id JOB_UUID --claim-epoch EPOCH_NUMBER
+python chatgpt_worker/scripts/queue_manager.py heartbeat-loop --job-id JOB_UUID --claim-epoch EPOCH_NUMBER
 python chatgpt_worker/scripts/queue_manager.py complete --job-id JOB_UUID --claim-epoch EPOCH_NUMBER --result-json result-record.json
 python chatgpt_worker/scripts/queue_manager.py recover-expired
 ```
+
+`heartbeat-loop` renews the lease every 15 minutes by default; stop it with
+Ctrl+C after publication or when abandoning the work. It uses the encrypted
+checkpoint and does not print the token. `checkpoint-list` lists only
+non-secret checkpoint IDs for recovery if the original command output is lost.
 
 Completion reads the three candidate files from `results/<site-slug>/...` on the private branch and verifies exact byte counts and SHA-256 values before recording the result. `scripts/publish_result.py` is the worker-side publisher: it accepts only a `native_qa_status: PASS` package whose three candidate digests match, commits candidate HTML and all evidence to private `chatgpt-worker`, then completes the fenced job. It never writes artifacts to public `git-content`.
 
 After completion, `scripts/handoff_content_post.py --job-id JOB_UUID` reserves a stable numeric-numeric content-post batch ID in the private job, stages the three HTML files and matching metadata on the existing private `content-post` branches `chatgpt-slot1`, `chatgpt-slot2`, and `chatgpt-slot3`, then marks the private handoff `handed_off`. The adapter does not write `content-post/main` or its ledger. The existing hourly orchestrator discovers the complete immutable queue snapshots and continues to assign the slots and update its ledger. If a push stops part-way through, rerunning the handoff command reuses the reserved batch ID and verifies already-pushed snapshots before continuing. Git credentials for private `git-content-private` and `content-post` must be available through the worker's Git credential helper.
 
 ```powershell
-$env:CHATGPT_WORKER_CLAIM_TOKEN = "CLAIM_TOKEN_FROM_PRIVATE_WORKER_STATE"
 python chatgpt_worker/scripts/publish_result.py --job-id JOB_UUID --claim-epoch EPOCH_NUMBER --skill-output <skill-output-folder>
 python chatgpt_worker/scripts/handoff_content_post.py --job-id JOB_UUID
 ```
+
+The publisher loads the matching token from the local DPAPI checkpoint and
+deletes that checkpoint only after it verifies that the job is completed. A
+legacy `CHATGPT_WORKER_CLAIM_TOKEN` environment variable remains supported for
+manually managed claims, but the normal claim command does not expose or require
+it.
 
 The content-post `site_slug` uses the existing host-based rule from the previous publisher, while the private result path uses the queue's `result_slug`.
 

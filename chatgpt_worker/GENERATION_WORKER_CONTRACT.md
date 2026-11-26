@@ -50,7 +50,11 @@ prove the GitHub poller or the future production artifact push.
 ## Production result publication
 
 For a production job, preserve the claimed `job_id`, `claim_epoch`, and one-time
-claim token privately. After the skill has a `PASS` result, run
+claim token in the encrypted local checkpoint created by `claim-next`; do not
+copy it into shell history, logs, or the repository. Start
+`queue_manager.py heartbeat-loop --job-id <job-id> --claim-epoch <epoch>` while
+the skill is working. It renews the lease every 15 minutes by default. After
+the skill has a `PASS` result, run
 `chatgpt_worker/scripts/publish_result.py` with the skill output folder. The
 publisher requires `evidence/native-qa.json` to report `native_qa_status: PASS`,
 three candidate records identified as Forty, Landed, and Story (a mapping keyed

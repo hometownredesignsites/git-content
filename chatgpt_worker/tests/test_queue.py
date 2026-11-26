@@ -4,6 +4,7 @@ from copy import deepcopy
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -25,6 +26,7 @@ from chatgpt_worker.queue import (
 )
 from chatgpt_worker.scripts.handoff_content_post import stage_all
 from chatgpt_worker.scripts.publish_result import collect_output
+from chatgpt_worker.token_checkpoint import TokenCheckpoint
 
 
 NOW = datetime(2026, 11, 25, 17, 0, tzinfo=timezone.utc)
@@ -317,6 +319,56 @@ class GitStoreTests(unittest.TestCase):
         second = claim_next(self.store, "worker-b", datetime(2026, 11, 25, 19, 32, tzinfo=timezone.utc))
         self.assertEqual(second["job"]["claim_epoch"], 2)
         self.assertNotEqual(second["claim_token"], token)
+
+    def test_claim_token_checkpoint_is_written_before_remote_claim(self):
+        class RecordingCheckpoint:
+            saved = None
+
+            def save(self, job_id, epoch, worker_id, token, remote_url, branch):
+                self.saved = (job_id, epoch, worker_id, token, remote_url, branch)
+                return "checkpoint-id"
+
+            def delete(self, _job_id, _epoch):
+                return 0
+
+        checkpoint = RecordingCheckpoint()
+        original_update = self.store.update_job
+
+        def update_after_checkpoint(job_id, transform, *args, **kwargs):
+            self.assertIsNotNone(checkpoint.saved)
+            return original_update(job_id, transform, *args, **kwargs)
+
+        self.store.update_job = update_after_checkpoint
+        payload = claim_next(self.store, "worker-a", NOW, checkpoint)
+        self.assertEqual(payload["checkpoint_id"], "checkpoint-id")
+        self.assertEqual(payload["job"]["claim_epoch"], checkpoint.saved[1])
+        self.assertEqual(payload["claim_token"], checkpoint.saved[3])
+
+    @unittest.skipUnless(os.name == "nt", "Windows DPAPI is available only on Windows")
+    def test_dpapi_checkpoint_encrypts_and_restores_claim_token(self):
+        with tempfile.TemporaryDirectory(prefix="chatgpt-worker-dpapi-test-") as temp:
+            checkpoint = TokenCheckpoint(Path(temp))
+            token = "private-test-claim-token-7d0b"
+            checkpoint_id = checkpoint.save(
+                self.job["job_id"], 1, "worker-a", token,
+                "https://example.invalid/private.git", "chatgpt-worker",
+            )
+            other_token = "another-private-test-claim-token"
+            other_id = checkpoint.save(
+                self.job["job_id"], 1, "worker-b", other_token,
+                "https://example.invalid/private.git", "chatgpt-worker",
+            )
+            path = Path(temp) / f"{checkpoint_id}.dpapi"
+            self.assertNotIn(token.encode(), path.read_bytes())
+            loaded = checkpoint.load(
+                self.job["job_id"], 1,
+                "https://example.invalid/private.git", "chatgpt-worker",
+                expected_sha256=hashlib.sha256(other_token.encode()).hexdigest(),
+            )
+            self.assertEqual(loaded["claim_token"], other_token)
+            self.assertTrue(checkpoint.delete_id(checkpoint_id))
+            self.assertTrue((Path(temp) / f"{other_id}.dpapi").exists())
+            self.assertEqual(checkpoint.delete(self.job["job_id"], 1), 1)
 
     def test_completion_verifies_saved_candidate_bytes_before_persisting(self):
         claimed = self.store.update_job(self.job["job_id"], lambda current: claim(current, "worker-a", "complete-token", NOW))
