@@ -165,6 +165,11 @@ def _assert_current_claim(job: dict[str, Any], token: str, now: datetime, epoch:
         raise QueueConflict("Claim lease has expired")
 
 
+def assert_current_claim(job: dict[str, Any], token: str, now: datetime, epoch: int) -> None:
+    """Validate a worker fencing token before publishing any result artifacts."""
+    _assert_current_claim(job, token, now, epoch)
+
+
 def heartbeat(job: dict[str, Any], token: str, now: datetime, epoch: int) -> dict[str, Any]:
     _assert_current_claim(job, token, now, epoch)
     result = deepcopy(job)
@@ -178,16 +183,25 @@ def heartbeat(job: dict[str, Any], token: str, now: datetime, epoch: int) -> dic
 
 def complete(job: dict[str, Any], token: str, now: datetime, epoch: int, result_record: dict[str, Any]) -> dict[str, Any]:
     _assert_current_claim(job, token, now, epoch)
+    if not isinstance(result_record, dict):
+        raise QueueConflict("Result record must be an object")
     if result_record.get("qa_status") != "PASS":
         raise QueueConflict("Only a complete PASS result can finish a generation job")
     candidates = result_record.get("candidates", {})
+    if not isinstance(candidates, dict):
+        raise QueueConflict("Result candidates must be an object")
     if set(candidates) != set(FINAL_FILES):
         raise QueueConflict("Result must contain exactly Forty, Landed, and Story")
     for slot, filename in FINAL_FILES.items():
         candidate = candidates[slot]
+        if not isinstance(candidate, dict):
+            raise QueueConflict(f"Result candidate {slot} must be an object")
         if candidate.get("filename") != filename or candidate.get("qa_status") != "PASS":
             raise QueueConflict(f"Candidate {slot} is missing or did not pass")
-        if int(candidate.get("bytes", 0)) <= 0 or not re.fullmatch(r"[a-f0-9]{64}", str(candidate.get("sha256", ""))):
+        size = candidate.get("bytes")
+        digest = candidate.get("sha256")
+        if (isinstance(size, bool) or not isinstance(size, int) or size <= 0
+                or not isinstance(digest, str) or not re.fullmatch(r"[a-f0-9]{64}", digest)):
             raise QueueConflict(f"Candidate {slot} has no verified byte count and SHA-256")
     updated = deepcopy(job)
     updated["result"] = deepcopy(result_record)
@@ -201,3 +215,48 @@ def complete(job: dict[str, Any], token: str, now: datetime, epoch: int, result_
             attempt["finished_at_utc"] = timestamp(now)
             break
     return updated
+
+
+def reserve_handoff(job: dict[str, Any], batch_id: str, now: datetime) -> dict[str, Any]:
+    """Persist one stable content-post batch ID before any slot branch writes."""
+    result_data = job.get("result")
+    if job.get("status") != "completed" or not isinstance(result_data, dict) or result_data.get("qa_status") != "PASS":
+        raise QueueConflict("Only a completed PASS job can enter content-post handoff")
+    if not re.fullmatch(r"[0-9]+-[0-9]+", batch_id):
+        raise ValueError("Content-post batch IDs must match the existing numeric-numeric format")
+    result = deepcopy(job)
+    handoff = result.setdefault("handoff", {})
+    current_id = handoff.get("content_post_batch_id")
+    if current_id:
+        if current_id != batch_id:
+            raise QueueConflict("A different content-post batch ID is already reserved")
+        if handoff.get("status") not in {"pending", "handed_off"}:
+            raise QueueConflict("Job handoff is not in a reservable state")
+        return result
+    if handoff.get("status") != "pending":
+        raise QueueConflict("Only a pending handoff can reserve a content-post batch")
+    stamp = timestamp(now)
+    handoff["content_post_batch_id"] = batch_id
+    handoff["reserved_at_utc"] = stamp
+    handoff["status"] = "pending"
+    result["updated_at_utc"] = stamp
+    return result
+
+
+def mark_handed_off(job: dict[str, Any], batch_id: str, now: datetime) -> dict[str, Any]:
+    """Record handoff only after all three slot branches contain the batch."""
+    result_data = job.get("result")
+    if job.get("status") != "completed" or not isinstance(result_data, dict) or result_data.get("qa_status") != "PASS":
+        raise QueueConflict("Only a completed PASS job can be handed off")
+    handoff = job.get("handoff", {})
+    if handoff.get("content_post_batch_id") != batch_id:
+        raise QueueConflict("Content-post batch ID does not match the reserved handoff")
+    if handoff.get("status") == "handed_off":
+        return deepcopy(job)
+    if handoff.get("status") != "pending":
+        raise QueueConflict("Job handoff is not pending")
+    result = deepcopy(job)
+    result["handoff"]["status"] = "handed_off"
+    result["handoff"]["handed_off_at_utc"] = timestamp(now)
+    result["updated_at_utc"] = timestamp(now)
+    return result

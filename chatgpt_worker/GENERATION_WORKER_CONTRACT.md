@@ -47,18 +47,34 @@ The simulation proves the skill invocation and QA contract only. Existing
 Git-backed queue tests cover the claim and persistence mechanics. It does not
 prove the GitHub poller or the future production artifact push.
 
-## Production result handoff (not enabled by this simulation)
+## Production result publication
 
-For a later production job, preserve the claimed `job_id`, `claim_epoch`, and
-one-time claim token privately. After the skill has a `PASS` result, store its
-three final HTML files and evidence beneath
-`results/<result_slug>/<run-id>/` on the private `chatgpt-worker` branch. Commit
-those files first. Build the queue result record from the exact committed bytes:
+For a production job, preserve the claimed `job_id`, `claim_epoch`, and one-time
+claim token privately. After the skill has a `PASS` result, run
+`chatgpt_worker/scripts/publish_result.py` with the skill output folder. The
+publisher requires `evidence/native-qa.json` to report `native_qa_status: PASS`,
+three candidate records identified as Forty, Landed, and Story (a mapping keyed
+by `forty`/`landed`/`story` or an array with a `template` or `slot` field), and
+matching filenames, byte counts, and SHA-256 values. Each entry may call its
+path `filename`, `final_path`, or `path`, and its byte count `bytes` or
+`byte_count`. If candidate entries include `qa_status` or `status`, each must
+be `PASS`. The skill's aggregate `PASS` is authoritative for per-candidate
+required checks. The publisher rereads the
+exact candidate bytes, commits all files in `evidence/` and the three HTML files
+under `results/<result_slug>/run-<job-id>-epoch-<claim-epoch>/` on the private
+`chatgpt-worker` branch, and then completes the queue job. The claim is checked
+again against the branch head before artifacts are written. If the publisher
+loses its response after completion, rerun it with the same output and epoch;
+it confirms the recorded digests and returns without rewriting the job.
+
+The persisted result record is built from exact bytes:
 
 ```json
 {
   "run_path": "results/<result_slug>/<run-id>",
   "qa_status": "PASS",
+  "artifact_commit": "<40-character private branch commit>",
+  "qa_evidence": {"filename": "evidence/native-qa.json", "bytes": 1, "sha256": "<64 lowercase hex>"},
   "candidates": {
     "forty": {"filename": "candidate-forty.html", "bytes": 1, "sha256": "<64 lowercase hex>", "qa_status": "PASS"},
     "landed": {"filename": "candidate-landed.html", "bytes": 1, "sha256": "<64 lowercase hex>", "qa_status": "PASS"},
@@ -67,8 +83,20 @@ those files first. Build the queue result record from the exact committed bytes:
 }
 ```
 
-Replace every placeholder with values measured from the saved files. Then run
-the private-branch `queue_manager.py complete` command using the current claim
-token and epoch. The Git-backed store verifies each file's byte count and
-SHA-256 before it records completion. Never put the claim token, customer row,
-HTML, or screenshots in public logs or the public repository.
+Replace the illustrative placeholders only with measured values. The publisher
+performs this operation automatically. Never put the claim token, customer
+row, HTML, or screenshots in public logs or the public repository.
+
+## Existing content-post handoff
+
+After publication completes, run
+`chatgpt_worker/scripts/handoff_content_post.py --job-id <job-id>`. It reserves
+one stable numeric-numeric batch ID in the private job before pushing any slot.
+It writes the established paths and metadata shape on the three private
+`content-post` slot branches, preserving immutable queue snapshots. Only after
+all three branches are verified does it change the generation job's handoff
+state from `pending` to `handed_off`. It does not write the content-post ledger,
+assign a worker, or change the existing orchestrator or repair workflow.
+For downstream compatibility, `site_slug` is derived from the website host by
+the same rule used by the legacy publisher; it is not copied from the private
+results folder's `result_slug`.

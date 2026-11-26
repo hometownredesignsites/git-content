@@ -18,9 +18,13 @@ from chatgpt_worker.queue import (
     complete,
     expire_claim,
     heartbeat,
+    mark_handed_off,
     reconcile_sources,
+    reserve_handoff,
     stable_job_id,
 )
+from chatgpt_worker.scripts.handoff_content_post import stage_all
+from chatgpt_worker.scripts.publish_result import collect_output
 
 
 NOW = datetime(2026, 11, 25, 17, 0, tzinfo=timezone.utc)
@@ -115,6 +119,48 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(completed["status"], "completed")
         self.assertEqual(completed["handoff"]["status"], "pending")
         self.assertIsNone(completed["claim"])
+
+    def test_handoff_batch_reservation_and_completion_are_idempotent(self):
+        claimed = claim(queued_job(), "worker-a", "secret", NOW)
+        completed = complete(claimed, "secret", NOW, 1, passing_result())
+        batch_id = "1795645200000-123456789"
+        reserved = reserve_handoff(completed, batch_id, NOW)
+        retried = reserve_handoff(reserved, batch_id, NOW.replace(minute=1))
+        self.assertEqual(retried["handoff"]["reserved_at_utc"], "2026-11-25T17:00:00Z")
+        with self.assertRaises(QueueConflict):
+            reserve_handoff(reserved, "1795645200001-987654321", NOW)
+        handed = mark_handed_off(reserved, batch_id, NOW.replace(minute=2))
+        self.assertEqual(mark_handed_off(handed, batch_id, NOW), handed)
+        with self.assertRaises(QueueConflict):
+            mark_handed_off(reserved, "1795645200001-987654321", NOW)
+
+    def test_publisher_collects_only_digest_matched_pass_output(self):
+        with tempfile.TemporaryDirectory(prefix="chatgpt-worker-output-test-") as temp:
+            root = Path(temp)
+            entries = {}
+            for slot, filename in (("forty", "candidate-forty.html"), ("landed", "candidate-landed.html"),
+                                   ("story", "candidate-story.html")):
+                content = ("<!doctype html><title>" + slot + "</title>").encode()
+                (root / filename).write_bytes(content)
+                entries[slot] = {"filename": filename, "bytes": len(content),
+                                 "sha256": hashlib.sha256(content).hexdigest(), "qa_status": "PASS"}
+            evidence = root / "evidence"
+            evidence.mkdir()
+            (evidence / "native-qa.json").write_text(json.dumps({
+                "native_qa_status": "PASS", "candidates": entries,
+            }), encoding="utf-8")
+            files, _report, measured = collect_output(root)
+            self.assertEqual(set(files), {
+                "candidate-forty.html", "candidate-landed.html", "candidate-story.html",
+                "evidence/native-qa.json",
+            })
+            self.assertEqual(measured["candidates"]["story"]["sha256"], entries["story"]["sha256"])
+            entries["story"]["sha256"] = "0" * 64
+            (evidence / "native-qa.json").write_text(json.dumps({
+                "native_qa_status": "PASS", "candidates": entries,
+            }), encoding="utf-8")
+            with self.assertRaises(QueueConflict):
+                collect_output(root)
 
 
 class GitStoreTests(unittest.TestCase):
@@ -233,6 +279,87 @@ class GitStoreTests(unittest.TestCase):
         with self.assertRaises(QueueConflict):
             self.store.complete_job(self.job["job_id"], "bad-token", claimed["claim_epoch"], record, NOW)
         self.assertEqual(self.store.read_job(self.job["job_id"])["status"], "claimed")
+
+    def test_publisher_commits_exact_artifacts_before_completing(self):
+        publish_now = datetime.now(timezone.utc)
+        claimed = self.store.update_job(
+            self.job["job_id"], lambda current: claim(current, "worker-a", "publish-token", publish_now)
+        )
+        run_path = f"results/sample-business/run-{self.job['job_id']}-epoch-1"
+        qa_bytes = b'{"native_qa_status":"PASS"}\n'
+        output_files = dict(self.artifact_contents)
+        output_files["evidence/native-qa.json"] = qa_bytes
+        artifact_commit = self.store.publish_artifacts(
+            self.job["job_id"], "publish-token", 1, run_path, output_files,
+        )
+        candidates = {}
+        for slot, filename in (("forty", "candidate-forty.html"), ("landed", "candidate-landed.html"),
+                               ("story", "candidate-story.html")):
+            content = self.artifact_contents[filename]
+            candidates[slot] = {"filename": filename, "bytes": len(content),
+                                "sha256": hashlib.sha256(content).hexdigest(), "qa_status": "PASS"}
+        result = {
+            "run_path": run_path,
+            "qa_status": "PASS",
+            "artifact_commit": artifact_commit,
+            "qa_evidence": {"filename": "evidence/native-qa.json", "bytes": len(qa_bytes),
+                            "sha256": hashlib.sha256(qa_bytes).hexdigest()},
+            "candidates": candidates,
+        }
+        completed = self.store.complete_job(
+            self.job["job_id"], "publish-token", 1, result, datetime.now(timezone.utc)
+        )
+        self.assertEqual(completed["result"]["artifact_commit"], artifact_commit)
+        saved_job, saved_files = self.store.read_completed_artifacts(self.job["job_id"])
+        self.assertEqual(saved_job["status"], "completed")
+        self.assertEqual(saved_files["forty"], self.artifact_contents["candidate-forty.html"])
+
+
+class ContentPostHandoffTests(unittest.TestCase):
+    def test_three_private_slot_branches_stage_idempotent_snapshots(self):
+        with tempfile.TemporaryDirectory(prefix="chatgpt-content-post-test-") as temp:
+            root = Path(temp)
+            remote = root / "content-post.git"
+            seed = root / "seed"
+            subprocess.run(["git", "init", "--bare", str(remote)], check=True, capture_output=True)
+            subprocess.run(["git", "init", "-b", "main", str(seed)], check=True, capture_output=True)
+            subprocess.run(["git", "-C", str(seed), "config", "user.name", "Handoff Test"], check=True)
+            subprocess.run(["git", "-C", str(seed), "config", "user.email", "handoff-test@example.invalid"], check=True)
+            (seed / "README.md").write_text("private fixture\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(seed), "add", "README.md"], check=True)
+            subprocess.run(["git", "-C", str(seed), "commit", "-m", "seed"], check=True, capture_output=True)
+            subprocess.run(["git", "-C", str(seed), "remote", "add", "origin", str(remote)], check=True)
+            subprocess.run(["git", "-C", str(seed), "push", "origin", "main"], check=True, capture_output=True)
+
+            job = {
+                "job_id": "22222222-2222-4222-8222-222222222222",
+                "created_at_utc": "2026-11-25T17:00:00Z",
+                "result_slug": "sample-business",
+                "row": {"business": "Sample Business", "website": "https://example.com"},
+                "result": {"artifact_commit": "a" * 40},
+            }
+            batch_id = "1795645200000-123456789"
+            queued_at = "2026-11-25T17:00:00Z"
+            artifacts = {
+                "forty": b"<!doctype html><title>Forty</title>",
+                "landed": b"<!doctype html><title>Landed</title>",
+                "story": b"<!doctype html><title>Story</title>",
+            }
+            stage_all(str(remote), job, artifacts, batch_id, queued_at)
+            stage_all(str(remote), job, artifacts, batch_id, queued_at)
+            for slot, branch in ((1, "chatgpt-slot1"), (2, "chatgpt-slot2"), (3, "chatgpt-slot3")):
+                path = f"sites/example/queue/{batch_id}/index.html"
+                saved = subprocess.run(["git", "--git-dir", str(remote), "show", f"refs/heads/{branch}:{path}"],
+                                       check=True, capture_output=True).stdout
+                self.assertEqual(saved, artifacts[{1: "forty", 2: "landed", 3: "story"}[slot]])
+                metadata_path = f"sites/example/queue/{batch_id}/metadata.json"
+                metadata = json.loads(subprocess.run(
+                    ["git", "--git-dir", str(remote), "show", f"refs/heads/{branch}:{metadata_path}"],
+                    check=True, capture_output=True, text=True,
+                ).stdout)
+                self.assertEqual(metadata["slot"], slot)
+                self.assertEqual(metadata["batch_id"], batch_id)
+                self.assertEqual(metadata["branch"], branch)
 
 
 if __name__ == "__main__":

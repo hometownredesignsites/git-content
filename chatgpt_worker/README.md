@@ -39,13 +39,23 @@ python chatgpt_worker/scripts/queue_manager.py complete --job-id JOB_UUID --clai
 python chatgpt_worker/scripts/queue_manager.py recover-expired
 ```
 
-Completion reads the three candidate files from `results/<site-slug>/...` on the private branch and verifies exact byte counts and SHA-256 values before recording the result. Intake reconciliation, leases, claim tokens, and candidate artifacts remain in the private repository. These are manual operations; no hourly Action or external worker endpoint is enabled yet.
+Completion reads the three candidate files from `results/<site-slug>/...` on the private branch and verifies exact byte counts and SHA-256 values before recording the result. `scripts/publish_result.py` is the worker-side publisher: it accepts only a `native_qa_status: PASS` package whose three candidate digests match, commits candidate HTML and all evidence to private `chatgpt-worker`, then completes the fenced job. It never writes artifacts to public `git-content`.
+
+After completion, `scripts/handoff_content_post.py --job-id JOB_UUID` reserves a stable numeric-numeric content-post batch ID in the private job, stages the three HTML files and matching metadata on the existing private `content-post` branches `chatgpt-slot1`, `chatgpt-slot2`, and `chatgpt-slot3`, then marks the private handoff `handed_off`. The adapter does not write `content-post/main` or its ledger. The existing hourly orchestrator discovers the complete immutable queue snapshots and continues to assign the slots and update its ledger. If a push stops part-way through, rerunning the handoff command reuses the reserved batch ID and verifies already-pushed snapshots before continuing. Git credentials for private `git-content-private` and `content-post` must be available through the worker's Git credential helper.
+
+```powershell
+$env:CHATGPT_WORKER_CLAIM_TOKEN = "CLAIM_TOKEN_FROM_PRIVATE_WORKER_STATE"
+python chatgpt_worker/scripts/publish_result.py --job-id JOB_UUID --claim-epoch EPOCH_NUMBER --skill-output <skill-output-folder>
+python chatgpt_worker/scripts/handoff_content_post.py --job-id JOB_UUID
+```
+
+The content-post `site_slug` uses the existing host-based rule from the previous publisher, while the private result path uses the queue's `result_slug`.
 
 ## Generator handoff and safe simulation
 
 [`GENERATION_WORKER_CONTRACT.md`](GENERATION_WORKER_CONTRACT.md) maps a claimed private job to the `website-poc-generator` skill and defines the exact deliverable and QA record expected by queue completion. A simulation uses the private simulation schema, a reachable non-customer business URL, and a local-only output directory. It must not reconcile or claim the production queue, dispatch the legacy Action, write candidate files to either repository, or modify `content-post`. Require `native_qa_status: PASS` and verify the three final file digests before considering the generator simulation successful.
 
-The simulation checks skill execution and QA only. It does not validate a Git-backed production artifact push or the not-yet-implemented High-site poller.
+The simulation checks skill execution and QA only. It does not validate a Git-backed production artifact push, private content-post handoff, or the not-yet-implemented High-site poller.
 
 Run the local tests with:
 
