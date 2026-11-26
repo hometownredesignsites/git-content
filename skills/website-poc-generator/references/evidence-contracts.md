@@ -45,6 +45,7 @@ Only list files that were actually written and verified. Use the user's requeste
 Record:
 
 - `schema_version`, `run_id`, `created_at`, `source_url`, `runtime_profile: "chatgpt_native"`, and `native_qa_status` (`PASS`, `FAIL`, `PARTIAL`, or `BLOCKED`).
+- For a queue-worker invocation, the exact supplied `job_id` and integer `claim_epoch`. Preserve these as provenance fields; do not derive them from the run ID or change them during retries. Standalone skill runs without queue context may omit them.
 - One candidate entry per template with final path, byte count, SHA-256, static check results, browser/version when available, desktop/tablet/mobile measurements, interaction results, desktop/mobile viewport screenshots, focused contact-section screenshots when a source form exists, failures, and repairs.
 - Session capability results for Python, Playwright, Chromium, exact-byte rendering, viewport control, screenshot capture, and screenshot pixel inspection.
 - `image_content_status: "UNVERIFIED"` with a short reason when images could not be inspected. This is informational and not a candidate blocking check.
