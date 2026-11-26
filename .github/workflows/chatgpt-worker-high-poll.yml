@@ -58,3 +58,15 @@ jobs:
           --candidate-csv lead-operations/scores/HIGH_MEDIUM_CANDIDATES.csv
           --private-checkout private-worker
           --max-sites "$MAX_SITES"
+
+      - name: Reconcile intake into the claimable generation queue
+        run: |
+          set -euo pipefail
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0="http.https://github.com/.extraheader"
+          export GIT_CONFIG_VALUE_0="$(git -C private-worker config --local --get http.https://github.com/.extraheader)"
+          if [[ -z "$GIT_CONFIG_VALUE_0" ]]; then
+            echo "Private worker checkout did not provide Git credentials for reconciliation."
+            exit 1
+          fi
+          python chatgpt_worker/scripts/queue_manager.py reconcile-intake

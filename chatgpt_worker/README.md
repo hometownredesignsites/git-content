@@ -61,7 +61,7 @@ The simulation checks skill execution and QA only. It does not validate a Git-ba
 
 The manual-only workflow [`.github/workflows/chatgpt-worker-high-poll.yml`](../.github/workflows/chatgpt-worker-high-poll.yml) reads completed High leads from the lead-operations `git-chatgpt` branch and applies the confidence, delivery-ready exception, score-ordering, and worker-queue duplicate rules. Existing legacy previews and candidate runs do not affect eligibility: this queue represents the initial candidate-generation phase. It checks the `chatgpt-worker` source and generation queues for duplicates, then writes source job records only to `git-content-private:chatgpt-worker`.
 
-Dispatch it on this `chatgpt-worker` branch with `max_sites=1` for an initial controlled run. The workflow does not run on a schedule and does not invoke the legacy candidate generator. Eligible source records are later imported into the generation claim queue by the existing reconciliation step.
+The default-branch registration workflow checks out this branch's poller code and runs it with `max_sites=1` for an initial controlled intake. The poller workflow then calls the Git-backed `reconcile-intake` operation, so a successful run leaves the new job immediately claimable in the generation queue. If intake persisted but reconciliation failed, rerunning safely reconciles the source record without creating another job. The workflow has no schedule and does not invoke the legacy candidate generator.
 
 Run the local tests with:
 
