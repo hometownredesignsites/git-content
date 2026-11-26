@@ -59,7 +59,7 @@ The simulation checks skill execution and QA only. It does not validate a Git-ba
 
 ## High-site intake poller
 
-The manual-only workflow [`.github/workflows/chatgpt-worker-high-poll.yml`](../.github/workflows/chatgpt-worker-high-poll.yml) reads completed High leads from the lead-operations `git-chatgpt` branch and applies the existing confidence, preview, delivery-ready exception, score-ordering, and duplicate rules. It checks both the legacy private `chatgpt` queue and the `chatgpt-worker` source and generation queues, then writes source job records only to `git-content-private:chatgpt-worker`.
+The manual-only workflow [`.github/workflows/chatgpt-worker-high-poll.yml`](../.github/workflows/chatgpt-worker-high-poll.yml) reads completed High leads from the lead-operations `git-chatgpt` branch and applies the confidence, delivery-ready exception, score-ordering, and worker-queue duplicate rules. Existing legacy previews and candidate runs do not affect eligibility: this queue represents the initial candidate-generation phase. It checks the `chatgpt-worker` source and generation queues for duplicates, then writes source job records only to `git-content-private:chatgpt-worker`.
 
 Dispatch it on this `chatgpt-worker` branch with `max_sites=1` for an initial controlled run. The workflow does not run on a schedule and does not invoke the legacy candidate generator. Eligible source records are later imported into the generation claim queue by the existing reconciliation step.
 

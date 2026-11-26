@@ -43,7 +43,7 @@ def score_value(value: Any) -> float:
 
 
 def load_existing_hosts(job_directories: list[Path]) -> set[str]:
-    """Read legacy ChatGPT and worker source/state records for duplicate hosts."""
+    """Read worker source/state records for new-queue duplicate protection."""
     seen: set[str] = set()
     for directory in job_directories:
         if not directory.exists():
@@ -55,7 +55,7 @@ def load_existing_hosts(job_directories: list[Path]) -> set[str]:
                 raise ValueError("An existing private queue job is invalid; refusing to poll safely.") from error
             if not isinstance(record, dict):
                 raise ValueError("An existing private queue job is not an object; refusing to poll safely.")
-            if record.get("provider") not in {"chatgpt", PROVIDER}:
+            if record.get("provider") != PROVIDER:
                 continue
             row = record.get("row")
             if isinstance(row, dict):
@@ -66,7 +66,7 @@ def load_existing_hosts(job_directories: list[Path]) -> set[str]:
 
 
 def select_high_sites(csv_path: Path, existing_hosts: set[str], max_sites: int) -> list[dict[str, Any]]:
-    """Apply the same eligibility, preview and delivery-ready rules as the legacy poller."""
+    """Select completed confidence-3 High leads not already in the worker queue."""
     if not 1 <= max_sites <= MAX_SITES_PER_POLL:
         raise ValueError(f"max_sites must be between 1 and {MAX_SITES_PER_POLL}.")
     if not csv_path.is_file():
@@ -80,10 +80,6 @@ def select_high_sites(csv_path: Path, existing_hosts: set[str], max_sites: int) 
             if (row.get("assessment_state") or "").strip().lower() != "complete":
                 continue
             if (row.get("confidence_level") or "").strip() != "3":
-                continue
-            preview_url = (row.get("PreviewURL") or "").strip()
-            legacy_previews = (row.get("Preview_URLs_json") or "").strip()
-            if preview_url or (legacy_previews and legacy_previews not in {"[]", "null"}):
                 continue
             website = (row.get("website_url") or "").strip()
             business = (row.get("business_name") or "").strip()

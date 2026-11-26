@@ -41,15 +41,6 @@ jobs:
           token: ${{ secrets.LEAD_OPERATIONS_TOKEN }}
           persist-credentials: false
 
-      - name: Read the legacy ChatGPT queue for duplicate checks
-        uses: actions/checkout@v4
-        with:
-          repository: hometownredesignsites/git-content-private
-          ref: chatgpt
-          path: private-chatgpt
-          token: ${{ secrets.PRIVATE_RESULTS_TOKEN }}
-          persist-credentials: false
-
       - name: Check out the private worker queue
         uses: actions/checkout@v4
         with:
@@ -66,5 +57,4 @@ jobs:
           python chatgpt_worker/scripts/poll_high_sites.py
           --candidate-csv lead-operations/scores/HIGH_MEDIUM_CANDIDATES.csv
           --private-checkout private-worker
-          --legacy-jobs-dir private-chatgpt/private_automation/queue/jobs
           --max-sites "$MAX_SITES"

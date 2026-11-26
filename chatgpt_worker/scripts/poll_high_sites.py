@@ -54,7 +54,7 @@ def read_slug_map(path: Path) -> dict[str, str]:
     return value
 
 
-def run_poller(candidate_csv: Path, private_checkout: Path, legacy_jobs_dir: Path,
+def run_poller(candidate_csv: Path, private_checkout: Path,
                max_sites: int, batch_id: str | None = None, retries: int = 5) -> dict[str, Any]:
     """Reevaluate candidates against each fresh private branch head and push only source queue records."""
     if not 1 <= max_sites <= 24:
@@ -77,7 +77,7 @@ def run_poller(candidate_csv: Path, private_checkout: Path, legacy_jobs_dir: Pat
 
         jobs_root = private_checkout / QUEUE_ROOT / "jobs"
         generation_jobs = private_checkout / QUEUE_ROOT / "generation" / "jobs"
-        existing = load_existing_hosts([legacy_jobs_dir, jobs_root, generation_jobs])
+        existing = load_existing_hosts([jobs_root, generation_jobs])
         candidates = select_high_sites(candidate_csv, existing, max_sites)
         if not candidates:
             return {"queued": 0, "batch_id": batch_id, "status": "no_eligible_sites"}
@@ -149,7 +149,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--candidate-csv", required=True, type=Path)
     parser.add_argument("--private-checkout", required=True, type=Path)
-    parser.add_argument("--legacy-jobs-dir", required=True, type=Path)
     parser.add_argument("--max-sites", type=int, default=int(os.environ.get("MAX_SITES", "1")))
     parser.add_argument("--batch-id", help="Stable UUID for retrying this exact poller invocation")
     return parser
@@ -158,8 +157,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        result = run_poller(args.candidate_csv, args.private_checkout, args.legacy_jobs_dir,
-                            args.max_sites, args.batch_id)
+        result = run_poller(args.candidate_csv, args.private_checkout, args.max_sites, args.batch_id)
         print(json.dumps(result, sort_keys=True))
         return 0
     except (GitStoreError, ValueError, OSError) as error:

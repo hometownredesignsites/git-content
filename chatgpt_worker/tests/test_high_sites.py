@@ -66,21 +66,28 @@ class HighSiteSelectionTests(unittest.TestCase):
                 candidate("https://low-confidence.test", "Low", confidence_level="2"),
                 candidate("https://medium.test", "Medium", final_outcome="medium"),
             ])
-            selected = select_high_sites(csv_path, set(), 1)
-        self.assertEqual([item["host"] for item in selected], ["alpha.test"])
+            selected = select_high_sites(csv_path, set(), 3)
+        self.assertEqual([item["host"] for item in selected], ["alpha.test", "zeta.test", "preview.test"])
         self.assertEqual(selected[0]["row"]["location"], "Example, ST")
 
-    def test_duplicate_hosts_are_checked_across_queue_directories(self) -> None:
+    def test_only_worker_queue_records_block_new_intake(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             queue = Path(temp) / "jobs"
             queue.mkdir()
             (queue / "legacy.json").write_text(json.dumps({
                 "provider": "chatgpt", "row": {"website": "https://www.Already.test/path"},
             }), encoding="utf-8")
-            self.assertEqual(load_existing_hosts([queue]), {"already.test"})
+            (queue / "worker.json").write_text(json.dumps({
+                "provider": "chatgpt-worker", "row": {"website": "https://worker-existing.test"},
+            }), encoding="utf-8")
+            self.assertEqual(load_existing_hosts([queue]), {"worker-existing.test"})
             csv_path = Path(temp) / "candidates.csv"
-            write_candidates(csv_path, [candidate("https://already.test", "Already")])
-            self.assertEqual(select_high_sites(csv_path, load_existing_hosts([queue]), 1), [])
+            write_candidates(csv_path, [
+                candidate("https://already.test", "Legacy record"),
+                candidate("https://worker-existing.test", "Worker record"),
+            ])
+            selected = select_high_sites(csv_path, load_existing_hosts([queue]), 2)
+            self.assertEqual([item["host"] for item in selected], ["already.test"])
 
     def test_private_write_is_idempotent_and_reconcilable_without_dispatch(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -99,10 +106,8 @@ class HighSiteSelectionTests(unittest.TestCase):
 
             csv_path = root / "candidates.csv"
             write_candidates(csv_path, [candidate("https://www.one.test/", "One")])
-            legacy_jobs = root / "legacy-jobs"
-            legacy_jobs.mkdir()
             batch_id = str(uuid4())
-            first = run_poller(csv_path, checkout, legacy_jobs, 1, batch_id=batch_id)
+            first = run_poller(csv_path, checkout, 1, batch_id=batch_id)
             self.assertEqual(first["status"], "queued")
             self.assertEqual(first["queued"], 1)
 
@@ -117,7 +122,7 @@ class HighSiteSelectionTests(unittest.TestCase):
             self.assertEqual(stats["created"], 1)
             self.assertEqual(next(iter(imported.values()))["row"]["website"], "https://www.one.test/")
 
-            second = run_poller(csv_path, checkout, legacy_jobs, 1)
+            second = run_poller(csv_path, checkout, 1)
             self.assertEqual(second["status"], "no_eligible_sites")
             self.assertEqual(len(list((checkout / "private_automation/queue/jobs").glob("*.json"))), 1)
 
