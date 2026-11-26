@@ -19,6 +19,13 @@ sys.path.insert(0, str(ROOT))
 from chatgpt_worker.git_store import GitJobStore, GitStoreError  # noqa: E402
 from chatgpt_worker.queue import FINAL_FILES, QueueConflict  # noqa: E402
 
+REQUIRED_CANDIDATE_CHECKS = {
+    "exact_saved_bytes_and_static_requirements",
+    "browser_viewport_and_interaction_matrix",
+    "rendered_template_credits_absent",
+}
+REQUIRED_VIEWPORTS = {"desktop", "tablet", "mobile"}
+
 
 def read_json(path: Path) -> dict:
     try:
@@ -39,7 +46,7 @@ def normalize_candidate_entries(value: object) -> dict[str, dict]:
         for item in value:
             if not isinstance(item, dict):
                 raise QueueConflict("Each native QA candidate entry must be an object.")
-            name = item.get("template", item.get("slot", ""))
+            name = item.get("template", item.get("slot", item.get("slot_id", "")))
             source.append((name, item))
     else:
         raise QueueConflict("Native QA candidate entries must be an object or array.")
@@ -57,13 +64,71 @@ def normalize_candidate_entries(value: object) -> dict[str, dict]:
     return entries
 
 
+def candidate_results_from_report(report: dict) -> dict[str, dict]:
+    """Adapt the skill's detailed candidate_results without weakening its QA record."""
+    if report.get("finished_checks") is not True:
+        raise QueueConflict("Native QA checks were not marked finished.")
+    raw_results = report.get("candidate_results")
+    if not isinstance(raw_results, list):
+        raise QueueConflict("Native QA candidate_results must be an array.")
+
+    for entry in raw_results:
+        if not isinstance(entry, dict):
+            raise QueueConflict("Each native QA candidate result must be an object.")
+        if entry.get("status") != "PASS" or entry.get("static_check_status") != "PASS":
+            raise QueueConflict("Every native QA candidate and static check must pass.")
+        if entry.get("static_errors") != [] or entry.get("failures") != []:
+            raise QueueConflict("Native QA candidate results contain static errors or failures.")
+
+        viewports = entry.get("viewports")
+        if not isinstance(viewports, list):
+            raise QueueConflict("Native QA candidate results must include viewport checks.")
+        viewport_statuses: dict[str, dict] = {}
+        for viewport in viewports:
+            if not isinstance(viewport, dict):
+                raise QueueConflict("Each native QA viewport result must be an object.")
+            name = viewport.get("name")
+            if not isinstance(name, str) or name in viewport_statuses:
+                raise QueueConflict("Native QA viewport names must be unique strings.")
+            viewport_statuses[name] = viewport
+        if set(viewport_statuses) != REQUIRED_VIEWPORTS:
+            raise QueueConflict("Native QA must include desktop, tablet, and mobile viewport results.")
+        if any(viewport.get("status") != "PASS" or viewport.get("errors") != []
+               for viewport in viewport_statuses.values()):
+            raise QueueConflict("Every native QA viewport must pass without errors.")
+
+        checks = entry.get("checks")
+        if not isinstance(checks, list):
+            raise QueueConflict("Native QA candidate results must include required check records.")
+        check_statuses: dict[str, str] = {}
+        for check in checks:
+            if not isinstance(check, dict):
+                raise QueueConflict("Each native QA check must be an object.")
+            name = check.get("name")
+            status = check.get("status")
+            if not isinstance(name, str) or name in check_statuses:
+                raise QueueConflict("Native QA check names must be unique strings.")
+            check_statuses[name] = status
+        if not REQUIRED_CANDIDATE_CHECKS.issubset(check_statuses):
+            raise QueueConflict("Native QA is missing one or more required candidate checks.")
+        if any(status != "PASS" for status in check_statuses.values()):
+            raise QueueConflict("Every native QA candidate check must pass.")
+
+    return normalize_candidate_entries(raw_results)
+
+
 def collect_output(root: Path) -> tuple[dict[str, bytes], dict, dict]:
     root = root.resolve(strict=True)
     qa_path = root / "evidence" / "native-qa.json"
     report = read_json(qa_path)
     if report.get("native_qa_status") != "PASS":
         raise QueueConflict("Only native_qa_status PASS output can be published.")
-    candidates = normalize_candidate_entries(report.get("candidates"))
+    if "candidates" in report:
+        candidates = normalize_candidate_entries(report.get("candidates"))
+    elif "candidate_results" in report:
+        candidates = candidate_results_from_report(report)
+    else:
+        raise QueueConflict("Native QA evidence must include candidate or candidate_results records.")
     files: dict[str, bytes] = {}
     result_candidates: dict[str, dict] = {}
     for key, filename in FINAL_FILES.items():

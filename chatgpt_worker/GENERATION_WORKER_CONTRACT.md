@@ -54,12 +54,15 @@ claim token privately. After the skill has a `PASS` result, run
 `chatgpt_worker/scripts/publish_result.py` with the skill output folder. The
 publisher requires `evidence/native-qa.json` to report `native_qa_status: PASS`,
 three candidate records identified as Forty, Landed, and Story (a mapping keyed
-by `forty`/`landed`/`story` or an array with a `template` or `slot` field), and
-matching filenames, byte counts, and SHA-256 values. Each entry may call its
-path `filename`, `final_path`, or `path`, and its byte count `bytes` or
-`byte_count`. If candidate entries include `qa_status` or `status`, each must
-be `PASS`. The skill's aggregate `PASS` is authoritative for per-candidate
-required checks. The publisher rereads the
+by `forty`/`landed`/`story` or an array with a `template`, `slot`, or `slot_id`
+field), and matching filenames, byte counts, and SHA-256 values. It accepts the
+skill's detailed `candidate_results` array when `candidates` is absent, but
+requires `finished_checks: true`, PASS status for all three candidates, empty
+static error and failure lists, passing desktop/tablet/mobile viewport checks,
+and passing exact-byte/static, browser interaction, and rendered-credit checks.
+Each entry may call its path `filename`, `final_path`, or `path`, and its byte
+count `bytes` or `byte_count`. If candidate entries include `qa_status` or
+`status`, each must be `PASS`. The publisher rereads the
 exact candidate bytes, commits all files in `evidence/` and the three HTML files
 under `results/<result_slug>/run-<job-id>-epoch-<claim-epoch>/` on the private
 `chatgpt-worker` branch, and then completes the queue job. The claim is checked

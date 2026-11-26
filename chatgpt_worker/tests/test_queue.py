@@ -162,6 +162,62 @@ class QueueTests(unittest.TestCase):
             with self.assertRaises(QueueConflict):
                 collect_output(root)
 
+    def test_publisher_adapts_detailed_candidate_results_without_weakening_qa(self):
+        with tempfile.TemporaryDirectory(prefix="chatgpt-worker-candidate-results-test-") as temp:
+            root = Path(temp)
+            candidate_results = []
+            for slot, filename in (("forty", "candidate-forty.html"), ("landed", "candidate-landed.html"),
+                                   ("story", "candidate-story.html")):
+                content = ("<!doctype html><title>" + slot + "</title>").encode()
+                (root / filename).write_bytes(content)
+                candidate_results.append({
+                    "slot_id": slot,
+                    "final_path": filename,
+                    "bytes": len(content),
+                    "sha256": hashlib.sha256(content).hexdigest(),
+                    "status": "PASS",
+                    "static_check_status": "PASS",
+                    "static_errors": [],
+                    "failures": [],
+                    "viewports": [
+                        {"name": name, "status": "PASS", "errors": []}
+                        for name in ("desktop", "tablet", "mobile")
+                    ],
+                    "checks": [
+                        {"name": name, "status": "PASS"}
+                        for name in (
+                            "exact_saved_bytes_and_static_requirements",
+                            "browser_viewport_and_interaction_matrix",
+                            "rendered_template_credits_absent",
+                        )
+                    ],
+                })
+            evidence = root / "evidence"
+            evidence.mkdir()
+            report = {
+                "native_qa_status": "PASS",
+                "finished_checks": True,
+                "candidate_results": candidate_results,
+            }
+            report_path = evidence / "native-qa.json"
+            report_path.write_text(json.dumps(report), encoding="utf-8")
+
+            files, _report, measured = collect_output(root)
+            self.assertEqual(set(measured["candidates"]), {"forty", "landed", "story"})
+            self.assertEqual(measured["candidates"]["story"]["sha256"], candidate_results[2]["sha256"])
+            self.assertEqual(files["evidence/native-qa.json"], report_path.read_bytes())
+
+            candidate_results[0]["viewports"][1]["status"] = "FAIL"
+            report_path.write_text(json.dumps(report), encoding="utf-8")
+            with self.assertRaises(QueueConflict):
+                collect_output(root)
+
+            candidate_results[0]["viewports"][1]["status"] = "PASS"
+            candidate_results[1]["checks"].append({"name": "unexpected_failure", "status": "FAIL"})
+            report_path.write_text(json.dumps(report), encoding="utf-8")
+            with self.assertRaises(QueueConflict):
+                collect_output(root)
+
 
 class GitStoreTests(unittest.TestCase):
     def setUp(self):
