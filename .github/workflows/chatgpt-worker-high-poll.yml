@@ -62,11 +62,13 @@ jobs:
       - name: Reconcile intake into the claimable generation queue
         run: |
           set -euo pipefail
-          export GIT_CONFIG_COUNT=1
-          export GIT_CONFIG_KEY_0="http.https://github.com/.extraheader"
-          export GIT_CONFIG_VALUE_0="$(git -C private-worker config --local --get http.https://github.com/.extraheader)"
-          if [[ -z "$GIT_CONFIG_VALUE_0" ]]; then
+          auth_header="$(git -C private-worker config --local --get http.https://github.com/.extraheader)"
+          if [[ -z "$auth_header" ]]; then
             echo "Private worker checkout did not provide Git credentials for reconciliation."
             exit 1
           fi
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0="http.https://github.com/.extraheader"
+          export GIT_CONFIG_VALUE_0="$auth_header"
+          unset auth_header
           python chatgpt_worker/scripts/queue_manager.py reconcile-intake
