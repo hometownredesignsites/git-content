@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import datetime, timezone
+import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -10,6 +11,7 @@ import threading
 import unittest
 
 from chatgpt_worker.git_store import GitJobStore
+from chatgpt_worker.scripts.queue_manager import claim_next
 from chatgpt_worker.queue import (
     QueueConflict,
     claim,
@@ -28,6 +30,12 @@ SOURCE = {
     "provider": "chatgpt-worker",
     "result_slug": "sample-business",
     "row": {"website": "https://example.com", "business": "Sample", "category": "Home Services"},
+}
+INTAKE_SOURCE = {
+    **SOURCE,
+    "job_id": "55555555-5555-4555-8555-555555555555",
+    "batch_id": "77777777-7777-4777-8777-777777777777",
+    "result_slug": "new-business",
 }
 
 
@@ -123,6 +131,18 @@ class GitStoreTests(unittest.TestCase):
         job_path = self.seed / "private_automation" / "queue" / "generation" / "jobs" / (self.job["job_id"] + ".json")
         job_path.parent.mkdir(parents=True)
         job_path.write_text(json.dumps(self.job), encoding="utf-8")
+        source_path = self.seed / "private_automation" / "queue" / "jobs" / (SOURCE["job_id"] + ".json")
+        source_path.parent.mkdir(parents=True)
+        source_path.write_text(json.dumps(INTAKE_SOURCE), encoding="utf-8")
+        legacy = {**INTAKE_SOURCE, "job_id": "66666666-6666-4666-8666-666666666666", "provider": "chatgpt"}
+        (source_path.parent / (legacy["job_id"] + ".json")).write_text(json.dumps(legacy), encoding="utf-8")
+        self.artifact_contents = {}
+        result_dir = self.seed / "results" / "sample-business" / "run-test"
+        result_dir.mkdir(parents=True)
+        for filename in ("candidate-forty.html", "candidate-landed.html", "candidate-story.html"):
+            content = ("<!doctype html><title>" + filename + "</title>").encode("utf-8")
+            (result_dir / filename).write_bytes(content)
+            self.artifact_contents[filename] = content
         subprocess.run(["git", "-C", str(self.seed), "add", "."], check=True)
         subprocess.run(["git", "-C", str(self.seed), "commit", "-m", "seed"], check=True, capture_output=True)
         subprocess.run(["git", "-C", str(self.seed), "remote", "add", "origin", str(self.remote)], check=True)
@@ -168,6 +188,51 @@ class GitStoreTests(unittest.TestCase):
         second = self.store.update_job(self.job["job_id"], transform)
         self.assertEqual(first, second)
         self.assertEqual(len(second["attempts"]), 1)
+
+    def test_remote_intake_reconciliation_is_idempotent_and_ignores_legacy(self):
+        first = self.store.reconcile_intake(NOW)
+        second = self.store.reconcile_intake(NOW)
+        self.assertEqual(first["created"], 1)
+        self.assertEqual(first["ignored"], 1)
+        self.assertEqual(second["created"], 0)
+        jobs = self.store.list_jobs()
+        self.assertEqual(len(jobs), 2)
+        self.assertEqual({job["provider"] for job in jobs}, {"chatgpt-worker"})
+
+    def test_manual_claim_heartbeat_and_expiry_reclaim_persist_remotely(self):
+        payload = claim_next(self.store, "worker-a", NOW)
+        self.assertIsNotNone(payload)
+        job = payload["job"]
+        token = payload["claim_token"]
+        renewed = self.store.update_job(
+            job["job_id"], lambda current: heartbeat(current, token, NOW.replace(minute=30), job["claim_epoch"])
+        )
+        self.assertEqual(renewed["status"], "generating")
+        recovered = self.store.update_job(
+            job["job_id"], lambda current: expire_claim(current, datetime(2026, 11, 25, 19, 31, tzinfo=timezone.utc))
+        )
+        self.assertEqual(recovered["status"], "queued")
+        second = claim_next(self.store, "worker-b", datetime(2026, 11, 25, 19, 32, tzinfo=timezone.utc))
+        self.assertEqual(second["job"]["claim_epoch"], 2)
+        self.assertNotEqual(second["claim_token"], token)
+
+    def test_completion_verifies_saved_candidate_bytes_before_persisting(self):
+        claimed = self.store.update_job(self.job["job_id"], lambda current: claim(current, "worker-a", "complete-token", NOW))
+        record = passing_result()
+        for slot, candidate in record["candidates"].items():
+            content = self.artifact_contents[candidate["filename"]]
+            candidate["bytes"] = len(content)
+            candidate["sha256"] = hashlib.sha256(content).hexdigest()
+        completed = self.store.complete_job(self.job["job_id"], "complete-token", claimed["claim_epoch"], record, NOW)
+        self.assertEqual(completed["status"], "completed")
+        self.assertEqual(self.store.read_job(self.job["job_id"])["handoff"]["status"], "pending")
+
+    def test_completion_rejects_hash_mismatch_without_mutating_job(self):
+        claimed = self.store.update_job(self.job["job_id"], lambda current: claim(current, "worker-a", "bad-token", NOW))
+        record = passing_result()
+        with self.assertRaises(QueueConflict):
+            self.store.complete_job(self.job["job_id"], "bad-token", claimed["claim_epoch"], record, NOW)
+        self.assertEqual(self.store.read_job(self.job["job_id"])["status"], "claimed")
 
 
 if __name__ == "__main__":

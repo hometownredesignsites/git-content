@@ -20,7 +20,26 @@ The command is dry-run by default. Add `--apply` to write new per-job JSON recor
 
 `git_store.py` adds the Git-backed persistence adapter. Each update uses a fresh clone of the private branch, changes only the target job record, and pushes a fast-forward commit. Git rejects a stale competing push; the store rereads the newest branch and recomputes the transition with bounded retries. A rejected push with no remote-head change is treated as an operational error. Credentials are supplied by the Git credential helper or runner environment, not stored in job data. Workers may treat a claim as owned only after `update_job()` returns successfully.
 
-The hourly Action and the external worker claim endpoint are intentionally not part of this milestone. The adapter assumes the caller can authenticate to the private repository and pass its remote URL; it does not schedule work or reveal customer data to public logs.
+## Manual coordinator
+
+`queue_manager.py` connects the private store to manual operations. Set `GIT_CONTENT_PRIVATE_REMOTE` if the remote URL differs from the default, and authenticate with the configured Git credential helper.
+
+```powershell
+python chatgpt_worker/scripts/queue_manager.py reconcile-intake
+python chatgpt_worker/scripts/queue_manager.py list
+python chatgpt_worker/scripts/queue_manager.py claim-next --worker-id operator-1
+```
+
+`claim-next` returns the job and one-time claim token only after the private branch commit succeeds. Treat its output as private because it includes the customer row and claim token. Store the token securely in `CHATGPT_WORKER_CLAIM_TOKEN` for later transitions; do not place it in shell history or public logs.
+
+```powershell
+$env:CHATGPT_WORKER_CLAIM_TOKEN = "CLAIM_TOKEN_FROM_OUTPUT"
+python chatgpt_worker/scripts/queue_manager.py heartbeat --job-id JOB_UUID --claim-epoch EPOCH_NUMBER
+python chatgpt_worker/scripts/queue_manager.py complete --job-id JOB_UUID --claim-epoch EPOCH_NUMBER --result-json result-record.json
+python chatgpt_worker/scripts/queue_manager.py recover-expired
+```
+
+Completion reads the three candidate files from `results/<site-slug>/...` on the private branch and verifies exact byte counts and SHA-256 values before recording the result. Intake reconciliation, leases, claim tokens, and candidate artifacts remain in the private repository. These are manual operations; no hourly Action or external worker endpoint is enabled yet.
 
 Run the local tests with:
 
