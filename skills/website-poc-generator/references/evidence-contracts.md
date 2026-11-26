@@ -52,6 +52,84 @@ Record:
 
 Each check reports `PASS`, `FAIL`, `BLOCKED`, or `UNVERIFIED`, a short result, and evidence such as a selector, measured value, file path, or runtime error. Do not include official-suite fields or claim repository validator execution.
 
+### Queue publisher compatibility
+
+When the output will be consumed by `chatgpt_worker/scripts/publish_result.py`, use this exact top-level and per-candidate shape in `native-qa.json`; retain the fuller measurements and evidence alongside these fields:
+
+```json
+{
+  "native_qa_status": "PASS",
+  "finished_checks": true,
+  "job_id": "<supplied-job-id>",
+  "claim_epoch": 1,
+  "source_url": "<verified-source-url>",
+  "candidate_results": [
+    {
+      "slot_id": "forty",
+      "final_path": "candidate-forty.html",
+      "bytes": 12345,
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "status": "PASS",
+      "static_check_status": "PASS",
+      "static_errors": [],
+      "failures": [],
+      "viewports": [
+        {"name": "desktop", "status": "PASS", "errors": []},
+        {"name": "tablet", "status": "PASS", "errors": []},
+        {"name": "mobile", "status": "PASS", "errors": []}
+      ],
+      "checks": [
+        {"name": "exact_saved_bytes_and_static_requirements", "status": "PASS"},
+        {"name": "browser_viewport_and_interaction_matrix", "status": "PASS"},
+        {"name": "rendered_template_credits_absent", "status": "PASS"}
+      ]
+    },
+    {
+      "slot_id": "landed",
+      "final_path": "candidate-landed.html",
+      "bytes": 23456,
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "status": "PASS",
+      "static_check_status": "PASS",
+      "static_errors": [],
+      "failures": [],
+      "viewports": [
+        {"name": "desktop", "status": "PASS", "errors": []},
+        {"name": "tablet", "status": "PASS", "errors": []},
+        {"name": "mobile", "status": "PASS", "errors": []}
+      ],
+      "checks": [
+        {"name": "exact_saved_bytes_and_static_requirements", "status": "PASS"},
+        {"name": "browser_viewport_and_interaction_matrix", "status": "PASS"},
+        {"name": "rendered_template_credits_absent", "status": "PASS"}
+      ]
+    },
+    {
+      "slot_id": "story",
+      "final_path": "candidate-story.html",
+      "bytes": 34567,
+      "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "status": "PASS",
+      "static_check_status": "PASS",
+      "static_errors": [],
+      "failures": [],
+      "viewports": [
+        {"name": "desktop", "status": "PASS", "errors": []},
+        {"name": "tablet", "status": "PASS", "errors": []},
+        {"name": "mobile", "status": "PASS", "errors": []}
+      ],
+      "checks": [
+        {"name": "exact_saved_bytes_and_static_requirements", "status": "PASS"},
+        {"name": "browser_viewport_and_interaction_matrix", "status": "PASS"},
+        {"name": "rendered_template_credits_absent", "status": "PASS"}
+      ]
+    }
+  ]
+}
+```
+
+The JSON is a shape example only; replace every illustrative value with measured values from the current run. Include one `candidate_results` entry for each `slot_id` (`forty`, `landed`, `story`) with its matching filename, final byte count, and SHA-256. Include all three named viewports and all required check names for every candidate. Any failed, blocked, missing, duplicate, or unrun required check prevents `native_qa_status: PASS` and `finished_checks: true`. Preserve exact claim provenance and do not synthesize QA fields after the checks; the publisher validates this record and re-reads the files before writing them.
+
 ## Final consistency
 
 Re-read each delivered HTML file as bytes after QA and confirm its byte count and SHA-256 still match the report. If a file changed, rerun affected checks and replace stale screenshots. Confirm all three files exist and that every evidence path resolves. `native_qa_status: PASS` means only the static and in-session layout/geometry/interaction checks in [QA requirements](qa-requirements.md) passed; it does not imply image-content approval.

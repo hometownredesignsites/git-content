@@ -18,7 +18,7 @@ Required: existing business website URL. If absent, ask only for the URL before 
 
 Optional: business name when unclear; additional source URLs or user facts; output directory or naming preference. Reuse facts already provided in the conversation; do not ask the user to repeat them.
 
-For a queue-worker invocation, the task also supplies `job_id` and `claim_epoch`. Preserve both values exactly as given. If queue context is present, include those values in `evidence/native-qa.json`; do not infer them from the run ID, timestamps, or prior attempts. A standalone skill run without queue context may omit them.
+For a queue-worker invocation, the task also supplies `job_id`, integer `claim_epoch`, and a run-specific output directory. Preserve the job and epoch exactly as given, and write the package into that directory so the worker publisher can read the same saved bytes after QA. Include `job_id` and `claim_epoch` in `evidence/native-qa.json`; do not infer them from the run ID, timestamps, or prior attempts. A standalone skill run without queue context may omit them.
 
 ## Workflow
 
@@ -78,7 +78,7 @@ Follow [the ChatGPT-native deliverable and evidence contract](references/evidenc
 
 ### 5. Save and report
 
-Save exactly the three named standalone HTML files and `evidence/native-qa.json` in the requested directory or the current task output location. For a queue-worker invocation, copy the supplied `job_id` and integer `claim_epoch` exactly into `evidence/native-qa.json` so the publisher can reject stale or cross-job evidence. Report per-file byte count and SHA-256, static and browser checks actually run, template conformance, source/form evidence, desktop/mobile measurements, screenshot classification, repairs, and evidence paths. State that image content remains UNVERIFIED when it was not visible. Identify any native check that could not run; do not list the official 27-check suite or external review as a required missing step.
+Save exactly the three named standalone HTML files and `evidence/native-qa.json` in the requested directory or the current task output location. For a queue-worker invocation, use the provided output directory and copy the supplied `job_id` and integer `claim_epoch` exactly into `evidence/native-qa.json`. Emit the publisher-compatible report shape defined in [the evidence contract](references/evidence-contracts.md). The skill generates and verifies local files; after it returns PASS, the worker invocation—not a QA cell—runs the Git-backed publisher against this same output directory. Never publish a PARTIAL, FAIL, or BLOCKED package. Report per-file byte count and SHA-256, static and browser checks actually run, template conformance, source/form evidence, desktop/mobile measurements, screenshot classification, repairs, and evidence paths. State that image content remains UNVERIFIED when it was not visible. Identify any native check that could not run; do not list the official 27-check suite or external review as a required missing step.
 
 ## Completion gate
 
