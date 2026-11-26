@@ -1,6 +1,6 @@
 # ChatGPT worker queue core
 
-This branch contains the first queue-state implementation. The private job contract is in `git-content-private:chatgpt-worker` at `private_automation/queue/generation/schemas/job.schema.json`.
+This branch contains the queue state implementation and the worker-to-skill handoff contract. The private production job contract is in `git-content-private:chatgpt-worker` at `private_automation/queue/generation/schemas/job.schema.json`. The test-only input contract is in `private_automation/queue/generation/simulation/job.schema.json` and is not imported by queue reconciliation.
 
 ## Reconcile locally
 
@@ -40,6 +40,12 @@ python chatgpt_worker/scripts/queue_manager.py recover-expired
 ```
 
 Completion reads the three candidate files from `results/<site-slug>/...` on the private branch and verifies exact byte counts and SHA-256 values before recording the result. Intake reconciliation, leases, claim tokens, and candidate artifacts remain in the private repository. These are manual operations; no hourly Action or external worker endpoint is enabled yet.
+
+## Generator handoff and safe simulation
+
+[`GENERATION_WORKER_CONTRACT.md`](GENERATION_WORKER_CONTRACT.md) maps a claimed private job to the `website-poc-generator` skill and defines the exact deliverable and QA record expected by queue completion. A simulation uses the private simulation schema, a reachable non-customer business URL, and a local-only output directory. It must not reconcile or claim the production queue, dispatch the legacy Action, write candidate files to either repository, or modify `content-post`. Require `native_qa_status: PASS` and verify the three final file digests before considering the generator simulation successful.
+
+The simulation checks skill execution and QA only. It does not validate a Git-backed production artifact push or the not-yet-implemented High-site poller.
 
 Run the local tests with:
 
