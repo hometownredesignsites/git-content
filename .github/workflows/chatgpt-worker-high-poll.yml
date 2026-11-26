@@ -1,0 +1,70 @@
+name: Queue High sites for ChatGPT workers
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_sites:
+        description: Maximum eligible sites to queue (use 1 for the first run)
+        required: true
+        default: "1"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chatgpt-worker-high-site-poller
+  cancel-in-progress: false
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require the chatgpt-worker branch
+        if: github.ref_name != 'chatgpt-worker'
+        run: |
+          echo "Run this workflow on the chatgpt-worker branch."
+          exit 1
+
+      - name: Check out the poller
+        uses: actions/checkout@v4
+        with:
+          ref: chatgpt-worker
+          fetch-depth: 0
+
+      - name: Read the High candidates CSV
+        uses: actions/checkout@v4
+        with:
+          repository: hometownredesignsites/website-lead-hunting-operations
+          ref: git-chatgpt
+          path: lead-operations
+          token: ${{ secrets.LEAD_OPERATIONS_TOKEN }}
+          persist-credentials: false
+
+      - name: Read the legacy ChatGPT queue for duplicate checks
+        uses: actions/checkout@v4
+        with:
+          repository: hometownredesignsites/git-content-private
+          ref: chatgpt
+          path: private-chatgpt
+          token: ${{ secrets.PRIVATE_RESULTS_TOKEN }}
+          persist-credentials: false
+
+      - name: Check out the private worker queue
+        uses: actions/checkout@v4
+        with:
+          repository: hometownredesignsites/git-content-private
+          ref: chatgpt-worker
+          path: private-worker
+          token: ${{ secrets.PRIVATE_RESULTS_TOKEN }}
+          fetch-depth: 0
+
+      - name: Queue eligible High sites privately
+        env:
+          MAX_SITES: ${{ inputs.max_sites }}
+        run: >-
+          python chatgpt_worker/scripts/poll_high_sites.py
+          --candidate-csv lead-operations/scores/HIGH_MEDIUM_CANDIDATES.csv
+          --private-checkout private-worker
+          --legacy-jobs-dir private-chatgpt/private_automation/queue/jobs
+          --max-sites "$MAX_SITES"

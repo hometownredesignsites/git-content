@@ -55,7 +55,13 @@ The content-post `site_slug` uses the existing host-based rule from the previous
 
 [`GENERATION_WORKER_CONTRACT.md`](GENERATION_WORKER_CONTRACT.md) maps a claimed private job to the `website-poc-generator` skill and defines the exact deliverable and QA record expected by queue completion. A simulation uses the private simulation schema, a reachable non-customer business URL, and a local-only output directory. It must not reconcile or claim the production queue, dispatch the legacy Action, write candidate files to either repository, or modify `content-post`. Require `native_qa_status: PASS` and verify the three final file digests before considering the generator simulation successful.
 
-The simulation checks skill execution and QA only. It does not validate a Git-backed production artifact push, private content-post handoff, or the not-yet-implemented High-site poller.
+The simulation checks skill execution and QA only. It does not validate a Git-backed production artifact push, private content-post handoff, or the High-site poller.
+
+## High-site intake poller
+
+The manual-only workflow [`.github/workflows/chatgpt-worker-high-poll.yml`](../.github/workflows/chatgpt-worker-high-poll.yml) reads completed High leads from the lead-operations `git-chatgpt` branch and applies the existing confidence, preview, delivery-ready exception, score-ordering, and duplicate rules. It checks both the legacy private `chatgpt` queue and the `chatgpt-worker` source and generation queues, then writes source job records only to `git-content-private:chatgpt-worker`.
+
+Dispatch it on this `chatgpt-worker` branch with `max_sites=1` for an initial controlled run. The workflow does not run on a schedule and does not invoke the legacy candidate generator. Eligible source records are later imported into the generation claim queue by the existing reconciliation step.
 
 Run the local tests with:
 
