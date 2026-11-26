@@ -50,16 +50,23 @@ prove the GitHub poller or the future production artifact push.
 
 ## Production result publication
 
-For a production job, use the returned `job_id`, `claim_epoch`, and `worker_id`
-only in the current scheduled invocation. The private job record and successful
+Before claiming, confirm this invocation can run the skill and publisher in the
+same non-Windows container, keep one output directory readable by both, run the
+heartbeat process, and authenticate Git writes to both private repositories.
+Do not acquire a lease if these prerequisites are unavailable. For a
+production job, use the returned `job_id`, `claim_epoch`, and `worker_id` only
+in the current scheduled invocation. The private job record and successful
 fast-forward Git push hold the claim state; no token or local checkpoint is
 used. Treat `worker_id` as an audit label, not a credential. Start
 `queue_manager.py heartbeat-loop --job-id <job-id> --claim-epoch <epoch> --worker-id <invocation-id>`
-while the skill is working. It renews the lease every 15 minutes by default. If
-the container ends or the claim response is lost, do not recover an old claim
-from Git. Let the lease expire; the next invocation must recover the expired
-claim and claim a new epoch. The epoch fences writes from stale invocations.
-After the skill has a `PASS` result, run
+before invoking the skill and keep it running while generation and QA are in
+progress. It renews the lease every 15 minutes by default. Use one
+run-specific output directory that the skill writes and the publisher reads;
+do not rebuild or edit the HTML between QA and publication. If the container
+ends or the claim response is lost, do not recover an old claim from Git. Let
+the lease expire; the next invocation must recover the expired claim and
+claim a new epoch. The epoch fences writes from stale invocations. After the
+skill has a `PASS` result, stop the heartbeat loop and run
 `chatgpt_worker/scripts/publish_result.py` with the skill output folder, using
 `--job-id`, `--claim-epoch`, and `--worker-id` from the current invocation. The
 skill must write the exact `job_id` and integer `claim_epoch` it received into
