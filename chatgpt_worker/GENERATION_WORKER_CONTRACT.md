@@ -28,7 +28,8 @@ Do not translate this contract into GitHub Actions or call the legacy
 Use the skill's exact-byte static and Chromium QA requirements. A candidate is
 eligible only when its exact saved bytes pass the skill's required checks. A
 transient runtime interruption or harness error is not a candidate failure or
-pass; follow the skill's checkpoint and recovery rules. Do not complete the
+pass; follow the skill's harness recovery steps and inspect returned values
+before classifying a smoke-test failure. Do not complete the
 queue job when the aggregate native QA status is `PARTIAL`, `FAIL`, or
 `BLOCKED`.
 
@@ -49,13 +50,18 @@ prove the GitHub poller or the future production artifact push.
 
 ## Production result publication
 
-For a production job, preserve the claimed `job_id`, `claim_epoch`, and one-time
-claim token in the encrypted local checkpoint created by `claim-next`; do not
-copy it into shell history, logs, or the repository. Start
-`queue_manager.py heartbeat-loop --job-id <job-id> --claim-epoch <epoch>` while
-the skill is working. It renews the lease every 15 minutes by default. After
-the skill has a `PASS` result, run
-`chatgpt_worker/scripts/publish_result.py` with the skill output folder. The
+For a production job, use the returned `job_id`, `claim_epoch`, and `worker_id`
+only in the current scheduled invocation. The private job record and successful
+fast-forward Git push hold the claim state; no token or local checkpoint is
+used. Treat `worker_id` as an audit label, not a credential. Start
+`queue_manager.py heartbeat-loop --job-id <job-id> --claim-epoch <epoch> --worker-id <invocation-id>`
+while the skill is working. It renews the lease every 15 minutes by default. If
+the container ends or the claim response is lost, do not recover an old claim
+from Git. Let the lease expire; the next invocation must recover the expired
+claim and claim a new epoch. The epoch fences writes from stale invocations.
+After the skill has a `PASS` result, run
+`chatgpt_worker/scripts/publish_result.py` with the skill output folder, using
+`--job-id`, `--claim-epoch`, and `--worker-id` from the current invocation. The
 publisher requires `evidence/native-qa.json` to report `native_qa_status: PASS`,
 three candidate records identified as Forty, Landed, and Story (a mapping keyed
 by `forty`/`landed`/`story` or an array with a `template`, `slot`, or `slot_id`
@@ -69,10 +75,7 @@ count `bytes` or `byte_count`. If candidate entries include `qa_status` or
 `status`, each must be `PASS`. The publisher rereads the
 exact candidate bytes, commits all files in `evidence/` and the three HTML files
 under `results/<result_slug>/run-<job-id>-epoch-<claim-epoch>/` on the private
-`chatgpt-worker` branch, and then completes the queue job. The claim is checked
-again against the branch head before artifacts are written. If the publisher
-loses its response after completion, rerun it with the same output and epoch;
-it confirms the recorded digests and returns without rewriting the job.
+`chatgpt-worker` branch, and then completes the queue job. The current worker ID, epoch, and lease are checked against the branch head before artifacts are written. If the publisher loses its response after completion, rerun it in the same invocation with the same output and epoch; it confirms the recorded digests and returns without rewriting the job. A new invocation without the original claim context must wait for expiry and use a new epoch.
 
 The persisted result record is built from exact bytes:
 
@@ -91,8 +94,8 @@ The persisted result record is built from exact bytes:
 ```
 
 Replace the illustrative placeholders only with measured values. The publisher
-performs this operation automatically. Never put the claim token, customer
-row, HTML, or screenshots in public logs or the public repository.
+performs this operation automatically. Never put customer rows, HTML, or
+screenshots in public logs or the public repository.
 
 ## Existing content-post handoff
 

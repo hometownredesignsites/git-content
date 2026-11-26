@@ -241,18 +241,18 @@ class GitJobStore:
                 recovered += 1
         return {"recovered": recovered, "total": len(self.list_jobs())}
 
-    def complete_job(self, job_id: str, token: str, epoch: int, result_record: dict[str, Any],
+    def complete_job(self, job_id: str, worker_id: str, epoch: int, result_record: dict[str, Any],
                      now: datetime | None = None) -> dict[str, Any]:
         def verify(checkout: Path, _current: dict[str, Any], updated: dict[str, Any]) -> None:
             self._verify_result_files(checkout, updated, result_record)
 
         return self.update_job(
             job_id,
-            lambda current: complete(current, token, now or datetime.now(timezone.utc), epoch, result_record),
+            lambda current: complete(current, worker_id, now or datetime.now(timezone.utc), epoch, result_record),
             verify,
         )
 
-    def publish_artifacts(self, job_id: str, token: str, epoch: int, run_path: str,
+    def publish_artifacts(self, job_id: str, worker_id: str, epoch: int, run_path: str,
                           files: dict[str, bytes]) -> str:
         """Persist exact output bytes while the same fenced claim is current.
 
@@ -289,7 +289,7 @@ class GitJobStore:
                 if job.get("result_slug") != relative_run.parts[1]:
                     raise QueueConflict("Result files must stay under this job's private results folder")
                 attempt_now = datetime.now(timezone.utc)
-                assert_current_claim(job, token, attempt_now, epoch)
+                assert_current_claim(job, worker_id, attempt_now, epoch)
                 results_root = (checkout / "results").resolve()
                 site_dir = checkout / "results" / str(job.get("result_slug"))
                 if (checkout / "results").is_symlink() or site_dir.is_symlink():
@@ -326,7 +326,7 @@ class GitJobStore:
                           "user.email=chatgpt-worker-publisher@users.noreply.github.com",
                           "commit", "--quiet", "-m", f"generation artifacts: publish {job_id} epoch {epoch}")
                 published_commit = self._git(checkout, "rev-parse", "HEAD").stdout.strip()
-                assert_current_claim(job, token, datetime.now(timezone.utc), epoch)
+                assert_current_claim(job, worker_id, datetime.now(timezone.utc), epoch)
                 pushed = self._git(checkout, "push", "origin", f"HEAD:refs/heads/{self.branch}", check=False)
                 if pushed.returncode == 0:
                     return published_commit

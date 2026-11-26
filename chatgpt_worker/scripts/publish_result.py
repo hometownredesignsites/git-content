@@ -18,7 +18,6 @@ sys.path.insert(0, str(ROOT))
 
 from chatgpt_worker.git_store import GitJobStore, GitStoreError  # noqa: E402
 from chatgpt_worker.queue import FINAL_FILES, QueueConflict  # noqa: E402
-from chatgpt_worker.token_checkpoint import CheckpointError, TokenCheckpoint  # noqa: E402
 
 REQUIRED_CANDIDATE_CHECKS = {
     "exact_saved_bytes_and_static_requirements",
@@ -208,6 +207,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--branch", default="chatgpt-worker")
     parser.add_argument("--job-id", required=True)
     parser.add_argument("--claim-epoch", required=True, type=int)
+    parser.add_argument("--worker-id", required=True)
     parser.add_argument("--skill-output", required=True, type=Path)
     return parser
 
@@ -217,7 +217,6 @@ def main(argv: list[str] | None = None) -> int:
     try:
         files, report, measured = collect_output(args.skill_output)
         store = GitJobStore(args.remote_url, args.branch)
-        checkpoint = TokenCheckpoint()
         current = store.read_job(args.job_id)
         row = current.get("row", {})
         expected_website = str(row.get("website", "")).strip() if isinstance(row, dict) else ""
@@ -243,31 +242,22 @@ def main(argv: list[str] | None = None) -> int:
             for key in ("qa_status", "candidates", "qa_evidence"):
                 if current["result"].get(key) != result_record.get(key):
                     raise QueueConflict("Job is already completed with different exact result bytes.")
-            checkpoint.delete(args.job_id, args.claim_epoch)
             print(json.dumps({"status": "already_published", "job_id": args.job_id}, sort_keys=True))
             return 0
-        try:
-            claim_data = current.get("claim")
-            if (current.get("status") not in {"claimed", "generating", "validating"}
-                    or current.get("claim_epoch") != args.claim_epoch or not isinstance(claim_data, dict)):
-                raise QueueConflict("The job does not have this active claim epoch.")
-            token = checkpoint.load(
-                args.job_id, args.claim_epoch, args.remote_url, args.branch,
-                expected_sha256=claim_data.get("claim_token_sha256"),
-            )["claim_token"]
-        except CheckpointError:
-            token = os.environ.get("CHATGPT_WORKER_CLAIM_TOKEN", "")
-        if not token:
-            raise ValueError("No secure claim checkpoint was found; use claim-next before publishing.")
+        claim_data = current.get("claim")
+        if (current.get("status") not in {"claimed", "generating", "validating"}
+                or current.get("claim_epoch") != args.claim_epoch or not isinstance(claim_data, dict)):
+            raise QueueConflict("The job does not have this active claim epoch.")
+        if claim_data.get("worker_id") != args.worker_id:
+            raise QueueConflict("Worker ID does not match the active claim.")
         artifact_commit = store.publish_artifacts(
-            args.job_id, token, args.claim_epoch, run_path, files,
+            args.job_id, args.worker_id, args.claim_epoch, run_path, files,
         )
         result_record["artifact_commit"] = artifact_commit
-        store.complete_job(args.job_id, token, args.claim_epoch, result_record)
-        checkpoint.delete(args.job_id, args.claim_epoch)
+        store.complete_job(args.job_id, args.worker_id, args.claim_epoch, result_record)
         print(json.dumps({"status": "completed", "job_id": args.job_id, "artifact_commit": artifact_commit}, sort_keys=True))
         return 0
-    except (CheckpointError, GitStoreError, QueueConflict, ValueError, TypeError, KeyError, OSError) as error:
+    except (GitStoreError, QueueConflict, ValueError, TypeError, KeyError, OSError) as error:
         print(f"Result publication failed: {error}", file=sys.stderr)
         return 1
 

@@ -4,7 +4,6 @@ from copy import deepcopy
 from datetime import datetime, timezone
 import hashlib
 import json
-import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -26,7 +25,6 @@ from chatgpt_worker.queue import (
 )
 from chatgpt_worker.scripts.handoff_content_post import stage_all
 from chatgpt_worker.scripts.publish_result import collect_output
-from chatgpt_worker.token_checkpoint import TokenCheckpoint
 
 
 NOW = datetime(2026, 11, 25, 17, 0, tzinfo=timezone.utc)
@@ -74,7 +72,7 @@ class QueueTests(unittest.TestCase):
 
         def contender(worker):
             snapshot = deepcopy(stored)
-            proposed = claim(snapshot["job"], worker, f"token-{worker}", NOW)
+            proposed = claim(snapshot["job"], worker, NOW)
             barrier.wait()
             with lock:
                 if stored["revision"] != snapshot["revision"]:
@@ -92,39 +90,39 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(stored["job"]["status"], "claimed")
 
     def test_heartbeat_extends_lease_and_fences_stale_epoch(self):
-        job = claim(queued_job(), "worker-a", "secret", NOW)
-        renewed = heartbeat(job, "secret", NOW.replace(minute=30), job["claim_epoch"])
+        job = claim(queued_job(), "worker-a", NOW)
+        renewed = heartbeat(job, "worker-a", NOW.replace(minute=30), job["claim_epoch"])
         self.assertEqual(renewed["status"], "generating")
         self.assertEqual(renewed["claim"]["lease_expires_at_utc"], "2026-11-25T18:30:00Z")
         with self.assertRaises(QueueConflict):
-            heartbeat(renewed, "secret", NOW, job["claim_epoch"] + 1)
+            heartbeat(renewed, "worker-a", NOW, job["claim_epoch"] + 1)
 
     def test_expired_claim_requeues_same_job_and_preserves_attempt(self):
-        job = claim(queued_job(), "worker-a", "first", NOW)
+        job = claim(queued_job(), "worker-a", NOW)
         recovered = expire_claim(job, datetime(2026, 11, 25, 18, 1, tzinfo=timezone.utc))
         self.assertEqual(recovered["job_id"], job["job_id"])
         self.assertEqual(recovered["status"], "queued")
         self.assertIsNone(recovered["claim"])
         self.assertEqual(recovered["attempts"][0]["status"], "lease_expired")
-        next_claim = claim(recovered, "worker-b", "second", datetime(2026, 11, 25, 18, 2, tzinfo=timezone.utc))
+        next_claim = claim(recovered, "worker-b", datetime(2026, 11, 25, 18, 2, tzinfo=timezone.utc))
         self.assertEqual(next_claim["claim_epoch"], 2)
         with self.assertRaises(QueueConflict):
-            complete(next_claim, "first", NOW, 1, passing_result())
+            complete(next_claim, "worker-a", NOW, 1, passing_result())
 
     def test_completion_requires_all_three_passing_candidates(self):
-        job = claim(queued_job(), "worker-a", "secret", NOW)
+        job = claim(queued_job(), "worker-a", NOW)
         incomplete = passing_result()
         del incomplete["candidates"]["story"]
         with self.assertRaises(QueueConflict):
-            complete(job, "secret", NOW, 1, incomplete)
-        completed = complete(job, "secret", NOW, 1, passing_result())
+            complete(job, "worker-a", NOW, 1, incomplete)
+        completed = complete(job, "worker-a", NOW, 1, passing_result())
         self.assertEqual(completed["status"], "completed")
         self.assertEqual(completed["handoff"]["status"], "pending")
         self.assertIsNone(completed["claim"])
 
     def test_handoff_batch_reservation_and_completion_are_idempotent(self):
-        claimed = claim(queued_job(), "worker-a", "secret", NOW)
-        completed = complete(claimed, "secret", NOW, 1, passing_result())
+        claimed = claim(queued_job(), "worker-a", NOW)
+        completed = complete(claimed, "worker-a", NOW, 1, passing_result())
         batch_id = "1795645200000-123456789"
         reserved = reserve_handoff(completed, batch_id, NOW)
         retried = reserve_handoff(reserved, batch_id, NOW.replace(minute=1))
@@ -269,7 +267,7 @@ class GitStoreTests(unittest.TestCase):
                 if first_read:
                     first_read = False
                     barrier.wait(timeout=10)
-                return claim(job, worker, f"token-{worker}", NOW)
+                return claim(job, worker, NOW)
             try:
                 winners.append(self.store.update_job(self.job["job_id"], transition)["claim"]["worker_id"])
             except QueueConflict as error:
@@ -287,7 +285,7 @@ class GitStoreTests(unittest.TestCase):
         self.assertEqual(stored["claim"]["worker_id"], winners[0])
 
     def test_remote_transition_retry_is_idempotent_for_same_claim(self):
-        transform = lambda job: claim(job, "worker-a", "stable-token", NOW)
+        transform = lambda job: claim(job, "worker-a", NOW)
         first = self.store.update_job(self.job["job_id"], transform)
         second = self.store.update_job(self.job["job_id"], transform)
         self.assertEqual(first, second)
@@ -307,9 +305,10 @@ class GitStoreTests(unittest.TestCase):
         payload = claim_next(self.store, "worker-a", NOW)
         self.assertIsNotNone(payload)
         job = payload["job"]
-        token = payload["claim_token"]
+        self.assertNotIn("claim_token", payload)
+        worker_id = payload["job"]["claim"]["worker_id"]
         renewed = self.store.update_job(
-            job["job_id"], lambda current: heartbeat(current, token, NOW.replace(minute=30), job["claim_epoch"])
+            job["job_id"], lambda current: heartbeat(current, worker_id, NOW.replace(minute=30), job["claim_epoch"])
         )
         self.assertEqual(renewed["status"], "generating")
         recovered = self.store.update_job(
@@ -318,87 +317,37 @@ class GitStoreTests(unittest.TestCase):
         self.assertEqual(recovered["status"], "queued")
         second = claim_next(self.store, "worker-b", datetime(2026, 11, 25, 19, 32, tzinfo=timezone.utc))
         self.assertEqual(second["job"]["claim_epoch"], 2)
-        self.assertNotEqual(second["claim_token"], token)
-
-    def test_claim_token_checkpoint_is_written_before_remote_claim(self):
-        class RecordingCheckpoint:
-            saved = None
-
-            def save(self, job_id, epoch, worker_id, token, remote_url, branch):
-                self.saved = (job_id, epoch, worker_id, token, remote_url, branch)
-                return "checkpoint-id"
-
-            def delete(self, _job_id, _epoch):
-                return 0
-
-        checkpoint = RecordingCheckpoint()
-        original_update = self.store.update_job
-
-        def update_after_checkpoint(job_id, transform, *args, **kwargs):
-            self.assertIsNotNone(checkpoint.saved)
-            return original_update(job_id, transform, *args, **kwargs)
-
-        self.store.update_job = update_after_checkpoint
-        payload = claim_next(self.store, "worker-a", NOW, checkpoint)
-        self.assertEqual(payload["checkpoint_id"], "checkpoint-id")
-        self.assertEqual(payload["job"]["claim_epoch"], checkpoint.saved[1])
-        self.assertEqual(payload["claim_token"], checkpoint.saved[3])
-
-    @unittest.skipUnless(os.name == "nt", "Windows DPAPI is available only on Windows")
-    def test_dpapi_checkpoint_encrypts_and_restores_claim_token(self):
-        with tempfile.TemporaryDirectory(prefix="chatgpt-worker-dpapi-test-") as temp:
-            checkpoint = TokenCheckpoint(Path(temp))
-            token = "private-test-claim-token-7d0b"
-            checkpoint_id = checkpoint.save(
-                self.job["job_id"], 1, "worker-a", token,
-                "https://example.invalid/private.git", "chatgpt-worker",
-            )
-            other_token = "another-private-test-claim-token"
-            other_id = checkpoint.save(
-                self.job["job_id"], 1, "worker-b", other_token,
-                "https://example.invalid/private.git", "chatgpt-worker",
-            )
-            path = Path(temp) / f"{checkpoint_id}.dpapi"
-            self.assertNotIn(token.encode(), path.read_bytes())
-            loaded = checkpoint.load(
-                self.job["job_id"], 1,
-                "https://example.invalid/private.git", "chatgpt-worker",
-                expected_sha256=hashlib.sha256(other_token.encode()).hexdigest(),
-            )
-            self.assertEqual(loaded["claim_token"], other_token)
-            self.assertTrue(checkpoint.delete_id(checkpoint_id))
-            self.assertTrue((Path(temp) / f"{other_id}.dpapi").exists())
-            self.assertEqual(checkpoint.delete(self.job["job_id"], 1), 1)
+        self.assertNotIn("claim_token_sha256", second["job"]["claim"])
 
     def test_completion_verifies_saved_candidate_bytes_before_persisting(self):
-        claimed = self.store.update_job(self.job["job_id"], lambda current: claim(current, "worker-a", "complete-token", NOW))
+        claimed = self.store.update_job(self.job["job_id"], lambda current: claim(current, "worker-a", NOW))
         record = passing_result()
         for slot, candidate in record["candidates"].items():
             content = self.artifact_contents[candidate["filename"]]
             candidate["bytes"] = len(content)
             candidate["sha256"] = hashlib.sha256(content).hexdigest()
-        completed = self.store.complete_job(self.job["job_id"], "complete-token", claimed["claim_epoch"], record, NOW)
+        completed = self.store.complete_job(self.job["job_id"], "worker-a", claimed["claim_epoch"], record, NOW)
         self.assertEqual(completed["status"], "completed")
         self.assertEqual(self.store.read_job(self.job["job_id"])["handoff"]["status"], "pending")
 
-    def test_completion_rejects_hash_mismatch_without_mutating_job(self):
-        claimed = self.store.update_job(self.job["job_id"], lambda current: claim(current, "worker-a", "bad-token", NOW))
+    def test_completion_rejects_missing_candidate_digests_without_mutating_job(self):
+        claimed = self.store.update_job(self.job["job_id"], lambda current: claim(current, "worker-a", NOW))
         record = passing_result()
         with self.assertRaises(QueueConflict):
-            self.store.complete_job(self.job["job_id"], "bad-token", claimed["claim_epoch"], record, NOW)
+            self.store.complete_job(self.job["job_id"], "worker-a", claimed["claim_epoch"], record, NOW)
         self.assertEqual(self.store.read_job(self.job["job_id"])["status"], "claimed")
 
     def test_publisher_commits_exact_artifacts_before_completing(self):
         publish_now = datetime.now(timezone.utc)
         claimed = self.store.update_job(
-            self.job["job_id"], lambda current: claim(current, "worker-a", "publish-token", publish_now)
+            self.job["job_id"], lambda current: claim(current, "worker-a", publish_now)
         )
         run_path = f"results/sample-business/run-{self.job['job_id']}-epoch-1"
         qa_bytes = b'{"native_qa_status":"PASS"}\n'
         output_files = dict(self.artifact_contents)
         output_files["evidence/native-qa.json"] = qa_bytes
         artifact_commit = self.store.publish_artifacts(
-            self.job["job_id"], "publish-token", 1, run_path, output_files,
+            self.job["job_id"], "worker-a", 1, run_path, output_files,
         )
         candidates = {}
         for slot, filename in (("forty", "candidate-forty.html"), ("landed", "candidate-landed.html"),
@@ -415,7 +364,7 @@ class GitStoreTests(unittest.TestCase):
             "candidates": candidates,
         }
         completed = self.store.complete_job(
-            self.job["job_id"], "publish-token", 1, result, datetime.now(timezone.utc)
+            self.job["job_id"], "worker-a", 1, result, datetime.now(timezone.utc)
         )
         self.assertEqual(completed["result"]["artifact_commit"], artifact_commit)
         saved_job, saved_files = self.store.read_completed_artifacts(self.job["job_id"])

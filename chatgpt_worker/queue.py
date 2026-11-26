@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
-import hashlib
 import re
 from typing import Any
 from uuid import UUID, uuid5, NAMESPACE_URL
@@ -117,14 +116,13 @@ def expire_claim(job: dict[str, Any], now: datetime) -> dict[str, Any]:
     return result
 
 
-def claim(job: dict[str, Any], worker_id: str, token: str, now: datetime) -> dict[str, Any]:
-    if not worker_id.strip() or not token:
-        raise ValueError("worker_id and claim token are required")
+def claim(job: dict[str, Any], worker_id: str, now: datetime) -> dict[str, Any]:
+    if not worker_id.strip():
+        raise ValueError("worker_id is required")
     result = expire_claim(job, now)
-    token_digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
     current_claim = result.get("claim")
     if (current_claim and current_claim.get("worker_id") == worker_id
-            and current_claim.get("claim_token_sha256") == token_digest
+            and result.get("claim_epoch") == job.get("claim_epoch")
             and parse_time(current_claim["lease_expires_at_utc"]) > now):
         return result
     if result.get("status") != "queued" or result.get("claim") is not None:
@@ -135,7 +133,6 @@ def claim(job: dict[str, Any], worker_id: str, token: str, now: datetime) -> dic
     result["status"] = "claimed"
     result["claim"] = {
         "worker_id": worker_id,
-        "claim_token_sha256": token_digest,
         "claimed_at_utc": stamp,
         "heartbeat_at_utc": stamp,
         "lease_expires_at_utc": timestamp(now + LEASE),
@@ -154,24 +151,25 @@ def claim(job: dict[str, Any], worker_id: str, token: str, now: datetime) -> dic
     return result
 
 
-def _assert_current_claim(job: dict[str, Any], token: str, now: datetime, epoch: int | None) -> None:
+def _assert_current_claim(job: dict[str, Any], worker_id: str, now: datetime, epoch: int) -> None:
     claim_data = job.get("claim")
     if not claim_data or job.get("status") not in {"claimed", "generating", "validating"}:
         raise QueueConflict("Job has no active claim")
-    digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
-    if digest != claim_data.get("claim_token_sha256") or (epoch is not None and epoch != job.get("claim_epoch")):
-        raise QueueConflict("Claim token or epoch is stale")
+    if epoch != job.get("claim_epoch"):
+        raise QueueConflict("Claim epoch is stale")
+    if worker_id != claim_data.get("worker_id"):
+        raise QueueConflict("Worker ID does not match the active claim")
     if parse_time(claim_data["lease_expires_at_utc"]) <= now:
         raise QueueConflict("Claim lease has expired")
 
 
-def assert_current_claim(job: dict[str, Any], token: str, now: datetime, epoch: int) -> None:
-    """Validate a worker fencing token before publishing any result artifacts."""
-    _assert_current_claim(job, token, now, epoch)
+def assert_current_claim(job: dict[str, Any], worker_id: str, now: datetime, epoch: int) -> None:
+    """Validate the Git-backed worker ID, epoch, and active lease."""
+    _assert_current_claim(job, worker_id, now, epoch)
 
 
-def heartbeat(job: dict[str, Any], token: str, now: datetime, epoch: int) -> dict[str, Any]:
-    _assert_current_claim(job, token, now, epoch)
+def heartbeat(job: dict[str, Any], worker_id: str, now: datetime, epoch: int) -> dict[str, Any]:
+    _assert_current_claim(job, worker_id, now, epoch)
     result = deepcopy(job)
     result["claim"]["heartbeat_at_utc"] = timestamp(now)
     result["claim"]["lease_expires_at_utc"] = timestamp(now + LEASE)
@@ -181,8 +179,8 @@ def heartbeat(job: dict[str, Any], token: str, now: datetime, epoch: int) -> dic
     return result
 
 
-def complete(job: dict[str, Any], token: str, now: datetime, epoch: int, result_record: dict[str, Any]) -> dict[str, Any]:
-    _assert_current_claim(job, token, now, epoch)
+def complete(job: dict[str, Any], worker_id: str, now: datetime, epoch: int, result_record: dict[str, Any]) -> dict[str, Any]:
+    _assert_current_claim(job, worker_id, now, epoch)
     if not isinstance(result_record, dict):
         raise QueueConflict("Result record must be an object")
     if result_record.get("qa_status") != "PASS":
