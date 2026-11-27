@@ -8,6 +8,9 @@ The workflow produces candidates and applies deterministic HTML, accessibility, 
 
 ## Documentation
 
+- [`skills/website-poc-generator/`](skills/website-poc-generator/SKILL.md) — generate three standalone website POC candidates and run candidate validation/browser QA.
+- [`skills/phase2-website-assessment/`](skills/phase2-website-assessment/SKILL.md) — slot-assigned Phase 2 assessment/redesign workflow; follows generation and assessment handoffs.
+
 - [`chatgpt_automation/README.md`](chatgpt_automation/README.md) — workflow, privacy boundaries, candidate generation, validation, and repository handoffs.
 - [`chatgpt_automation/html_assessment/README.md`](chatgpt_automation/html_assessment/README.md) — the separate assessment workflow and its current disabled status.
 
