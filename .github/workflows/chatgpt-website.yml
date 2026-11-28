@@ -479,6 +479,7 @@ jobs:
           name: chatgpt-evidence-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             chatgpt-runs/run-${{ github.run_id }}-${{ github.run_attempt }}-site-1-*/evidence/**
+            chatgpt-runs/run-${{ github.run_id }}-${{ github.run_attempt }}-site-1/website-poc-output/evidence/**
             chatgpt-runs/run-${{ github.run_id }}-${{ github.run_attempt }}-site-1-*/**/*screenshot*
             chatgpt-runs/run-${{ github.run_id }}-${{ github.run_attempt }}-site-1-*/**/*Screenshot*
           if-no-files-found: warn
