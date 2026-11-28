@@ -266,7 +266,8 @@ jobs:
             local relative_candidate="results/${result_slug}/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/candidates/${candidate_name}"
             mkdir -p "$payload"
             cp -a "$candidate_dir/." "$payload/"
-            # Screenshots are uploaded as Actions artifacts, never committed to the private repo.
+            # Evidence directories and screenshot files are artifact-only; never commit them to the private repo.
+            find "$payload" -type d -name evidence -prune -exec rm -rf {} +
             find "$payload" -type f -iname '*screenshot*' -delete
             for save_retry in 1 2 3 4 5 6 7 8 9 10; do
               git -C private-results fetch origin "$target_branch"
@@ -471,16 +472,17 @@ jobs:
             --prior-public-run-id "$PRIOR_RUN_ID" \
             --attempts-used "$ATTEMPTS_USED"
 
-      - name: Upload screenshots as a workflow artifact
+      - name: Upload evidence as a separate workflow artifact
         if: always() && steps.private_target.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: chatgpt-screenshots-${{ github.run_id }}-${{ github.run_attempt }}
+          name: chatgpt-evidence-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
+            chatgpt-runs/run-${{ github.run_id }}-${{ github.run_attempt }}-site-1-*/evidence/**
             chatgpt-runs/run-${{ github.run_id }}-${{ github.run_attempt }}-site-1-*/**/*screenshot*
             chatgpt-runs/run-${{ github.run_id }}-${{ github.run_attempt }}-site-1-*/**/*Screenshot*
-          if-no-files-found: ignore
-          retention-days: 14
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Save all candidate evidence to the private repository
         id: save_evidence
@@ -512,10 +514,15 @@ jobs:
           mkdir -p "$result_dir/candidates"
           output_root="chatgpt-runs/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-site-1/website-poc-output"
           if [[ -d "$output_root" ]]; then cp -R "$output_root" "$result_dir/website-poc-output"; fi
+          # The evidence directory is stored only in the Actions artifact, never in Git history.
+          find "$result_dir" -type d -name evidence -prune -exec rm -rf {} +
           shopt -s nullglob
           run_dirs=(chatgpt-runs/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-site-1-*)
           for run_dir in "${run_dirs[@]}"; do
-            [[ -d "$run_dir" ]] && cp -R "$run_dir" "$result_dir/candidates/"
+            if [[ -d "$run_dir" ]]; then
+              cp -R "$run_dir" "$result_dir/candidates/"
+              find "$result_dir/candidates/$(basename "$run_dir")" -type d -name evidence -prune -exec rm -rf {} +
+            fi
           done
           # Keep screenshot binaries out of the private Git history; the artifact above is their retention store.
           find "$result_dir" -type f -iname '*screenshot*' -delete
