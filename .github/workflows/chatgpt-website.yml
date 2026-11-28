@@ -266,6 +266,8 @@ jobs:
             local relative_candidate="results/${result_slug}/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/candidates/${candidate_name}"
             mkdir -p "$payload"
             cp -a "$candidate_dir/." "$payload/"
+            # Screenshots are uploaded as Actions artifacts, never committed to the private repo.
+            find "$payload" -type f -iname '*screenshot*' -delete
             for save_retry in 1 2 3 4 5 6 7 8 9 10; do
               git -C private-results fetch origin "$target_branch"
               git -C private-results reset --hard "origin/$target_branch"
@@ -469,6 +471,17 @@ jobs:
             --prior-public-run-id "$PRIOR_RUN_ID" \
             --attempts-used "$ATTEMPTS_USED"
 
+      - name: Upload screenshots as a workflow artifact
+        if: always() && steps.private_target.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: chatgpt-screenshots-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            chatgpt-runs/run-${{ github.run_id }}-${{ github.run_attempt }}-site-1-*/**/*screenshot*
+            chatgpt-runs/run-${{ github.run_id }}-${{ github.run_attempt }}-site-1-*/**/*Screenshot*
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Save all candidate evidence to the private repository
         id: save_evidence
         if: always() && steps.validate_marker.outcome == 'success' && steps.private_source.outcome == 'success' && steps.private_results.outcome == 'success'
@@ -504,6 +517,8 @@ jobs:
           for run_dir in "${run_dirs[@]}"; do
             [[ -d "$run_dir" ]] && cp -R "$run_dir" "$result_dir/candidates/"
           done
+          # Keep screenshot binaries out of the private Git history; the artifact above is their retention store.
+          find "$result_dir" -type f -iname '*screenshot*' -delete
           if [[ -f "chatgpt-runs/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-site-1-batch-summary.json" ]]; then
             cp "chatgpt-runs/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-site-1-batch-summary.json" "$result_dir/batch-summary.json"
           fi
