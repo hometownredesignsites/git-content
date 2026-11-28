@@ -480,7 +480,7 @@ jobs:
             chatgpt-runs/run-${{ github.run_id }}-${{ github.run_attempt }}-site-1-*/**/*screenshot*
             chatgpt-runs/run-${{ github.run_id }}-${{ github.run_attempt }}-site-1-*/**/*Screenshot*
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 7
 
       - name: Save all candidate evidence to the private repository
         id: save_evidence
